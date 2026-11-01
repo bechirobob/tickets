@@ -72,6 +72,7 @@ export default function Trial() {
   return <I18nProvider locale="en-GB"><main className="boardui-trial">
     <header className="trial-header"><BrandLogo /><span>Interface trial · fictional data</span></header>
     <section className="trial-workspace" aria-labelledby="trial-title">
+      <nav className="trial-area-links" aria-label="Trial work areas"><a href="/boardui-trial/workspace">Workspace preview</a><span aria-current="page">Guest list</span><a href="/boardui-trial/yorke-way">Yorke Way early access</a></nav>
       <div className="trial-heading"><div><p className="trial-eyebrow">Backstage / Friday after hours</p><h1 id="trial-title">Guest list</h1><p>Accra · 13 November · Doors at 8 pm</p></div><Button className="trial-primary" leadingIcon={Plus} onClick={e => open(null, e.currentTarget)}>Add guest</Button></div>
       <div className="trial-toolbar">
         <Input ref={searchInput} label="Search guests" leadingIcon={Search} placeholder="Name, email or ticket number" value={query} onChange={value => { setQuery(value); setPage(1); }} fieldClassName="trial-input" />

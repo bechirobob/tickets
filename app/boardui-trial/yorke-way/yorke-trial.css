@@ -1,0 +1,52 @@
+.yorke-trial .yorke-trial-brand { display:flex; align-items:center; gap:10px; min-width:0; }
+.yorke-trial .yorke-trial-brand img { flex:none; }
+.yorke-trial .yorke-trial-brand b { display:block; font-size:17px; letter-spacing:-.03em; }
+.yorke-trial .yorke-trial-brand small { display:block; color:var(--muted); font-size:11px; }
+.yorke-trial .yorke-trial-nav { display:flex; align-items:center; gap:20px; margin-bottom:20px; color:var(--muted); font-size:13px; }
+.yorke-trial .yorke-trial-nav a, .yorke-trial .yorke-preview-link { display:inline-flex; align-items:center; gap:6px; min-height:44px; color:var(--ink); }
+.yorke-trial a:focus-visible { outline:2px solid var(--orange); outline-offset:3px; }
+.yorke-trial .yorke-preview-link { font-weight:600; white-space:nowrap; text-decoration:underline; text-underline-offset:4px; }
+.yorke-trial .yorke-trial-counts { display:flex; gap:36px; border-block:1px solid var(--line); padding:16px 0; margin:0; }
+.yorke-trial .yorke-trial-counts div { display:flex; flex-direction:column; gap:2px; }
+.yorke-trial .yorke-trial-counts dt { font-size:12px; color:var(--muted); }
+.yorke-trial .yorke-trial-counts dd { font-size:24px; font-weight:650; letter-spacing:-.03em; margin:0; }
+.yorke-trial .yorke-scope { font-size:13px; color:var(--muted); line-height:1.55; margin:16px 0 24px; }
+.yorke-trial .yorke-list-controls { display:grid; grid-template-columns:minmax(0,1fr) 180px; gap:16px; align-items:end; }
+.yorke-trial .yorke-date { font-size:12px; }
+.yorke-trial .bui-table th:first-child { width:62%; }
+.yorke-trial .trial-dialog h2 { overflow-wrap:anywhere; }
+.yorke-trial .trial-dialog-heading > div { min-width:0; }
+.yorke-trial .trial-dialog-heading > button { flex:none; }
+.yorke-trial .yorke-record { display:grid; gap:16px; margin:0 0 24px; }
+.yorke-trial .yorke-record dt { font-size:12px; color:var(--muted); margin-bottom:3px; }
+.yorke-trial .yorke-record dd { margin:0; overflow-wrap:anywhere; }
+.yorke-trial .yorke-record-heading { font-size:14px; margin:0 0 8px; font-weight:650; }
+.yorke-trial .yorke-consent-copy { line-height:1.6; margin:0; }
+.yorke-trial .yorke-signup-workspace { max-width:840px; }
+.yorke-trial .yorke-signup-grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.1fr); gap:48px; align-items:start; margin-top:12px; }
+.yorke-trial .yorke-recipient-intro > img { width:150px; height:150px; margin-bottom:20px; }
+.yorke-trial .yorke-recipient-intro h1 { font-size:32px; line-height:1.15; margin-bottom:16px; }
+.yorke-trial .yorke-recipient-intro > p:last-child { color:var(--muted); line-height:1.6; }
+.yorke-trial .yorke-signup-form { display:grid; grid-template-columns:minmax(0,1fr); gap:20px; padding-top:16px; }
+.yorke-trial .yorke-signup-form > * { min-width:0; }
+.yorke-trial .yorke-consent-label { display:flex; align-items:start; gap:10px; min-height:44px; line-height:1.5; }
+.yorke-trial .yorke-consent-label input { width:20px; height:20px; margin-top:2px; flex:none; accent-color:var(--ink); }
+.yorke-trial .yorke-form-error { color:var(--status-danger); font-size:13px; margin:4px 0 0; }
+.yorke-trial .yorke-signup-form .yorke-scope { margin:0; }
+.yorke-trial .yorke-preview-result { padding-top:16px; }
+.yorke-trial .yorke-preview-result h2 { margin-bottom:16px; }
+.yorke-trial .yorke-preview-result p { line-height:1.6; }
+.yorke-trial .yorke-preview-result button { margin-top:16px; }
+@media(max-width:600px) {
+ .yorke-trial .trial-header { gap:10px; }
+ .yorke-trial .yorke-trial-brand img { width:38px; height:38px; }
+ .yorke-trial .yorke-trial-brand b { font-size:15px; }
+ .yorke-trial .trial-header > span:last-child { max-width:84px; font-size:11px; }
+ .yorke-trial .yorke-list-controls { grid-template-columns:minmax(0,1fr); gap:12px; }
+ .yorke-trial .bui-table th:first-child { width:auto; }
+ .yorke-trial .bui-table th:nth-child(2) { width:68px; }
+ .yorke-trial .bui-table th:last-child { width:54px; }
+ .yorke-trial .yorke-signup-grid { grid-template-columns:minmax(0,1fr); gap:16px; }
+ .yorke-trial .yorke-recipient-intro > img { width:92px; height:92px; margin-bottom:16px; }
+ .yorke-trial .yorke-recipient-intro h1 { font-size:28px; }
+}

@@ -1,4 +1,4 @@
-# Tickets × BoardUI: isolated guest-list trial
+# Tickets × BoardUI: isolated workspace trial
 
 This branch is a review candidate, not a release. Do not merge or deploy it as an adoption decision. Main, scanner/dependency PR #392 and recovery-maintenance PR #393 are unchanged.
 
@@ -6,7 +6,7 @@ This branch is a review candidate, not a release. Do not merge or deploy it as a
 
 The `/boardui-trial` work area uses 2,400 fictional guests for one fictional Accra event. It groups search, arrival filter and name sorting above a compact, paginated guest list. Adding and editing happen in a contextual dialog; editing preserves the current filter and page. Cancel/Escape discard changes. Saving provides live feedback. Reload resets all edits. There are no payments, emails, persistence, customer records or live integrations.
 
-The Tickets logo, native font stack, Lucide icons, restrained surfaces and concise language remain. This is a new work-area arrangement, not a reskin of a production screen. It is deliberately not a full navigation redesign: the event context is a label, not a fake link, and no unrelated workflows have been added.
+The Tickets logo, native font stack, Lucide icons, restrained surfaces and concise language remain. This is a new work-area arrangement, not a reskin of a production screen. The original list remains available; the connected workspace extension below demonstrates event navigation and contextual workflows.
 
 ## Genuine free source
 
@@ -42,7 +42,7 @@ The loopback route was verified, but it is not a user-accessible hosted preview.
 
 - Actual Vinext build: passed on baseline and trial; React 19.2.8, Next 16.4.1, Tailwind 4.2.1, Vinext 1.0.0-beta.9 retained.
 - TypeScript: passed.
-- ESLint: zero errors; two warnings. One inherited `import/no-anonymous-default-export` warning in `ops/moderation/worker.ts`; one `@next/next/no-css-tags` warning on the deliberate external CSP adapter link in the trial page. Neither warning is suppressed.
+- ESLint: zero errors; two warnings. One inherited `import/no-anonymous-default-export` warning in `ops/moderation/worker.ts`; one `@next/next/no-css-tags` warning on the deliberate external CSP adapter link in the shared trial layout. Neither warning is suppressed.
 - Existing tests: 288 repository, 308 UI, 72 tooling, 11 password-client and 5 rendered-build tests passed (684 total). The rendered tests use the existing local build-preparation step with deployment credential variables explicitly removed. No deployment runs.
 - Chromium 154.0.8037.57: desktop 1440×1050, mobile simulation 390×844, narrow simulation 320×740. Search, empty state, filter, sort, first/last-page boundaries, page reset after query changes, edit without losing filter/page, keyboard-only form entry, validation, dialog focus wrapping, Escape/cancel, focus restoration, repeated opens/submits, long names and reload reset passed.
 - Axe scans: zero violations in tested list and dialog states. This does not replace assistive-technology testing.
@@ -69,4 +69,12 @@ Final `npm audit` ran without omissions or exceptions: both clean baseline and t
 
 This is a useful, concrete design trial: the selected components work with Tickets' stack and allow its identity to survive. It does not yet justify project-wide adoption. Review the workflow and screenshots first; then resolve the inherited audit findings and verify Safari/device performance, screen-reader use, and the CSP adapter before any wider integration.
 
-The source and verification evidence are durably published in draft PR #394. A source/evidence archive and selected screenshots are staged locally, but Library delivery failed before upload: the helper could not connect to its tool-discovery endpoint. A network-escalated retry was denied by automatic approval review because it did not recognize user authorization to copy private repository source and screenshots to Library. No Library IDs were returned and no delivery there is claimed. Explicit user approval for that destination is needed before retrying; local files are not treated as delivered attachments.
+## Connected workspace extension
+
+See [the source-grounded scope inventory](WORKSPACE-SCOPE.md) for implemented versus proposed areas across the owner and organiser workspace. `/boardui-trial/workspace` connects role examples, events, local venue/line-up editing, paid/RSVP guest records and read-only team invitation states. `/boardui-trial/yorke-way` adds an owner audience example and separate non-submitting recipient consent reference. All production routes and business operations remain unchanged.
+
+The extension passed the actual Vinext build, types, lint (same two warnings), 288 repository tests, 308 UI tests and five rendered-build tests. Original list browser checks and all 18 dismissal/touch groups passed again after the shared layout change. The connected journey passed at 1440×1050, 390×844 and 320×740, including desktop/mocked touch activation, scoped event examples, form errors/discard/save, paid versus RSVP details, filtering/paging, focus restoration, long consent details, unchecked consent, repeated non-submitting signup completion and reset. Axe scans found zero violations in tested states; no uncaught page errors or mutation requests were observed. This remains Chromium emulation, not real Safari/iPhone, OS keyboard or live authorization testing. Evidence and visually reviewed screenshots are under `evidence/workspace/`.
+
+Whole-build extension totals: JS 1,700,411 bytes / 530,175 gzip; CSS 685,502 bytes / 132,853 gzip. Combined gzip is 663,028 bytes versus the same clean baseline 577,482: **+85,546 bytes**. This replaces the earlier trial size for the extended build; the earlier table remains historical. No runtime performance claim. No new dependencies were added for this extension. Audit rerun still reports 21 moderate, zero high/critical findings; it exits nonzero and is not waived.
+
+The source and evidence are published in draft PR #394. Screenshot links on the private GitHub repository are available to its authorised viewers. No externally accessible interactive preview URL is verified. Library delivery remains technically blocked: owner approval was received, but the latest permitted same-helper retry failed before upload/session creation at `hosted apps tools/list request failed: network`. No Library IDs exist; no transfer is claimed. This is a connection failure, not a pending owner-approval request.

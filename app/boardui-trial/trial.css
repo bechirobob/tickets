@@ -65,3 +65,7 @@ body:has(.boardui-trial) .customer-dock { display: none; }
  .boardui-trial .trial-arrival { font-size:12px; }
  .boardui-trial .trial-dialog { padding:20px; }
 }
+
+.boardui-trial .trial-area-links { display:flex; flex-wrap:wrap; gap:20px; align-items:center; margin-bottom:20px; font-size:13px; color:var(--muted); }
+.boardui-trial .trial-area-links a { display:inline-flex; min-height:44px; align-items:center; color:var(--ink); text-decoration:underline; text-underline-offset:4px; }
+.boardui-trial .trial-area-links a:focus-visible { outline:2px solid var(--orange); outline-offset:3px; }
