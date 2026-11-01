@@ -1,0 +1,173 @@
+{
+  "scenarios": [
+    {
+      "name": "desktop",
+      "width": 1440,
+      "height": 1000,
+      "passed": true
+    },
+    {
+      "name": "mobile",
+      "width": 390,
+      "height": 844,
+      "passed": true
+    },
+    {
+      "name": "narrow",
+      "width": 320,
+      "height": 740,
+      "passed": true
+    }
+  ],
+  "errors": [],
+  "writes": [
+    {
+      "name": "desktop",
+      "body": {
+        "action": "question_save",
+        "eventSlug": "fixture-night",
+        "id": "q11",
+        "prompt": "Fictional revised question",
+        "kind": "text",
+        "options": [],
+        "required": false,
+        "status": "active",
+        "sortOrder": 10
+      },
+      "intercepted": true
+    },
+    {
+      "name": "desktop",
+      "body": {
+        "action": "question_save",
+        "eventSlug": "fixture-night",
+        "id": "q11",
+        "prompt": "Fictional revised question",
+        "kind": "text",
+        "options": [],
+        "required": false,
+        "status": "active",
+        "sortOrder": 10
+      },
+      "intercepted": true
+    },
+    {
+      "name": "desktop",
+      "body": {
+        "action": "ticket_save",
+        "eventSlug": "fixture-night",
+        "id": "grade1",
+        "updatedAt": "2026-11-01T00:00:00Z",
+        "code": null,
+        "name": "Fictional standard",
+        "description": "Fictional revised description",
+        "priceMinor": 15000,
+        "capacity": 100,
+        "admissionsPerUnit": 2,
+        "maxUnitsPerOrder": 5,
+        "status": "available",
+        "roomBadge": null
+      },
+      "intercepted": true
+    },
+    {
+      "name": "mobile",
+      "body": {
+        "action": "question_save",
+        "eventSlug": "fixture-night",
+        "id": "q11",
+        "prompt": "Fictional revised question",
+        "kind": "text",
+        "options": [],
+        "required": false,
+        "status": "active",
+        "sortOrder": 10
+      },
+      "intercepted": true
+    },
+    {
+      "name": "mobile",
+      "body": {
+        "action": "question_save",
+        "eventSlug": "fixture-night",
+        "id": "q11",
+        "prompt": "Fictional revised question",
+        "kind": "text",
+        "options": [],
+        "required": false,
+        "status": "active",
+        "sortOrder": 10
+      },
+      "intercepted": true
+    },
+    {
+      "name": "mobile",
+      "body": {
+        "action": "ticket_save",
+        "eventSlug": "fixture-night",
+        "id": "grade1",
+        "updatedAt": "2026-11-01T00:00:00Z",
+        "code": null,
+        "name": "Fictional standard",
+        "description": "Fictional revised description",
+        "priceMinor": 15000,
+        "capacity": 100,
+        "admissionsPerUnit": 2,
+        "maxUnitsPerOrder": 5,
+        "status": "available",
+        "roomBadge": null
+      },
+      "intercepted": true
+    },
+    {
+      "name": "narrow",
+      "body": {
+        "action": "question_save",
+        "eventSlug": "fixture-night",
+        "id": "q11",
+        "prompt": "Fictional revised question",
+        "kind": "text",
+        "options": [],
+        "required": false,
+        "status": "active",
+        "sortOrder": 10
+      },
+      "intercepted": true
+    },
+    {
+      "name": "narrow",
+      "body": {
+        "action": "question_save",
+        "eventSlug": "fixture-night",
+        "id": "q11",
+        "prompt": "Fictional revised question",
+        "kind": "text",
+        "options": [],
+        "required": false,
+        "status": "active",
+        "sortOrder": 10
+      },
+      "intercepted": true
+    },
+    {
+      "name": "narrow",
+      "body": {
+        "action": "ticket_save",
+        "eventSlug": "fixture-night",
+        "id": "grade1",
+        "updatedAt": "2026-11-01T00:00:00Z",
+        "code": null,
+        "name": "Fictional standard",
+        "description": "Fictional revised description",
+        "priceMinor": 15000,
+        "capacity": 100,
+        "admissionsPerUnit": 2,
+        "maxUnitsPerOrder": 5,
+        "status": "available",
+        "roomBadge": null
+      },
+      "intercepted": true
+    }
+  ],
+  "limits": "Actual source forms; all HTTP intercepted with fictional contracts. No database, credentials, financial execution or outgoing delivery."
+}

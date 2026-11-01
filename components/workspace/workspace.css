@@ -69,3 +69,6 @@ main.workspace-boardui:has(>.workspace-topbar) .workspace-orders button { border
 .workspace-boardui .workspace-team-tabs button[aria-pressed=true] { font-weight:750; text-decoration:underline; text-underline-offset:6px; }
 
 .workspace-boardui .suite-badge { color:var(--ink); background:transparent; }
+.workspace-boardui .organizer-request { background:transparent; border-bottom:1px solid var(--line); border-radius:0; }
+.workspace-boardui .organizer-request > span { color:var(--ink); }
+.workspace-boardui .organizer-panel .workspace-input input { border:0; border-radius:0; padding:0; min-height:0; background:transparent; outline:none; }

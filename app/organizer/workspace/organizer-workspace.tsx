@@ -1,5 +1,7 @@
 "use client";
 
+import { Input } from '@/components/boardui/components/base/input/input';
+import { Pagination } from '@/components/boardui/components/base/pagination/pagination';
 import HostStart from "./host-start";
 import { preferredHostEvent } from "../../../lib/host-guide";
 import { ActionButton } from "../../action";
@@ -77,6 +79,7 @@ export default function OrganizerWorkspace({ actor, role, embeddedEventSlug, emb
   const [message, setMessage] = useState("");
   const [ownView, setView] = useState("start");
   const selectedSlug=embeddedEventSlug??ownSelectedSlug,view=embeddedView??ownView;
+  const [requestQuery,setRequestQuery]=useState(''),[requestPage,setRequestPage]=useState(1);
   const [historyPage, setHistoryPage] = useState(0);
 
   const load = useCallback(async () => {
@@ -116,6 +119,8 @@ export default function OrganizerWorkspace({ actor, role, embeddedEventSlug, emb
   const tiers = data.tiers.filter((tier) => tier.eventSlug === selectedSlug);
   const settlements = data.settlements.filter((item) => item.eventSlug === selectedSlug);
   const requests = data.requests.filter((item) => item.eventSlug === selectedSlug);
+  const filteredRequests=requests.filter(item=>`${readable(item.kind)} ${item.status} ${item.detail} ${item.reviewNote??''}`.toLowerCase().includes(requestQuery.toLowerCase()));
+  const requestPages=Math.max(1,Math.ceil(filteredRequests.length/10)),currentRequestPage=Math.min(requestPage,requestPages);
   const gateStaff = data.gateStaff.filter((item) => item.eventSlug === selectedSlug);
   const attendeeAnswers = data.attendeeAnswers.filter((item) => item.eventSlug === selectedSlug);
   const vipSetting = data.vipSettings.find((item) => item.eventSlug === selectedSlug);
@@ -211,7 +216,7 @@ export default function OrganizerWorkspace({ actor, role, embeddedEventSlug, emb
               <form hidden={view!=="entry"} className="organizer-panel" onSubmit={assignGate}><header><div><small>Entry team</small><h3>Gate staff</h3></div><ScanLine size={18} /></header>{gateStaff.map((person) => <div className="organizer-person" key={person.id}><span>{person.displayName}<small>{person.email}</small></span><button type="button" disabled={busy} onClick={() => void request("assign_gate", { email: person.email, remove: true })}>Remove</button></div>)}<label>Gate staff email<input name="email" type="email" required /></label><ActionButton type="submit" disabled={busy}>Add to entry team</ActionButton></form>
               <section hidden={view!=="entry"} className="organizer-panel organizer-panel--wide"><header><div><small>Guest notes</small><h3>Before the Night</h3></div><UsersRound size={18} /></header>{attendeeAnswers.length ? <div className="organizer-answers">{attendeeAnswers.map((item) => <article key={`${item.questionId}:${item.displayName}:${item.updatedAt}`}><div><b>{item.displayName}</b><time>{new Date(item.updatedAt).toLocaleString("en-GH")}</time></div><span>{item.prompt}</span><p>{item.answer}</p></article>)}</div> : <p>No attendee answers yet.</p>}</section>
               <form hidden={view!=="requests"} className="organizer-panel" onSubmit={submitRequest}><header><div><small>BeCore operations</small><h3>Make a request</h3></div><ArrowUpRight size={18} /></header><label>Request<select name="kind"><option value="cancel_event">Cancel event</option><option value="reschedule_event">Reschedule event</option><option value="refund_order">Refund an order</option><option value="inventory_change">Change ticket prices or capacity</option><option value="other">Other</option></select></label><label>Booking reference <small>refund only</small><input name="orderId" /></label><label>Detail<textarea name="detail" minLength={10} maxLength={1200} required /></label><ActionButton type="submit" disabled={busy}>Send to BeCore</ActionButton></form>
-              <section hidden={view!=="requests"} className="organizer-panel"><header><div><small>Sent to BeCore</small><h3>Requests</h3></div><FileCheck2 size={18} /></header>{requests.length ? requests.map((item) => <article className="organizer-request" key={item.id}><b>{readable(item.kind)}</b><span>{item.status}</span><p>{item.detail}</p>{item.reviewNote ? <small>{item.reviewNote}</small> : null}</article>) : <p>No requests yet.</p>}</section>
+              <section hidden={view!=="requests"} className="organizer-panel"><header><div><small>Sent to BeCore</small><h3>Requests</h3></div><FileCheck2 size={18} /></header><Input label="Find a request" value={requestQuery} onChange={value=>{setRequestQuery(value);setRequestPage(1);}} placeholder="Request, status or reply" fieldClassName="workspace-input"/>{filteredRequests.length ? filteredRequests.slice((currentRequestPage-1)*10,currentRequestPage*10).map((item) => <article className="organizer-request" key={item.id}><b>{readable(item.kind)}</b><span>{item.status}</span><p>{item.detail}</p>{item.reviewNote ? <small>{item.reviewNote}</small> : null}</article>) : <p>{requests.length?'No requests match this view.':'No requests yet.'}</p>}<Pagination aria-label="Request history pages" page={currentRequestPage} totalPages={requestPages} onChange={setRequestPage}/></section>
               <section hidden={Boolean(embeddedEventSlug)||view!=="details"} className="organizer-panel organizer-panel--wide"><header><div><small>Payouts</small><h3>Settlement statements</h3></div></header>{settlements.length ? <div className="organizer-settlements">{settlements.map((item) => <div key={item.id}><time>{date(item.periodEnd)}</time><span>{money(item.grossMinor)} {role==='owner'?'gross':'ticket sales'}</span><span>{money(item.refundsMinor)} refunds</span><b>{money(item.netTicketSalesMinor)} net</b><small>{item.status}</small></div>)}</div> : <p>Your payout statements will appear here once payments have been checked.</p>}</section>
             </div></div>
             {message ? <p className="organizer-message" role="status">{message}</p> : null}
