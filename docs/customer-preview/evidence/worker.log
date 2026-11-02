@@ -1,0 +1,39 @@
+
+> becore-tickets@0.1.0 test:worker
+> vitest run
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ RUN  v4.1.12 /workspace/tickets-customer
+
+uncaught exception; source = Uncaught (in promise); stack = Error: D1_ERROR: Simulated fanout interruption: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_TRIGGER)
+    at D1DatabaseSessionAlwaysPrimary._sendOrThrow (cloudflare-internal:d1-api:146:19)
+    at cloudflare-internal:d1-api:97:27
+    at queueHostAnnouncement (/workspace/tickets-customer/lib/notifications.ts:247:5)
+    at notifyRoomMessage (/workspace/tickets-customer/lib/notifications.ts:103:29)
+    at TheRoom.publishAnnouncementUntracked (/workspace/tickets-customer/worker/the-room.ts:556:78)
+    at /workspace/tickets-customer/worker/the-room.ts:215:20
+    at trackedOperation (/workspace/tickets-customer/worker/handover-control.ts:34:16)
+uncaught exception; source = Uncaught (in promise); stack = Error: This announcement changed. Start a new announcement.
+    at TheRoom.publishAnnouncementUntracked (/workspace/tickets-customer/worker/the-room.ts:542:13)
+    at /workspace/tickets-customer/worker/the-room.ts:169:77
+    at /workspace/tickets-customer/worker/the-room.ts:215:26
+    at trackedOperation (/workspace/tickets-customer/worker/handover-control.ts:34:22)
+uncaught exception; source = Uncaught (in promise); stack = Error: This announcement changed. Start a new announcement.
+    at TheRoom.publishAnnouncementUntracked (/workspace/tickets-customer/worker/the-room.ts:542:13)
+    at /workspace/tickets-customer/worker/the-room.ts:169:77
+    at /workspace/tickets-customer/worker/the-room.ts:215:26
+    at trackedOperation (/workspace/tickets-customer/worker/handover-control.ts:34:22)
+
+ Test Files  90 passed (90)
+      Tests  1145 passed (1145)
+   Start at  00:01:44
+   Duration  62.10s (transform 7.46s, setup 28.17s, import 22.72s, tests 79.93s, environment 11ms)
+
+npm notice
+npm notice New major version of npm available! 11.9.0 -> 12.2.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+npm notice To update run: npm install -g npm@12.2.1
+npm notice

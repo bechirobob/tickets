@@ -5,7 +5,7 @@ import { useDiscoveryState } from "./discovery-state";
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowLeft, ArrowRight, ArrowUpRight, BadgeCheck, CalendarDays, ChevronDown, MapPin, Search, Ticket } from "lucide-react";
-import { useMemo, useSyncExternalStore } from "react";
+import { useMemo, useRef, useSyncExternalStore } from "react";
 import { useCurrentTime } from "./use-current-time";
 import { eventImageLoader, eventImageUrl } from "./event-images";
 import type { CustomerEvent } from "../lib/customer-screen";
@@ -34,6 +34,8 @@ export default function EventExplorer({ events, full = false, featuredSlug }: { 
   // SSR can appear before React attaches handlers. Do not accept and lose input.
   const ready = useSyncExternalStore(subscribeToClient, clientReady, serverReady);
   const { windowFilter, selectedDate, area, vibe, page, search, setWindowFilter, setSelectedDate, setArea, setVibe, setPage, setSearch } = useDiscoveryState(full);
+  const searchInput = useRef<HTMLInputElement>(null);
+  const nextWindowButton = useRef<HTMLButtonElement>(null);
   const now = useCurrentTime();
   const pageSize = full ? 12 : 6;
   const areas = useMemo(() => ["All areas", ...new Set(events.map((event) => event.area))], [events]);
@@ -46,6 +48,12 @@ export default function EventExplorer({ events, full = false, featuredSlug }: { 
   const currentPage = Math.min(page, pageCount - 1);
   const pageEvents = visible.slice(currentPage * pageSize, currentPage * pageSize + pageSize);
 
+  const hasFilters = windowFilter !== "next" || area !== "All areas" || vibe !== "All" || Boolean(search.trim());
+  function clearFilters() {
+    setWindowFilter("next"); setArea("All areas"); setVibe("All"); setSearch(""); setPage(0);
+    requestAnimationFrame(() => (searchInput.current ?? nextWindowButton.current)?.focus());
+  }
+
   function changeWindow(value: WindowFilter) {
     setWindowFilter(value);
     setPage(0);
@@ -56,13 +64,13 @@ export default function EventExplorer({ events, full = false, featuredSlug }: { 
   }
 
   return <div className={`drop-explorer discovery-explorer${full ? " drop-explorer--full" : ""}`}>
-    {full ? <label className="discovery-search"><Search size={19} aria-hidden="true" /><span className="sr-only">Search events, artists or venues</span><input type="search" disabled={!ready} value={search} onChange={(event) => { setSearch(event.target.value); setPage(0); }} placeholder="Search events, artists or venues" /></label> : null}
+    {full ? <label className="discovery-search"><Search size={19} aria-hidden="true" /><span className="sr-only">Search events, artists or venues</span><input ref={searchInput} type="search" disabled={!ready} value={search} onChange={(event) => { setSearch(event.target.value); setPage(0); }} placeholder="Search events, artists or venues" /></label> : null}
     <div className="drop-controls" aria-label="Filter The Drop">
       <SegmentedControl className="discovery-window" role="group" aria-label="When">
         <button type="button" disabled={!ready} aria-pressed={windowFilter === "tonight"} onClick={() => changeWindow("tonight")}>Tonight</button>
         <button type="button" disabled={!ready} aria-pressed={windowFilter === "tomorrow"} onClick={() => changeWindow("tomorrow")}>Tomorrow</button>
         <button type="button" disabled={!ready} aria-pressed={windowFilter === "weekend"} onClick={() => changeWindow("weekend")}>This weekend</button>
-        <button type="button" disabled={!ready} aria-pressed={windowFilter === "next"} onClick={() => changeWindow("next")}>Next up</button>
+        <button ref={nextWindowButton} type="button" disabled={!ready} aria-pressed={windowFilter === "next"} onClick={() => changeWindow("next")}>Next up</button>
       </SegmentedControl>
     </div>
     <div className="discovery-refinements">
@@ -78,6 +86,8 @@ export default function EventExplorer({ events, full = false, featuredSlug }: { 
         </div>
       </details>
     </div>
+
+    {hasFilters ? <div className="discovery-active-filters"><p>{[selectedDate || (windowFilter === "next" ? "" : windowFilter === "weekend" ? "This weekend" : windowFilter === "tonight" ? "Tonight" : "Tomorrow"), area === "All areas" ? "" : area, vibe === "All" ? "" : vibe, search.trim() ? `“${search.trim()}”` : ""].filter(Boolean).join(" · ")}</p><button type="button" disabled={!ready} onClick={clearFilters}>Clear filters</button></div> : null}
 
     {pageEvents.length ? <div key={`${windowFilter}:${selectedDate}:${area}:${vibe}:${currentPage}:${search}`} className={`drop-grid discovery-grid${full ? " drop-grid--full" : pageEvents.length === 1 ? " discovery-grid--spotlight" : ""}`} data-count={pageEvents.length}>
       {pageEvents.map((event) => <article className="drop-card" key={event.slug} data-vibe={event.vibe} data-event-slug={event.slug} data-colour-scheme={eventColourScheme(event)} style={eventPresentationStyle(event)} data-featured={event.slug === featuredSlug ? "true" : undefined}>
@@ -96,7 +106,7 @@ export default function EventExplorer({ events, full = false, featuredSlug }: { 
           <ActionLink href={`/event/${event.slug}`} variant="text" aria-label={`See ${event.title}`}>View event</ActionLink>
         </div>
       </article>)}
-    </div> : <div className="drop-no-match"><CalendarDays size={22} /><h3>Even Accra has a quiet corner.</h3><p>No nights match just yet. Try another date, area or music style.</p><button type="button" onClick={() => { setWindowFilter("next"); setArea("All areas"); setVibe("All"); setSearch(""); setPage(0); }}>Clear filters</button></div>}
+    </div> : <div className="drop-no-match"><CalendarDays size={22} /><h3>Even Accra has a quiet corner.</h3><p>No nights match just yet. Try another date, area or music style.</p><button type="button" onClick={clearFilters}>Show all upcoming nights</button></div>}
 
     {full && pageCount > 1 ? <nav className="drop-pagination" aria-label="Event pages"><button type="button" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}><ArrowLeft size={15} /> Previous</button><span>{currentPage + 1} of {pageCount}</span><button type="button" disabled={currentPage >= pageCount - 1} onClick={() => setPage(currentPage + 1)}>Next <ArrowRight size={15} /></button></nav> : null}
   </div>;

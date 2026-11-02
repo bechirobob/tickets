@@ -1,0 +1,17 @@
+import '../../../styles/customer.css';
+import '../../../styles/input-modality.css';
+import '../../../app/booking-consent.css';
+import '../../../app/the-yorke-way/yorke-way.css';
+import {installInputModality} from '../../../lib/input-modality';
+import {createRoot} from 'react-dom/client';
+import EventsScreen from '../../../app/events/events-screen';
+import CheckoutForm from '../../../app/checkout/[slug]/checkout-form';
+import MyNightsClient from '../../../app/my-nights/my-nights-client';
+import RegistrationForm from '../../../app/registration-form';
+import YorkeSignup from '../../../app/the-yorke-way/signup';
+import type {CuratedEvent} from '../../../lib/customer-screen';
+const event:CuratedEvent={slug:'fictional-friday',title:'Fictional Friday',shortDate:'13 Nov',fullDate:'Friday, 13 November 2026',day:'Friday',time:'8 PM — 4 AM',startsAt:'2026-11-13T20:00:00Z',endsAt:'2026-11-14T04:00:00Z',venue:'Fictional Courtyard',venueMapUrl:null,area:'Osu',vibe:'Late night',price:100,priceFromMinor:10000,bookingFeeBasisPoints:500,capacity:100,ageRestriction:'18+',lineup:'Fictional DJ',eventState:'on_sale',isTestEvent:false,rescheduledFrom:null,salesOpenAt:null,salesCloseAt:null,image:'/events/on-the-guest-list.webp',note:'A fictional preview night.',quip:'Good music. Your people.',sequence:'01',ticketTiers:[{id:'general',recordId:'fixture',name:'General admission',description:'One guest',priceMinor:10000,status:'available',roomBadge:null,admissionsPerUnit:1,maxUnitsPerOrder:4,remainingAdmissions:40,capacityAdmissions:100}]};
+const events=Array.from({length:14},(_,i)=>({...event,slug:`fictional-${i}`,title:i?`Fictional night ${i+1}`:event.title,area:i%2?'East Legon':'Osu'}));
+installInputModality(document);
+const path=location.pathname;
+createRoot(document.getElementById('root')!).render(<><p style={{padding:'8px 18px',margin:0,font:'14px system-ui'}}>Fictional component preview · nothing is saved or sent</p>{path==='/checkout/fictional-friday'?<CheckoutForm slug={event.slug} event={event} feeBasisPoints={500}/>:path==='/my-nights'?<MyNightsClient/>:path==='/rsvp/fictional-friday'?<main className="event-page" style={{maxWidth:680,margin:'auto',padding:24}}><h1>Fictional Friday</h1><RegistrationForm eventSlug={event.slug} mode="rsvp" maxPartySize={4} approvalRequired={true} roomAccess={true}/></main>:path==='/the-yorke-way'?<main className="yorke-main"><section className="yorke-form-section"><YorkeSignup/></section></main>:<EventsScreen events={events}/>}</>);
