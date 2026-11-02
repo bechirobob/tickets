@@ -48,7 +48,7 @@ export default function AboutPage() {
 
     <section className="about-close">
       <p>The outfit can wait.<br />Pick the night first.</p>
-      <div><ActionLink href="/events">See what is dropping</ActionLink><ActionLink href="/organizer/submit" variant="text">Bring us your night</ActionLink></div>
+      <div><ActionLink href="/events">See what is dropping</ActionLink><ActionLink href="/hosts" variant="text">Meet the Hosts</ActionLink></div>
     </section>
   </main>;
 }

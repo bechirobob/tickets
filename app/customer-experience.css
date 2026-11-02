@@ -28,6 +28,7 @@
 .checkout-discount { margin-top: 16px; border-block: 1px solid #68645e; }
 .checkout-discount summary { min-height: 44px; padding-block: 12px; font-size: 14px; cursor: pointer; }
 .checkout-discount .checkout-coupon { margin-block: 8px 16px; }
+.checkout-discount .checkout-coupon label { color: inherit; }
 .checkout-page .summary-lines { margin-top: 20px; }
 .checkout-page .summary-lines :is(span, strong) { padding-block: 12px; }
 .checkout-page .payment-message:empty { display: none; }
@@ -81,6 +82,7 @@
   .my-nights-page--studio .my-nights-tabs.segmented-control.segmented-control button { padding-inline: 8px; gap: 5px; font-size: 13px; }
 }
 @media (max-width: 359px) {
+  .discovery-selects { grid-template-columns: minmax(0, 1fr); }
   .discovery-directory .directory-header, .poster-event-page .sub-header { grid-template-columns: 32px minmax(0, 1fr) auto; }
   .discovery-directory .directory-header .brand-mark, .poster-event-page .sub-header .brand-mark { justify-self: start; }
   .discovery-directory .discovery-grid[data-count="1"] .drop-card { grid-template-columns: 92px minmax(0, 1fr); gap: 12px; }
@@ -88,3 +90,11 @@
 }
 
 .my-nights-page--studio .my-nights-tabs > .segmented-control__selection { display: none; }
+
+/* Keep action glyphs aligned without a separate decorative tile. */
+body :is(.discovery-home, .discovery-directory, .poster-event-page, .checkout-page, .my-nights-page--studio, .hosts-page, .about-page) :is(a, button).ticket-action[data-variant] .ticket-action__icon { background: transparent; border-radius: 0; }
+.host-directory-verification { display: flex; align-items: center; gap: 6px; }
+.host-directory-verification svg { flex: none; }
+@media (max-width: 760px) {
+  .event-detail-loading .event-detail-poster { aspect-ratio: auto; height: 300px; }
+}

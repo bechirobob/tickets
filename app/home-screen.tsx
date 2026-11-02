@@ -4,7 +4,7 @@ import PaymentFooter from "./payment-footer";
 import BrandLogo from "./brand-logo";
 import Image from "next/image";
 import Link from "next/link";
-import { ChartNoAxesCombined, MapPin, MessageCircle, Ticket } from "lucide-react";
+import { Bell, MapPin, MessageCircle, Ticket } from "lucide-react";
 import { ActionLink } from "./action";
 import ActiveNightExperience from "./active-night-experience";
 import type { CustomerEvent } from "../lib/customer-screen";
@@ -24,16 +24,16 @@ export default function HomeScreen({ events }: { events: CustomerEvent[] }) {
 
     <section className="organizer-intelligence backstage-bridge backstage-bridge--split" data-scroll-reveal>
       <div className="organizer-intelligence__copy">
-        <p className="night-kicker"><span /> Behind the night / Hosts &amp; organisers</p>
-        <h2>You bring the crowd.<br />We’ll mind the details.</h2>
-        <p>Sell the tickets, keep guests in the loop and get the door moving. You have a party to throw.</p>
-        <div className="backstage-bridge__actions"><ActionLink href="/organizer/submit">List your event</ActionLink><ActionLink href="/hosts" variant="text">Meet the Hosts</ActionLink></div>
+        <p className="night-kicker"><span /> Behind the night / Meet the Hosts</p>
+        <h2>Find your people.<br />Make a night of it.</h2>
+        <p>Meet the people behind the nights and find your next plan.</p>
+        <div className="backstage-bridge__actions"><ActionLink href="/hosts">Meet the Hosts</ActionLink><ActionLink href="/events" variant="text">Explore nights</ActionLink></div>
       </div>
       <figure className="backstage-bridge__image"><Image src="/atmospheres/behind-the-night.webp" width={1100} height={733} sizes="(max-width: 700px) 100vw, 50vw" alt="" aria-hidden="true" unoptimized /><figcaption>Good nights don’t happen by accident.</figcaption></figure>
       <dl>
-        <div><dt><Ticket aria-hidden="true" size={20} /> Sell tickets</dt><dd>MoMo, cards, USDC and ticket tiers. Give the group chat a deadline.</dd></div>
-        <div><dt><MessageCircle aria-hidden="true" size={20} /> Run the night</dt><dd>Guest updates, a private Room and passes ready for the door.</dd></div>
-        <div><dt><ChartNoAxesCombined aria-hidden="true" size={20} /> Plan the next</dt><dd>See what sold, who brought the crowd and when they showed up.</dd></div>
+        <div><dt><Ticket aria-hidden="true" size={20} /> Your tickets</dt><dd>Keep your bookings and entry passes in My Nights.</dd></div>
+        <div><dt><MessageCircle aria-hidden="true" size={20} /> The Room</dt><dd>Meet the crowd before your night begins.</dd></div>
+        <div><dt><Bell aria-hidden="true" size={20} /> Host updates</dt><dd>Check My Nights for updates to your plans.</dd></div>
       </dl>
     </section>
 

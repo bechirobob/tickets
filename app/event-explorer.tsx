@@ -23,7 +23,7 @@ const clientReady = () => true;
 const serverReady = () => false;
 
 const vibes: Array<{ value: VibeFilter; label: string }> = [
-  { value: "All", label: "All music & moods" },
+  { value: "All", label: "All music" },
   { value: "Late night", label: "Late night" },
   { value: "Day party", label: "Day party" },
   { value: "Alté", label: "Alté" },

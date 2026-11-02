@@ -10,7 +10,7 @@ test("crypto labels name the integrated USDC method while checkout and event ava
   ].map(path => readFile(new URL(path, import.meta.url), "utf8")));
   assert.match(footer, /Crypto<small>USDC through SeevPlus<\/small>/u);
   assert.doesNotMatch(footer, /coming soon/iu);
-  assert.match(home, /MoMo, cards, USDC and ticket tiers/u);
+  assert.match(home, /Keep your bookings and entry passes in My Nights/u);
   assert.match(help, /Pay with Mobile Money, cards or USDC/u);
   assert.match(help, /Choose from the payment methods shown at checkout/u);
   assert.match(help, /only the asset and network shown/u);
@@ -552,8 +552,9 @@ test("public organiser actions keep submission public and named workspaces prote
   const home = `${homeShell}\n${activeNight}`;
 
   assert.doesNotMatch(home, /href="\/organizer"/u);
-  assert.ok(home.match(/href="\/organizer\/submit"/gu)?.length >= 2);
-  assert.match(home, />List your event\s*</u);
+  assert.equal(home.match(/href="\/organizer\/submit"/gu)?.length, 1);
+  assert.match(home, />Organisers\s*</u);
+  assert.match(home, /<ActionLink href="\/hosts">Meet the Hosts/u);
   assert.match(organizer, /redirect\("\/organizer\/workspace"\)/u);
   assert.doesNotMatch(organizer, /ops-shell|Ticket sales|Gross sales|Attendees/u);
   assert.match(submission, /<PublicNavigation \/>/u);
@@ -610,8 +611,8 @@ test("About us has its own open page and no longer interrupts the landing page",
   assert.match(about, /which tickets sold, which promoters brought people and when the crowd arrived/u);
   assert.match(about, /Made for how Accra moves/u);
   assert.match(home, /className="organizer-intelligence backstage-bridge(?: [^"]+)?"/u);
-  assert.match(home, /We’ll mind the details/u);
-  assert.match(home, /MoMo, cards, USDC and ticket tiers/u);
+  assert.match(home, /Find your people/u);
+  assert.match(home, /Keep your bookings and entry passes in My Nights/u);
   assert.match(css, /\.about-hero\s*\{[^}]*display:\s*grid[^}]*border-bottom:\s*1px solid #aaa79e/su);
   assert.match(css, /\.about-reasons article\s*\{[^}]*border-bottom:\s*1px solid #cbc7bd/su);
   assert.doesNotMatch(css, /\.about-(?:hero|reasons|close)[^}]*box-shadow/su);
