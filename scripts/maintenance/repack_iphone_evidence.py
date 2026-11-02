@@ -8,12 +8,12 @@ import urllib.request
 import zipfile
 
 REPO = 'bechirobob/tickets'
-RUN = 41384240306
-ARTIFACT = 13114687891
-SOURCE = 'd9f4ca0c8c24feab8f6db17446313938f206f9e6'
-DIGEST = 'sha256:19d175abe7c102c2e84951b0c01f51dcc7edfa05215c030b3bdd07a34baa5126'
-NAME = 'BeCore-Tickets-iPhone-layouts-41384240306'
-SIZE = 38687329
+RUN = 41422336206
+ARTIFACT = 13129663703
+SOURCE = 'c81c868c09d864dd49c310af75fe2d8dcee111e4'
+DIGEST = 'sha256:2b3a1b21b8961d9fabb6d1aa0bb7050a52495aa1eeeddd2eb7795f1ab998ea86'
+NAME = 'BeCore-Tickets-iPhone-layouts-41422336206'
+SIZE = 38685131
 BUDGET = 20 * 1024 * 1024
 LIMIT = 24 * 1024 * 1024
 
