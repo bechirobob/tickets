@@ -1,3 +1,5 @@
+> Historical read-only assessment of the existing fixture. The subsequently approved narrower implementation and successful cleanup are recorded in `dashboard-pass.md` and `evidence/authenticated/results.json`. The old script described below was not used.
+
 # Read-only assessment of authenticated browser fixtures
 
 No credential was generated and no fixture setup was executed for this assessment.

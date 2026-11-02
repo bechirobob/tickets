@@ -1,0 +1,70 @@
+{
+  "sourceCommit": "4bb0532f4b14450451fa7bbe0bab49e436aa8354",
+  "helperSha256": "1354ffe375064eda94ab72d7b7bdcf3550deee50cbd3d1c909d085383878d45f",
+  "lockSha256": "806a3c7c6a8ac1a4b569882757b9a5c03a9d901df34c268dca2f039eab09f8d7",
+  "scope": "Compiled application, real password login, dedicated local D1; no injected sessions or mocked API responses.",
+  "checks": [
+    {
+      "name": "setup",
+      "accounts": 2,
+      "seededSessions": 0,
+      "migrations": 72,
+      "providerBindings": false,
+      "queueBindings": false,
+      "passwordFiles": false
+    },
+    {
+      "name": "real sign-in, persistence, accessibility and sign-out",
+      "viewport": "desktop",
+      "role": "owner",
+      "passed": true
+    },
+    {
+      "name": "cross-event isolation",
+      "viewport": "desktop",
+      "read": 403,
+      "write": 403
+    },
+    {
+      "name": "real sign-in, persistence, accessibility and sign-out",
+      "viewport": "desktop",
+      "role": "organizer",
+      "passed": true
+    },
+    {
+      "name": "real sign-in, persistence, accessibility and sign-out",
+      "viewport": "mobile",
+      "role": "owner",
+      "passed": true
+    },
+    {
+      "name": "cross-event isolation",
+      "viewport": "mobile",
+      "read": 403,
+      "write": 403
+    },
+    {
+      "name": "real sign-in, persistence, accessibility and sign-out",
+      "viewport": "mobile",
+      "role": "organizer",
+      "passed": true
+    },
+    {
+      "name": "application-created sessions",
+      "count": 4
+    }
+  ],
+  "pageErrors": [],
+  "csp": [],
+  "blockedBrowserRequests": [],
+  "outboundAttempts": 0,
+  "cleanup": {
+    "databaseRemoved": true,
+    "temporaryDirectoryRemoved": true,
+    "passwordFilesCreated": false,
+    "browserClosed": true,
+    "runtimeStopped": true
+  },
+  "passed": true,
+  "browser": "154.0.8037.57"
+}

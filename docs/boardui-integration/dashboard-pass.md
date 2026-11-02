@@ -28,17 +28,21 @@ This pass covers existing owner/organiser staff dashboards. Customer Room/VIP, c
 
 Browser tests use actual source components and styles with intercepted fictional GET contracts. They assert zero mutation requests. They cover staff account dialog/cancel/focus and self-removal protection, support draft isolation, review return state, host review eligibility and note retention, promoter/coupon paging and form-draft retention, and current-device protection. Desktop and touch-emulated viewports are not real iPhone/Safari or signed-in browser-to-database evidence.
 
-Existing Worker tests exercise staff access, owner integrity, host applications, compact/event-day operations and organiser business behavior in the existing isolated unit-test environment. These do not establish compiled authenticated end-to-end readiness. No persistent local browser accounts, fixture passwords, seeded sessions or registration grants were generated.
+Existing Worker tests exercise staff access, owner integrity, host applications, compact/event-day operations and organiser business behavior in the existing isolated unit-test environment.
 
-## Bounded pending authorization
+## Approved compiled authenticated acceptance
 
-Allow exactly two temporary fictional password accounts (owner and organiser) in a dedicated **local-only** D1 test database, sign in through the application's real password form, run bounded authenticated dashboard tests against fictional records, then stop the local server and delete the dedicated database and secret files. Do not seed/inject session tokens; let normal app authentication create its own sessions. No provider credentials, external accounts, production data/settings, outgoing messages/invitations, payment/refund execution or deployment. Keep passwords/cookies out of logs, screenshots, traces and repository artifacts.
+The owner approved exactly two temporary local fictional password accounts and cleanup. `scripts/boardui-integration/authenticated-check.mjs` applies the 72 repository migrations to a new dedicated local D1 database, creates owner/organiser password accounts, and signs in through the compiled application's real password form. It never seeds sessions or injects cookies. Passwords remain in process memory; no password file, trace or HAR is created. Application sessions retain their normal twelve-hour lifetime while the database exists; the entire isolated database is removed after the run. The local login-decoy secret is ephemeral and grants no external access.
 
-The existing setup script cannot be run unchanged under this narrower authorization: it directly seeds two staff sessions and one registration grant and leaves the local password account behind. The read-only assessment in `fixture-assessment.md` records exact storage and expiry. A bounded normal-login fixture variant would be required only after approval.
+Desktop 1440×1000 and touch-emulated Chromium 390×844 each passed owner and organiser sign-in/sign-out, event visibility, owner-account access versus organiser 403, owner self-removal exclusion, actual guest-question save plus database/reload persistence, and organiser cross-event read/write rejection. Organiser runs also passed answered-question rejection with draft retention, ticket-description cancel, concurrent-edit conflict, reload of saved values, then real UI save and database/reload persistence. Ticket price remained unchanged. The compiled runtime uses unchanged rate-limit definitions and denies all outbound network; no provider or queue bindings are supplied. No invitations, messages, payments or refunds were executed.
+
+The inspected question/ticket dialogs had no axe violations or horizontal overflow. Four real app-created sessions, zero page errors, zero observed CSP violations, zero external network attempts, and complete database/runtime/browser cleanup were verified. CSP observations are scoped to the inspected page lifecycle, not exhaustive route coverage. Screenshots contain fictional records only. This bounded acceptance complements the wider component tests; it does not establish saved-action coverage for every staff workflow. Real iPhone/Safari and screen-reader testing remain outstanding.
+
+Evidence and source/lock/helper hashes: `evidence/authenticated/results.json`. No application changes were required by this acceptance; an initial ambiguous test locator was corrected before successful runs.
 
 ## Remaining release gates, not an unspecified UI backlog
 
-1. Obtain the bounded local-fixture authorization above; verify compiled authenticated owner/organiser journeys, permission rejection, persistence/conflicts, draft retention and CSP using actual application routes and local database.
+1. Bounded local authenticated acceptance is complete as described above. Any broader saved-action coverage must retain fictional fixtures and the same no-message/no-financial-execution boundaries.
 2. Complete real iPhone/Safari and assistive-technology checks through an authorized isolated HTTPS environment. No hosted URL or LAN instructions have been verified here.
 3. Resolve PR #392's independent original email-screenshot/release blocker. Reviewed dependency fixes are present source-only; #392/#393 and their admission controls are untouched.
 4. Review this combined candidate's exact source, remove evaluation-only routes if required for release, and run exact-candidate security/build/browser gates. Old admission inventories do not approve this new candidate.
@@ -50,7 +54,7 @@ The existing setup script cannot be run unchanged under this narrower authorizat
 - TypeScript and actual Vinext build passed. Lint: zero errors, five unsuppressed warnings (three protected/trial external stylesheet links, inherited moderation default export, harness image shim).
 - Root and mobile audits: zero vulnerabilities, no exceptions or dependency changes in this pass.
 - Staff dashboard browser journeys passed at 1440×1000, 390×844 and 320×740, with zero write requests, zero page errors and no axe violations in the inspected views. Actual pixels were inspected. Earlier guest/Yorke, order/event/Money/Team and form/request journeys were rerun.
-- Compiled unauthenticated checks: 11 protected pages redirect to login; 10 APIs return 403. No authenticated browser-to-database claim.
+- Compiled unauthenticated checks: 11 protected pages redirect to login; 10 APIs return 403. These earlier checks were unauthenticated; the later bounded authenticated run is recorded above.
 - Fixed a confirmed compact-pagination bug: when data initially yielded one page, the width observer never attached after more pages loaded. The observer now attaches when the pager becomes active; a mobile assertion covers asynchronous device-list loading. Original MIT provenance is retained and this adaptation is recorded.
 - Whole emitted client JS/CSS: 673,959 gzip bytes across 200 files, including retained trial routes. Same dependency lock as phase 2 (671,491 bytes). These are artifact totals, not route transfer sizes or speed measurements.
 
