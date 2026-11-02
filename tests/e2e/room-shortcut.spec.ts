@@ -14,25 +14,72 @@ test.beforeEach(async ({ page }) => {
 });
 const expiry = () => new Date(Date.now() + 3600_000).toISOString();
 
-test('Room summaries do not poll behind the desktop breakpoint and refresh on mobile re-entry', async ({ page, eventSlug }) => {
-  await page.setViewportSize({ width: 1000, height: 800 });
-  await page.clock.install();
+test('Room summaries do not poll behind the desktop breakpoint and refresh on mobile re-entry', async ({ page, eventSlug }, info) => {
+  const phases: { phase: string; time: number; requests: number }[] = [];
+  const routeReceipts: { time: number; request: number; method: string; path: string }[] = [];
   let requests = 0;
-  await page.route('**/api/customer/room-updates', route => {
-    requests++;
-    return route.fulfill({ json: { rooms: [{ eventSlug, title: 'Garden', unread: 2, expiresAt: expiry() }], unread: 2 } });
+  const mark = (phase: string) => { phases.push({ phase, time: Date.now(), requests }); };
+  await page.addInitScript(() => {
+    const records: Record<string, unknown>[] = [];
+    const trace = (record: Record<string, unknown>) => {
+      if (records.length >= 500) return;
+      records.push({ ...record, performanceTime: performance.now(), time: Date.now(),
+        width: innerWidth, matches700: matchMedia('(max-width: 700px)').matches,
+        visibility: document.visibilityState });
+    };
+    Object.assign(window, { __bctRoomTrace: trace, __bctRoomTraceRecords: records });
+    for (const name of ['resize', 'focus', 'pageshow']) {
+      window.addEventListener(name, () => trace({ type: 'native-event', event: name }));
+    }
+    document.addEventListener('visibilitychange', () => trace({ type: 'native-event', event: 'visibilitychange' }));
+    const originalFetch = window.fetch;
+    window.fetch = function (this: unknown, ...args) {
+      // Instrument only the public endpoint name, never headers or payloads.
+      try {
+        const input = args[0] instanceof Request ? args[0].url : String(args[0]);
+        if (new URL(input, location.href).pathname === '/api/customer/room-updates') {
+          trace({ type: 'fetch-start', path: '/api/customer/room-updates' });
+        }
+      } catch { /* Diagnostics must not change fetch behavior. */ }
+      return originalFetch.apply(this, args);
+    };
+    trace({ type: 'trace-installed' });
   });
-  await page.goto('/');
-  const dock = page.getByRole('navigation', { name: 'Customer navigation', includeHidden: true });
-  await expect(dock).toBeHidden(); await page.clock.fastForward(60_000); expect(requests).toBe(0);
-  await page.setViewportSize({ width: 700, height: 800 });
-  const room = dock.getByRole('link', { name: 'Room, 2 new updates' });
-  await expect(room).toBeVisible(); expect(requests).toBe(1);
-  await page.clock.fastForward(30_000); await expect.poll(() => requests).toBe(2);
-  await page.setViewportSize({ width: 701, height: 800 });
-  await expect(room).toHaveCount(0); await page.clock.fastForward(60_000); expect(requests).toBe(2);
-  await page.setViewportSize({ width: 700, height: 800 });
-  await expect(room).toBeVisible(); expect(requests).toBe(3);
+  try {
+    mark('before-desktop-viewport');
+    await page.setViewportSize({ width: 1000, height: 800 });
+    mark('after-desktop-viewport');
+    await page.clock.install();
+    await page.route('**/api/customer/room-updates', route => {
+      requests++;
+      if (routeReceipts.length < 500) routeReceipts.push({ time: Date.now(), request: requests, method: route.request().method(), path: '/api/customer/room-updates' });
+      return route.fulfill({ json: { rooms: [{ eventSlug, title: 'Garden', unread: 2, expiresAt: expiry() }], unread: 2 } });
+    });
+    await page.goto('/');
+    const dock = page.getByRole('navigation', { name: 'Customer navigation', includeHidden: true });
+    mark('before-desktop-hidden-assertion');
+    await expect(dock).toBeHidden(); mark('before-desktop-fast-forward'); await page.clock.fastForward(60_000); mark('before-desktop-count-assertion'); expect(requests).toBe(0);
+    mark('before-mobile-viewport');
+    await page.setViewportSize({ width: 700, height: 800 });
+    mark('after-mobile-viewport');
+    const room = dock.getByRole('link', { name: 'Room, 2 new updates' });
+    await expect(room).toBeVisible(); mark('before-mobile-count-assertion'); expect(requests).toBe(1);
+    mark('before-mobile-fast-forward');
+    await page.clock.fastForward(30_000); mark('before-mobile-poll-assertion'); await expect.poll(() => requests).toBe(2);
+    mark('before-701-viewport');
+    await page.setViewportSize({ width: 701, height: 800 });
+    mark('after-701-viewport');
+    await expect(room).toHaveCount(0); mark('before-701-fast-forward'); await page.clock.fastForward(60_000); mark('before-701-count-assertion'); expect(requests).toBe(2);
+    mark('before-mobile-reentry-viewport');
+    await page.setViewportSize({ width: 700, height: 800 });
+    mark('after-mobile-reentry-viewport');
+    await expect(room).toBeVisible(); mark('before-mobile-reentry-count-assertion'); expect(requests).toBe(3);
+    mark('assertions-complete');
+  } finally {
+    const browser = await page.evaluate(() => (window as unknown as { __bctRoomTraceRecords?: Record<string, unknown>[] }).__bctRoomTraceRecords ?? [])
+      .catch(error => [{ type: 'trace-retrieval-failed', message: String(error) }]);
+    await info.attach('room-breakpoint-trace.json', { body: JSON.stringify({ phases, routeReceipts, browser }, null, 2), contentType: 'application/json' });
+  }
 });
 
 test('a quiet visible Room retries a transient read failure with the same rendered boundary', async ({ page, eventSlug }) => {

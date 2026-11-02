@@ -17,8 +17,12 @@ const dockIsVisible = () => window.matchMedia(dockMediaQuery).matches;
 const serverDockIsVisible = () => false;
 const subscribeToDockViewport = (changed: () => void) => {
   const media = window.matchMedia(dockMediaQuery);
-  media.addEventListener('change', changed);
-  return () => media.removeEventListener('change', changed);
+  const observed = () => {
+    (window as unknown as { __bctRoomTrace?: (record: Record<string, unknown>) => void }).__bctRoomTrace?.({ phase: 'dock-media-change', matches: media.matches });
+    changed();
+  };
+  media.addEventListener('change', observed);
+  return () => media.removeEventListener('change', observed);
 };
 
 export default function CustomerDock() {

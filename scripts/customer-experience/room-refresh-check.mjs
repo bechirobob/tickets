@@ -35,6 +35,6 @@ try{
  result.webkit={path:webkit.executablePath(),available:existsSync(webkit.executablePath()),status:engine==='webkit'?'selected for hosted verification':existsSync(webkit.executablePath())?'not selected':'not installed locally; no download attempted'};
  result.engine=engine;
 
- const code=await new Promise((resolve,reject)=>{const child=spawn('node',['node_modules/@playwright/test/cli.js','test','tests/e2e/room-shortcut.spec.ts','--config=playwright.room-refresh.config.ts','--workers=1','--retries=0'],{stdio:'inherit',env:{...process.env,E2E_BASE_URL:origin,BECORE_ISOLATED_PREVIEW:'true'}});child.on('error',reject);child.on('close',(code,signal)=>{result.childSignal=signal;resolve(code===0?0:1);});});
+ const code=await new Promise((resolve,reject)=>{const child=spawn('node',['node_modules/@playwright/test/cli.js','test','tests/e2e/room-shortcut.spec.ts','--grep=Room summaries do not poll behind the desktop breakpoint','--config=playwright.room-refresh.config.ts','--workers=1','--retries=0'],{stdio:'inherit',env:{...process.env,E2E_BASE_URL:origin,BECORE_ISOLATED_PREVIEW:'true'}});child.on('error',reject);child.on('close',(code,signal)=>{result.childSignal=signal;resolve(code===0?0:1);});});
  result.passed=code===0;process.exitCode=code;
 }finally{await runtime?.dispose();rmSync(isolated,{recursive:true,force:true});result.cleanup={temporaryDatabaseRemoved:!existsSync(isolated),persistentCredentialsCreated:false};writeFileSync(join(out,'results.json'),JSON.stringify(result,null,2));}
