@@ -1,39 +1,72 @@
-name: Shared input modality regressions
+name: Isolated Operations suite diagnostic
 on:
-  push:
-    branches: [fix/shared-input-focus-20261024]
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: input-modality-${{ github.ref }}
-  cancel-in-progress: true
+  group: operations-diagnostic-${{ github.ref }}
+  cancel-in-progress: false
+# Diagnostic evidence only. Never a release gate substitute or production job.
 jobs:
-  browser:
+  operations:
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'bechirobob/tickets' && github.ref == 'refs/heads/diag/operations-suite-20261102'
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [desktop-chromium, mobile-chromium, mobile-webkit]
     runs-on: ubuntu-24.04
     container:
       image: mcr.microsoft.com/playwright:v1.62.1-noble@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e
       options: --user 1001 --shm-size=1g
-    timeout-minutes: 15
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+      BECORE_RELEASE_SHA: ${{ github.sha }}
+      BECORE_ISOLATED_PREVIEW: 'true'
+      WRANGLER_SEND_METRICS: 'false'
     defaults:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
           persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - name: Require only the reviewed test correction and diagnostic workflow
+        run: |
+          set -euo pipefail
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          test -z "${E2E_BASE_URL:-}"
+          test "$(git rev-parse HEAD)" = "$BECORE_RELEASE_SHA"
+          git merge-base --is-ancestor 77e1cbce17aa19fc75ba154b45224666fbe4a9e9 HEAD
+          test "$(git diff --name-only 77e1cbce17aa19fc75ba154b45224666fbe4a9e9 HEAD)" = .github/workflows/input-modality-checks.yml
+          git diff --exit-code 77e1cbce17aa19fc75ba154b45224666fbe4a9e9 HEAD -- tests/e2e/operations.spec.ts
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22.23.4
-          cache: npm
-      - run: npm ci
-      - run: node --test tests/input-modality.test.mjs
-      - run: node scripts/verify-browser-environment.mjs chromium webkit
-      # setContent + real components/styles only: no app server, accounts or API writes.
-      - run: npx playwright test --config playwright.input-modality.config.ts --workers=1 --retries=0
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Verify existing container browsers
+        run: node scripts/verify-browser-environment.mjs chromium webkit
+      - name: Build isolated candidate application
+        run: |
+          npm run build
+          node scripts/prepare-deploy.mjs
+          node --input-type=module -e 'import { readFileSync } from "node:fs"; import assert from "node:assert/strict"; assert.equal(JSON.parse(readFileSync("dist/server/wrangler.json", "utf8")).vars.RELEASE_SHA, process.env.BECORE_RELEASE_SHA);'
+      - name: Prepare fresh local-only fixtures
+        run: |
+          npx wrangler d1 migrations apply DB --local --persist-to .wrangler/state
+          node scripts/prepare-operations-browser-fixture.mjs
+      - name: Run every Operations test without retries
+        run: |
+          set -euo pipefail
+          npx playwright test --config playwright.operations.config.ts --project '${{ matrix.browser }}' --workers=1 --retries=0 --output test-results/operations 2>&1 | sed '/BECORE_SCANNER_PREVIEW_V1/d'
+      - name: Preserve navigation screenshot if produced
         if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: input-modality-${{ github.sha }}
-          path: test-results/input-modality
+          name: operations-navigation-${{ matrix.browser }}-${{ github.sha }}
+          path: test-results/operations/**/organizer-segmented-views.png
+          if-no-files-found: warn
           retention-days: 14
