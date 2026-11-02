@@ -1,27 +1,14 @@
-name: Production browser audit
+name: Exact live WebKit navigation verification
 
 on:
-  workflow_run:
-    workflows: ["Deploy to Cloudflare"]
-    types: [completed]
   workflow_dispatch:
-  workflow_call:
-    inputs:
-      expected_source:
-        description: Exact source just activated by the guarded VPS release
-        required: true
-        type: string
-      activation_required:
-        description: Require the successful VPS activation revision
-        type: boolean
-        default: true
 
 permissions:
   contents: read
 
 jobs:
   browser-audit:
-    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'bechirobob/tickets' && github.ref == 'refs/heads/diag/host-navigation-live-webkit-20261102'
     runs-on: ubuntu-latest
     # Each job installs only its selected engine. Keep enough headroom for
     # WebKit system dependencies and evidence upload on a slow mirror.
@@ -29,12 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        browser: [desktop-chromium, mobile-chromium, mobile-webkit]
         include:
-          - browser: desktop-chromium
-            engine: chromium
-          - browser: mobile-chromium
-            engine: chromium
           - browser: mobile-webkit
             engine: webkit
     steps:
@@ -43,8 +25,8 @@ jobs:
       - name: Resolve and verify the active production revision
         id: deployed
         env:
-          ACTIVATED_SHA: ${{ inputs.expected_source || '' }}
-          ACTIVATION_REQUIRED: ${{ inputs.activation_required && 'true' || 'false' }}
+          ACTIVATED_SHA: '32b5956549cb3eff04e2abbcfda177bccb07b0f8'
+          ACTIVATION_REQUIRED: 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -119,6 +101,22 @@ jobs:
           git merge-base --is-ancestor "$DEPLOYED_SHA" refs/remotes/origin/main
           printf '%s\n' "$DEPLOYED_SHA" > "$RUNNER_TEMP/production-browser-audit/checked-out-revision.txt"
           git rev-parse HEAD^{tree} > "$RUNNER_TEMP/production-browser-audit/checked-out-tree.txt"
+      - name: Apply only the reviewed test synchronization overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          base=32b5956549cb3eff04e2abbcfda177bccb07b0f8
+          correction=479aba1b23625b21ee93de3fc6d063ad748764fe
+          file=tests/e2e/host-brand-identity.spec.ts
+          test "$(git rev-parse HEAD)" = "$base"
+          test "$(git diff --name-only "$base" "$correction")" = "$file"
+          git merge-base --is-ancestor "$base" "$correction"
+          git show "$correction:$file" > "$file"
+          test "$(git hash-object "$file")" = "$(git rev-parse "$correction:$file")"
+          test "$(git diff --name-only)" = "$file"
+          git diff --check
+          git diff > "$RUNNER_TEMP/production-browser-audit/test-overlay.patch"
+          printf '{"liveSource":"%s","testCorrection":"%s","file":"%s","testBlob":"%s","productionModified":false}\n' "$base" "$correction" "$file" "$(git hash-object "$file")" > "$RUNNER_TEMP/production-browser-audit/test-overlay.json"
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22.23.4
@@ -130,22 +128,120 @@ jobs:
         env:
           DEPLOYED_SHA: ${{ steps.deployed.outputs.revision }}
         run: bash "$RUNNER_TEMP/production-browser-audit/verify-deployment.sh" before
-      - name: Audit production in desktop Chrome, mobile Chrome and mobile WebKit
-        run: npm run test:e2e:production -- --project ${{ matrix.browser }} --workers=1 --retries=0
+      - name: Verify complete host journey including destination render and downstream assertions
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: focused-results.json
+        run: npm run test:e2e:production -- tests/e2e/host-brand-identity.spec.ts --project mobile-webkit --workers=1 --retries=0 --trace=on --reporter=line,json --output=focused-test-results
+      - name: Verify full production WebKit suite without retries
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: full-webkit-results.json
+        run: npm run test:e2e:production -- --project mobile-webkit --workers=1 --retries=0 --reporter=line,json
       - name: Confirm production stayed on the audited source
         if: ${{ always() && steps.source.outcome == 'success' }}
         env:
           DEPLOYED_SHA: ${{ steps.deployed.outputs.revision }}
         run: bash "$RUNNER_TEMP/production-browser-audit/verify-deployment.sh" after
-      - name: Preserve browser results and isolated Room renders
+      - name: Package bounded original verification evidence
+        id: evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        shell: bash
+        run: |
+          python3 - <<'PYPACK'
+          import hashlib,json,os,pathlib,zipfile
+          root=pathlib.Path.cwd(); selected={}
+          for folder in ('focused-test-results','test-results'):
+              for p in sorted((root/folder).rglob('*')):
+                  if not p.is_file() or p.is_symlink():continue
+                  if folder=='focused-test-results' or 'host-brand-identity' in str(p) or p.name in ('trace.zip','error-context.md','test-failed-1.png'):
+                      selected[str(p.relative_to(root))]=p.read_bytes()
+          for name in ('focused-results.json','full-webkit-results.json'):
+              if (root/name).is_file():selected[name]=(root/name).read_bytes()
+          metadata=pathlib.Path(os.environ['RUNNER_TEMP'])/'production-browser-audit'
+          for p in sorted(metadata.glob('*')):
+              if p.is_file() and p.suffix in ('.json','.txt','.patch'):selected['identity/'+p.name]=p.read_bytes()
+          assert selected
+          budget=20*1024*1024;groups=[];group={};size=0;index=[]
+          for name,data in selected.items():
+              assert len(data)<=budget, 'Single evidence file exceeds bounded part'
+              if group and size+len(data)>budget:groups.append(group);group={};size=0
+              group[name]=data;size+=len(data)
+          if group:groups.append(group)
+          assert len(groups)<=8
+          for i,g in enumerate(groups,1):
+              index.extend({'path':n,'bytes':len(d),'sha256':hashlib.sha256(d).hexdigest(),'part':i} for n,d in g.items())
+          manifest=json.dumps({'liveSource':'32b5956549cb3eff04e2abbcfda177bccb07b0f8','testCorrection':'479aba1b23625b21ee93de3fc6d063ad748764fe','workflowSource':os.environ['GITHUB_SHA'],'runId':os.environ['GITHUB_RUN_ID'],'files':index},sort_keys=True,indent=2).encode()
+          for i,g in enumerate(groups,1):
+              directory=pathlib.Path(os.environ['RUNNER_TEMP'])/'bounded-host-audit'/f'part-{i:02}';directory.mkdir(parents=True)
+              archive=directory/'evidence.zip'
+              with zipfile.ZipFile(archive,'w',compression=zipfile.ZIP_STORED) as z:
+                  z.writestr('EVIDENCE-INDEX.json',manifest)
+                  for name,data in g.items():z.writestr(name,data)
+              assert archive.stat().st_size < 24*1024*1024-65536
+              (directory/'SHA256SUMS').write_text(hashlib.sha256(archive.read_bytes()).hexdigest()+'  evidence.zip\n')
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write(f'parts={len(groups)}\n')
+          print(json.dumps({'parts':len(groups),'files':len(index),'indexSha256':hashlib.sha256(manifest).hexdigest()}))
+          PYPACK
+      - if: always() && steps.evidence.outputs.parts >= 1
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: production-browser-audit-${{ github.run_id }}-${{ matrix.browser }}
-          path: |
-            playwright-report
-            test-results
-            ${{ runner.temp }}/production-browser-audit/*.json
-            ${{ runner.temp }}/production-browser-audit/checked-out-*.txt
-          if-no-files-found: ignore
+          name: live-webkit-navigation-${{ github.run_id }}-part-01
+          path: ${{ runner.temp }}/bounded-host-audit/part-01/
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 14
+      - if: always() && steps.evidence.outputs.parts >= 2
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: live-webkit-navigation-${{ github.run_id }}-part-02
+          path: ${{ runner.temp }}/bounded-host-audit/part-02/
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 14
+      - if: always() && steps.evidence.outputs.parts >= 3
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: live-webkit-navigation-${{ github.run_id }}-part-03
+          path: ${{ runner.temp }}/bounded-host-audit/part-03/
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 14
+      - if: always() && steps.evidence.outputs.parts >= 4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: live-webkit-navigation-${{ github.run_id }}-part-04
+          path: ${{ runner.temp }}/bounded-host-audit/part-04/
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 14
+      - if: always() && steps.evidence.outputs.parts >= 5
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: live-webkit-navigation-${{ github.run_id }}-part-05
+          path: ${{ runner.temp }}/bounded-host-audit/part-05/
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 14
+      - if: always() && steps.evidence.outputs.parts >= 6
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: live-webkit-navigation-${{ github.run_id }}-part-06
+          path: ${{ runner.temp }}/bounded-host-audit/part-06/
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 14
+      - if: always() && steps.evidence.outputs.parts >= 7
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: live-webkit-navigation-${{ github.run_id }}-part-07
+          path: ${{ runner.temp }}/bounded-host-audit/part-07/
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 14
+      - if: always() && steps.evidence.outputs.parts >= 8
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: live-webkit-navigation-${{ github.run_id }}-part-08
+          path: ${{ runner.temp }}/bounded-host-audit/part-08/
+          compression-level: 0
+          if-no-files-found: error
           retention-days: 14
