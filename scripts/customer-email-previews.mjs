@@ -182,3 +182,11 @@ if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.m
   await writeFile(resolve(output, 'index.html'), `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Customer email previews</title><body style="font:16px system-ui;padding:24px"><h1>Customer email previews</h1><p>Exact production HTML with the public On The Guest List identity and flyer. Customer, payment and registration scenarios are fictional, not current event availability or prices. No emails sent. Existing receipt actions use inert preview addresses; the first-host example retains its exact production Room URL with fictional event and message identifiers. The Host invitation uses public PURO/Kofi names and an invalid SAMPLE token, not a real access grant. Do not submit any action.</p><ul>${previews.map(({ name }) => `<li><a href="${name}.html">${name}</a> · <a href="${name}.txt">plain text</a></li>`).join('')}</ul></body></html>`);
   console.log(`Saved ${previews.length} synthetic customer email previews to ${output}. No email was sent.`);
 }
+
+// Browser-evaluated preview readiness, not part of any delivered email.
+// Image dimensions/load completion alone do not establish decoded pixels.
+/* global document, requestAnimationFrame */
+export async function waitForEmailImagePaint() {
+  await Promise.all(Array.from(document.images, image => image.decode()));
+  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+}

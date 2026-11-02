@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
+import { runInNewContext } from 'node:vm';
 import sharp from 'sharp';
-import { createCustomerEmailHarness, previewData, previewNow, renderCustomerEmailPreviews } from '../scripts/customer-email-previews.mjs';
+import { waitForEmailImagePaint, createCustomerEmailHarness, previewData, previewNow, renderCustomerEmailPreviews } from '../scripts/customer-email-previews.mjs';
 
 const hash = value => createHash('sha256').update(value).digest('hex');
 const escape = value => value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
@@ -451,4 +452,44 @@ test('public listing media flyers retain strict origin, identifier and JPEG/PNG 
   for (const contentType of [null, 'image/svg+xml', 'image/webp', 'text/html']) {
     assert.equal(helpers.emailFlyer({ ...input, url: path, contentType }), '', String(contentType));
   }
+});
+
+
+test('preview capture waits for all decoders even when images report complete and dimensions', async () => {
+  let releasePoster;
+  const poster = new Promise(resolve => { releasePoster = resolve; });
+  const frames = [];
+  let finished = false;
+  const ready = runInNewContext(`(${waitForEmailImagePaint.toString()})()`, {
+    document: { images: [
+      { complete: true, naturalWidth: 239, decode: () => Promise.resolve() },
+      { complete: true, naturalWidth: 960, decode: () => poster },
+    ] },
+    requestAnimationFrame: callback => { frames.push(callback); },
+  }).then(() => { finished = true; });
+  const flush = () => new Promise(resolve => setImmediate(resolve));
+  await flush();
+  assert.equal(finished, false);
+  assert.equal(frames.length, 0, 'No paint readiness before every image has decoded.');
+  releasePoster();
+  await flush();
+  assert.equal(frames.length, 1);
+  frames.shift()();
+  await flush();
+  assert.equal(finished, false, 'The first animation callback runs before its paint opportunity.');
+  assert.equal(frames.length, 1);
+  frames.shift()();
+  await ready;
+  assert.equal(finished, true);
+});
+
+test('preview capture fails on image decoding errors instead of accepting blank artwork', async () => {
+  const failure = new Error('Poster decode failed');
+  let frames = 0;
+  const ready = runInNewContext(`(${waitForEmailImagePaint.toString()})()`, {
+    document: { images: [{ complete: true, naturalWidth: 960, decode: () => Promise.reject(failure) }] },
+    requestAnimationFrame: () => { frames++; },
+  });
+  await assert.rejects(ready, error => error === failure);
+  assert.equal(frames, 0);
 });
