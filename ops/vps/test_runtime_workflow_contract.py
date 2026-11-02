@@ -42,6 +42,9 @@ def successful_job(name, steps):
 class RuntimeWorkflowContractTests(unittest.TestCase):
     def setUp(self):
         self.runtime_names = declared_jobs('.github/workflows/vps-runtime.yml')
+        # Non-release classifier is additional; all existing admission gates remain required.
+        self.assertEqual(self.runtime_names['verify'].count('Classify exact recovery maintenance'), 1)
+        self.runtime_names['verify'].remove('Classify exact recovery maintenance')
         self.candidate_names = declared_jobs('.github/workflows/candidate-checks.yml')
         self.runtime = [successful_job(name, steps) for name, steps in self.runtime_names.items()]
         self.candidate = [successful_job(name, steps) for name, steps in self.candidate_names.items()]
