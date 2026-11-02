@@ -16,20 +16,20 @@ or native-store acceptance is claimed.
   trusted controls `748a5abca40568d2e5bde6d5b9d3b46f5ed2df1e`. Independent review
   verified 20 PNGs and four geometry records with source/hash provenance.
 - [Runtime41432536567](https://github.com/bechirobob/tickets/actions/runs/41432536567)
-  passed verification and handoff. Archive asset701469486 has SHA256
+  passed verification and handoff. Archive asset 701469486 has SHA256
   `f3c8deae5b726322410c13e5eb55f0d3e52f6d64d18684a3d89a068edc6d9e63`.
 - [Activation64](https://github.com/bechirobob/tickets/actions/runs/41438362201)
   committed successfully at 11:46:17 UTC: active/publicVerified true, previous
   `72fa3f6a77d922dadd65fa3a788807e1ec57549f`, no data migration, no crypto enablement.
   Public health/version independently confirmed the active source at 11:47 UTC.
   All three retired-preview checks passed. The overall run remains **failed**:
-  desktop audit246 passed/131 skipped; mobile Chromium261 passed/116 skipped;
-  WebKit256 passed/120 skipped/one failed. Do not relabel this run green.
+  desktop audit 246 passed/131 skipped; mobile Chromium 261 passed/116 skipped;
+  WebKit 256 passed/120 skipped/one failed. Do not relabel this run green.
 - The original WebKit failure was a test navigation collision after a successful
   native profile-link tap: the URL assertion finished before `/events` rendered,
   and the test immediately started an unrelated event navigation. The original
   trace shows that second navigation cancelling the pending RSC request, followed
-  by the router's `/events` document fallback. Original artifact13141215982 SHA256
+  by the router's `/events` document fallback. Original artifact 13141215982 SHA256
   `ea33463aa88dc2f9da65c2f7870e29cb584ab0ea69e62966a67413adf5739542` was preserved;
   [read-only repack617](https://github.com/bechirobob/tickets/actions/runs/41442652295)
   exported four selected files byte-for-byte. Original pixels show the events
@@ -39,19 +39,19 @@ or native-store acceptance is claimed.
   heading assertion and explanatory comment before the unrelated navigation.
   It preserves the real tap and all geometry, accessibility and downstream checks.
   [Corrective verification482](https://github.com/bechirobob/tickets/actions/runs/41444056693)
-  used exact live application32b5956 with this explicitly recorded test-only
-  overlay: all four focused host cases and full WebKit257 passed/120 skipped,
+  used exact live application 32b5956 with this explicitly recorded test-only
+  overlay: all four focused host cases and full WebKit 257 passed/120 skipped,
   **zero retries**. Before/after identity checks confirmed unchanged production.
-  Independent review verified all32 indexed files and inspected12 PNGs (six
+  Independent review verified all 32 indexed files and inspected 12 PNGs (six
   identical pairs); downstream event-host, focus and accessibility checks ran.
   No application redeployment was performed to correct the test.
-- Prior ancillary email41422336199, capacity41422336150, iPhone41422336206,
-  consent41422336143 and native41422336072 remain supporting evidence from
-  `c81c868c09d864dd49c310af75fe2d8dcee111e4`, not fresh32b5956 runs. All1,754 tracked
+- Prior ancillary email 41422336199, capacity 41422336150, iPhone 41422336206,
+  consent 41422336143 and native 41422336072 remain supporting evidence from
+  `c81c868c09d864dd49c310af75fe2d8dcee111e4`, not fresh 32b5956 runs. All 1,754 tracked
   files outside the operator and its tests are mode/blob-identical, including
   application, fixtures, dependencies, capture scripts and workflow configuration.
 - [Readiness22](https://github.com/bechirobob/tickets/actions/runs/41440540232)
-  independently verified current32b5956/previous72fa3f6 directories, protection
+  independently verified current 32b5956 / previous 72fa3f6 directories, protection
   now and after one rotation, retention-policy hash/loaded unit, active local
   health, zero service restarts, database quick_check and no foreign-key violations.
   This is retained rollback readiness, **not a live rollback rehearsal**. Do not
@@ -68,7 +68,7 @@ The test correction and this record are prepared on a maintenance PR. Do not mer
 blindly: `deploy.yml` does not exclude `tests/e2e/host-brand-identity.spec.ts`, and
 `vps-runtime.yml` includes `tests/**`. Main merge would start unrelated deployment
 work/runtime packaging. No trigger, release admission or security guard was changed
-as part of this test fix. The live application remains32b5956.
+as part of this test fix. The live application remains 32b5956.
 
 
 ## Booking and storage cleanup — 29 September 2026, 16:43 UTC
