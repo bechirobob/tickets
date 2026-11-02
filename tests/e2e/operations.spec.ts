@@ -680,15 +680,21 @@ test('organizer can manage coupons, questions, guests and promoter records in is
  const statements=moneyRecords.getByRole('button',{name:'Statements',exact:true});
  const payouts=moneyRecords.getByRole('button',{name:'Payout history',exact:true});
  await expect(statements).toHaveAttribute('aria-pressed','true');
+ await expectViewSelection(moneyRecords);
+ await expect(statements).toHaveCSS('text-decoration-line','none');
  await expect(page.getByRole('heading',{name:'Settlement statements',exact:true})).toBeVisible();
  await expect(page.getByRole('heading',{name:'Payout history',exact:true})).toBeHidden();
  await payouts.click();
  await expect(payouts).toHaveAttribute('aria-pressed','true');
+ await expectViewSelection(moneyRecords);
+ await expect(payouts).toHaveCSS('text-decoration-line','none');
  await expect(statements).toHaveAttribute('aria-pressed','false');
  await expect(page.getByRole('heading',{name:'Payout history',exact:true})).toBeVisible();
  await expect(page.getByRole('heading',{name:'Settlement statements',exact:true})).toBeHidden();
  await statements.click();
  await expect(statements).toHaveAttribute('aria-pressed','true');
+ await expectViewSelection(moneyRecords);
+ await expect(statements).toHaveCSS('text-decoration-line','none');
  await expect(payouts).toHaveAttribute('aria-pressed','false');
  await expect(page.getByRole('heading',{name:'Settlement statements',exact:true})).toBeVisible();
  await expect(page.getByRole('heading',{name:'Payout history',exact:true})).toBeHidden();
@@ -1002,7 +1008,13 @@ test('team invitations show delivery recovery and return acceptance to the assig
   }
   return route.continue();
  });
- await page.goto('/organizer/workspace?area=team&event=rsvp-browser');await page.getByRole('button',{name:/^Invitations \(1\)$/}).click();await expect(page.getByText('Email needs attention',{exact:true})).toBeVisible();
+ await page.goto('/organizer/workspace?area=team&event=rsvp-browser');const teamLists=page.getByRole('navigation',{name:'Team lists',exact:true});
+ await expectViewSelection(teamLists);
+ await expect(teamLists.getByRole('button',{name:/^Members/})).toHaveCSS('text-decoration-line','none');
+ await teamLists.getByRole('button',{name:/^Invitations \(1\)$/}).click();
+ await expectViewSelection(teamLists);
+ await expect(teamLists.getByRole('button',{name:/^Invitations/})).toHaveCSS('text-decoration-line','none');
+ await expect(page.getByText('Email needs attention',{exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Resend invitation',exact:true}).click();await expect(page.locator('.suite-section').filter({has:page.getByRole('button',{name:'Refresh team status',exact:true})}).getByRole('status')).toContainText('Fresh invitation queued');await expect(page.getByText('Email queued',{exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Refresh team status',exact:true}).click();await expect(page.getByText('Email queued',{exact:true})).toBeVisible();expect(resends).toBe(1);
  await page.route('**/api/organizer/team/accept',route=>route.fulfill({json:route.request().postDataJSON().action==='inspect'?{email:'door@example.com',role:'gate',eventTitle:'RSVP browser gathering',eventSlug:'rsvp-browser',needsPassword:false}:{accepted:true,role:'gate',eventSlug:'rsvp-browser'}}));

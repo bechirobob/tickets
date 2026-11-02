@@ -65,8 +65,11 @@ main.workspace-boardui:has(>.workspace-topbar) .yorkeway-workspace .bui-table bu
 main.workspace-boardui:has(>.workspace-topbar) .workspace-orders .ops-order-filters { background:transparent; border-radius:0; border-block:1px solid var(--line); padding:0; }
 main.workspace-boardui:has(>.workspace-topbar) .workspace-orders button { border-radius:7px; }
 .workspace-boardui .workspace-team-tabs { display:flex; gap:12px; border-bottom:1px solid var(--line); margin:20px 0; }
-.workspace-boardui .workspace-team-tabs button { border:0; border-radius:0; }
-.workspace-boardui .workspace-team-tabs button[aria-pressed=true] { font-weight:750; text-decoration:underline; text-underline-offset:6px; }
+.workspace-boardui .workspace-team-tabs button { border:0; border-radius:0; min-height:44px; box-shadow:none; text-shadow:none; text-decoration:none; }
+.workspace-boardui .workspace-team-tabs button[aria-pressed=true] { font-weight:750; }
+/* Static Guest tools use selection weight, without the old bottom-border indicator. */
+.workspace-boardui .suite-segments:not(.segmented-control) > button { min-height:44px; border:0; box-shadow:none; text-shadow:none; text-decoration:none; }
+.workspace-boardui .suite-segments:not(.segmented-control) > button[aria-pressed=true] { font-weight:750; }
 
 .workspace-boardui .suite-badge { color:var(--ink); background:transparent; }
 .workspace-boardui .organizer-request { background:transparent; border-bottom:1px solid var(--line); border-radius:0; }
