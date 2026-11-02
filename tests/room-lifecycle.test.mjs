@@ -89,22 +89,25 @@ function mountResponsiveUpdates() {
     },
   });
   const render = () => {
-    cursor = 0; effects.clear(); layoutEffects.clear(); api = component.exports.useRoomUpdates(enabled, '/events');
+    cursor = 0; effects.clear(); layoutEffects.clear(); api = component.exports.useRoomUpdates(enabled, '/events', viewport.dockIsVisible);
     for (const index of layoutEffects.keys()) slots[index]?.cleanup?.();
     for (const [index, effect] of layoutEffects) slots[index] = { ...effect, cleanup: effect.setup() };
     for (const index of effects.keys()) slots[index]?.cleanup?.();
     for (const [index, effect] of effects) slots[index] = { ...effect, cleanup: effect.setup() };
   };
-  const unsubscribe = viewport.subscribeToDockViewport(() => { enabled = viewport.dockIsVisible(); render(); });
+  const unsubscribe = viewport.subscribeToDockViewport(() => { const next = viewport.dockIsVisible(); if (next !== enabled) { enabled = next; render(); } });
   render();
   return { get api() { return api; }, clock, requests, render, viewport,
+    setWidthSilently(width) { media.matches = width <= 700; },
+    nativeResize() { window.dispatchEvent(new Event('resize')); },
+    mediaChange() { media.dispatchEvent(new Event('change')); },
     resize(width) { const matches = width <= 700; if (matches !== media.matches) { media.matches = matches; media.dispatchEvent(new Event('change')); } },
     unmount() { unsubscribe(); for (const slot of slots) slot?.cleanup?.(); },
   };
 }
 test('CSS-hidden desktop dock does not fetch or poll; breakpoint entry refreshes without reviving cached Rooms', async () => {
   assert.match(dockSource, /useSyncExternalStore\(subscribeToDockViewport, dockIsVisible, serverDockIsVisible\)/u);
-  assert.match(dockSource, /useRoomUpdates\(!hidden && dockVisible, pathname\)/u);
+  assert.match(dockSource, /useRoomUpdates\(!hidden && dockVisible, pathname, dockIsVisible\)/u);
   const hook = mountResponsiveUpdates(); assert.equal(hook.viewport.serverDockIsVisible(), false);
   await hook.clock.advance(120_000); assert.equal(hook.requests.length, 0);
   hook.resize(700); await hook.clock.advance(0); assert.equal(hook.requests.length, 1);
@@ -224,3 +227,35 @@ for (const status of [401, 403, 404]) {
     assert.equal(ack.requests.length, 1); assert.equal(ack.accessAttempts, 0); ack.unmount();
   });
 }
+
+
+test('native resize synchronizes a missed media change and duplicate delivery does not restart Room reads', async () => {
+  const hook = mountResponsiveUpdates();
+  hook.setWidthSilently(700); hook.nativeResize(); await hook.clock.advance(0);
+  assert.equal(hook.requests.length, 1);
+  hook.requests[0].resolve({ rooms: [{ eventSlug: 'fixture', title: 'Fixture', unread: 2, expiresAt: new Date(Date.now() + 3600_000).toISOString() }] });
+  await flush(); hook.render(); assert.equal(hook.api.rooms.length, 1);
+  hook.nativeResize(); hook.mediaChange(); await hook.clock.advance(0);
+  assert.equal(hook.requests.length, 1, 'duplicate viewport delivery cannot restart polling');
+  hook.setWidthSilently(701); hook.nativeResize();
+  assert.equal(hook.api.rooms.length, 0);
+  assert.equal(hook.requests[0].signal.aborted, true);
+  await hook.clock.advance(60_000); assert.equal(hook.requests.length, 1);
+  hook.setWidthSilently(700); hook.nativeResize();
+  assert.equal(hook.api.rooms.length, 0, 're-entry must not revive cached private Rooms');
+  await hook.clock.advance(0); assert.equal(hook.requests.length, 2);
+  hook.unmount(); hook.setWidthSilently(701); hook.nativeResize(); hook.setWidthSilently(700); hook.nativeResize();
+  await hook.clock.advance(60_000); assert.equal(hook.requests.length, 2);
+});
+
+test('actual desktop viewport rejects a queued Room refresh before any resize event or React commit', async () => {
+  const hook = mountResponsiveUpdates(); hook.resize(700); await hook.clock.advance(0);
+  const refresh = hook.api.refresh;
+  hook.setWidthSilently(701);
+  const rejected = refresh(); assert.equal(hook.requests.length, 1); assert.equal(await rejected, null);
+  assert.equal(hook.requests[0].signal.aborted, false, 'rejected stale callback must not abort another read');
+  hook.nativeResize(); hook.setWidthSilently(700);
+  assert.equal(await refresh(), null); assert.equal(hook.requests.length, 1, 'viewport alone cannot override disabled committed state');
+  hook.nativeResize(); await hook.clock.advance(0); assert.equal(hook.requests.length, 2);
+  hook.unmount();
+});

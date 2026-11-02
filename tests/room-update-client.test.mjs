@@ -29,6 +29,7 @@ function mountUpdates() {
   window.setTimeout = window.setInterval = () => 1;
   window.clearTimeout = window.clearInterval = () => {};
   let cursor = 0, api, enabled = true, pathname = '/tickets';
+  const isVisible = () => true;
   const equal = (a, b) => a && b && a.length === b.length && a.every((v, i) => Object.is(v, b[i]));
   const memo = (callback, dependencies, evaluate) => {
     const index = cursor++;
@@ -52,7 +53,7 @@ function mountUpdates() {
     },
   });
   const render = ({ passive = true } = {}) => {
-    cursor = 0; effects.clear(); layoutEffects.clear(); api = component.exports.useRoomUpdates(enabled, pathname);
+    cursor = 0; effects.clear(); layoutEffects.clear(); api = component.exports.useRoomUpdates(enabled, pathname, isVisible);
     for (const index of layoutEffects.keys()) slots[index]?.cleanup?.();
     for (const [index, effect] of layoutEffects) slots[index] = { ...effect, cleanup: effect.setup() };
     if (passive) {

@@ -11,7 +11,7 @@ function traceRoom(phase: string, detail: Record<string, unknown> = {}) {
   trace?.({ phase, ...detail });
 }
 
-export function useRoomUpdates(enabled: boolean, pathname: string) {
+export function useRoomUpdates(enabled: boolean, pathname: string, isVisible: () => boolean) {
   const [result, setResult] = useState<{ pathname: string; rooms: RoomUpdateSummary[] }>({ pathname: '', rooms: [] });
   // Discard the old path before commit, including a trip through a disabled
   // Room/checkout route followed by a return to the same public page.
@@ -33,7 +33,7 @@ export function useRoomUpdates(enabled: boolean, pathname: string) {
   const refresh = useCallback(async () => {
     traceRoom('refresh-entry', { enabled, pathname, committed: { ...committed.current } });
     // Queued callbacks can outlive their render and passive-effect cleanup.
-    if (!enabled || !committed.current.enabled || committed.current.pathname !== pathname) { traceRoom('refresh-rejected'); return null; }
+    if (!enabled || !committed.current.enabled || committed.current.pathname !== pathname || !isVisible()) { traceRoom('refresh-rejected'); return null; }
     request.current?.abort();
     if (document.visibilityState !== 'visible') { traceRoom('refresh-hidden'); return null; }
     const controller = new AbortController();
@@ -52,7 +52,7 @@ export function useRoomUpdates(enabled: boolean, pathname: string) {
       if (!controller.signal.aborted) setResult({ pathname, rooms: [] });
       return null;
     }
-  }, [enabled, pathname]);
+  }, [enabled, pathname, isVisible]);
 
   useEffect(() => {
     traceRoom('passive-subscription', { enabled, pathname });

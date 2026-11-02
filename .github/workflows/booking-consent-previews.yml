@@ -285,7 +285,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        engine: [webkit]
+        engine: [chromium, webkit]
     defaults:
       run:
         shell: bash
@@ -307,8 +307,8 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EXPECTED_CUSTOMER_SOURCE"
           test "$RUNNER_ENVIRONMENT" = github-hosted
           test -z "${E2E_BASE_URL:-}"
-          git merge-base --is-ancestor efc770a94c773bacc62bf31ddf8bef6316ada829 HEAD
-          git diff --exit-code efc770a94c773bacc62bf31ddf8bef6316ada829 HEAD -- . ':!.github/workflows/booking-consent-previews.yml' ':!scripts/customer-experience/room-refresh-check.mjs' ':!app/use-room-updates.ts' ':!app/customer-dock.tsx' ':!tests/e2e/room-shortcut.spec.ts'
+          git merge-base --is-ancestor 27407ab216af25f55640a8034e1c8686584c09d9 HEAD
+          git diff --exit-code 27407ab216af25f55640a8034e1c8686584c09d9 HEAD -- . ':!.github/workflows/booking-consent-previews.yml' ':!scripts/customer-experience/room-refresh-check.mjs' ':!app/use-room-updates.ts' ':!app/customer-dock.tsx' ':!tests/room-lifecycle.test.mjs' ':!tests/room-update-client.test.mjs'
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22.23.4

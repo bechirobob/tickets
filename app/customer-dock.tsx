@@ -22,14 +22,18 @@ const subscribeToDockViewport = (changed: () => void) => {
     changed();
   };
   media.addEventListener('change', observed);
-  return () => media.removeEventListener('change', observed);
+  window.addEventListener('resize', changed);
+  return () => {
+    media.removeEventListener('change', observed);
+    window.removeEventListener('resize', changed);
+  };
 };
 
 export default function CustomerDock() {
   const pathname = usePathname();
   const hidden = hiddenPrefixes.some((prefix) => pathname.startsWith(prefix));
   const dockVisible = useSyncExternalStore(subscribeToDockViewport, dockIsVisible, serverDockIsVisible);
-  const { rooms, refresh } = useRoomUpdates(!hidden && dockVisible, pathname);
+  const { rooms, refresh } = useRoomUpdates(!hidden && dockVisible, pathname, dockIsVisible);
   const { id, trigger, panel, ready, open, mounted, phase, toggle, close } = useHeaderPanel();
   const position = useTopPanelPosition(mounted, trigger, () => close(true, true));
   useEffect(() => {
