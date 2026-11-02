@@ -26,7 +26,8 @@ test('Room summaries do not poll behind the desktop breakpoint and refresh on mo
   const dock = page.getByRole('navigation', { name: 'Customer navigation', includeHidden: true });
   await expect(dock).toBeHidden(); await page.clock.fastForward(60_000); expect(requests).toBe(0);
   await page.setViewportSize({ width: 700, height: 800 });
-  const room = dock.getByRole('link', { name: 'Room, 2 new updates' });
+  // Require private DOM removal, not only CSS hiding, before advancing the clock.
+  const room = dock.getByRole('link', { name: 'Room, 2 new updates', includeHidden: true });
   await expect(room).toBeVisible(); expect(requests).toBe(1);
   await page.clock.fastForward(30_000); await expect.poll(() => requests).toBe(2);
   await page.setViewportSize({ width: 701, height: 800 });
@@ -163,7 +164,9 @@ test('a Room acknowledges only its captured boundary after a visible successful 
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))); expect(marks).toBe(1);
 });
 
-test('same-page sign-out immediately clears private Room counts and the chooser', async ({ page, eventSlug }) => {
+for (const sessionLoss of [false, true]) test(sessionLoss
+  ? 'session loss while the Room chooser is open immediately clears private choices'
+  : 'closing the Room chooser then signing out clears private counts', async ({ page, eventSlug }) => {
   test.skip((page.viewportSize()?.width ?? 1000) > 700, 'Mobile dock');
   let signedOut = false;
   await page.route('**/api/customer/tickets', route => route.fulfill({ json: { attendee: { attendeeId: 'self', displayName: 'Guest', emailVerified: true }, orders: [] } }));
@@ -175,7 +178,17 @@ test('same-page sign-out immediately clears private Room counts and the chooser'
   await page.goto('/tickets');
   const trigger = page.getByRole('button', { name: 'Room, 3 new updates' });
   await trigger.click(); await expect(page.getByRole('dialog', { name: 'Choose your Room' })).toBeVisible();
-  await page.getByRole('button', { name: 'Sign out' }).click();
+  if (sessionLoss) {
+    // Exercise the real session-change integration event with expired mocked
+    // auth state while private choices are still open; no background click.
+    signedOut = true;
+    await page.evaluate(() => window.dispatchEvent(new Event('bct:attendee-session-changed')));
+  } else {
+    await page.getByRole('button', { name: 'Close Rooms', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Choose your Room' })).toBeHidden();
+    await expect(trigger).toBeFocused();
+    await page.getByRole('button', { name: 'Sign out' }).click();
+  }
   await expect(trigger).toHaveCount(0, { timeout: 1500 });
   await expect(page.getByRole('dialog', { name: 'Choose your Room' })).toHaveCount(0);
   await expect(page).toHaveURL(/\/tickets$/u);
