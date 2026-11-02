@@ -1,0 +1,9 @@
+{
+  "failure": "Vite 504 Outdated Optimize Dep; empty body before React mounted",
+  "affectedDependencies": [
+    "@simplewebauthn_browser.js",
+    "react-aria-components.js"
+  ],
+  "cause": "Two local Vite harnesses shared node_modules/.vite while using different dependency graphs.",
+  "resolution": "Separate temporary dashboard server cacheDir and port; no application or committed harness changes."
+}

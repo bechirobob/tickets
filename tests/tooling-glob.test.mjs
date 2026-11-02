@@ -43,7 +43,7 @@ function link(t, target, filename, type) {
 test('installed packages have the owned identities and pinned provider', () => {
   assert.equal(require('@becoreops/tooling-glob/package.json').name, '@becoreops/tooling-glob');
   assert.equal(require('vite-plugin-dynamic-import/package.json').name, '@becoreops/vite-plugin-dynamic-import');
-  assert.equal(require('glob/package.json').version, '13.0.6');
+  assert.equal(require('glob/package.json').version, '14.0.2');
   assert.equal(glob.sync, glob.globSync);
 });
 
@@ -179,3 +179,43 @@ for (const [entrypoint, implementation] of [['CJS', pluginCjs], ['ESM', pluginEs
     }
   }
 }
+
+
+test('legacy callable and modern minimatch imports share the patched matching behavior', async () => {
+  const legacy = require('minimatch');
+  const modern = await import('minimatch');
+  assert.equal(require('@becoreops/minimatch-engine/package.json').version, '11.0.1');
+  for (const match of [legacy, legacy.minimatch, modern.default, modern.minimatch]) {
+    for (const [file, pattern, expected] of [
+      ['src/a.ts', 'src/*.{js,ts}', true], ['src/a.ts', '**/*.js', false],
+      ['src/a.ts', '!**/*.js', true], ['a.ts', '@(a|b).ts', true],
+      ['.private', '*', false], ['src/deep/a.ts', 'src/**/*.ts', true],
+    ]) assert.equal(match(file, pattern), expected);
+  }
+  assert.equal(new legacy.Minimatch('*.ts').match('a.ts'), true);
+  assert.deepEqual(legacy.match(['a.ts', 'b.js'], '*.ts'), ['a.ts']);
+  assert.equal(legacy.defaults({ dot: true })('.private', '*'), true);
+  assert.equal(legacy.filter('*.ts')('a.ts'), true);
+  assert.equal(legacy.makeRe('*.ts').test('a.ts'), true);
+});
+
+test('upgraded glob rejects an already-aborted traversal', async (t) => {
+  const root = fixture(t);
+  write(root, 'nested/a.ts');
+  const reason = new Error('fixture cancellation');
+  await assert.rejects(require('glob').glob('**/*', { cwd: root, signal: AbortSignal.abort(reason) }),
+    error => error === reason);
+});
+
+
+test('pinned import lint rule preserves forbidden and allowed module matching', async () => {
+  const { Linter } = await import('eslint');
+  const plugin = require('eslint-plugin-import');
+  const lint = (source, options) => new Linter().verify(source, [{
+    languageOptions: { ecmaVersion: 2022, sourceType: 'module' },
+    plugins: { import: plugin }, rules: { 'import/no-internal-modules': ['error', options] },
+  }]);
+  assert.equal(lint("import x from 'package/private/file.js';", { forbid: ['package/private/**'] }).length, 1);
+  assert.equal(lint("import x from 'package/public/file.js';", { forbid: ['package/private/**'] }).length, 0);
+  assert.equal(lint("import x from 'package/public/file.js';", { allow: ['package/public/**'] }).length, 0);
+});

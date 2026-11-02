@@ -1,16 +1,17 @@
 'use client';
+import { RecordDialog } from '@/components/workspace/record-dialog';
 import { useState } from 'react';
 import { Message, money, useMutation, apiUrl, type Tier } from './suite-shared';
 
 const availabilityLabels: Record<string, string> = { available: 'Available', sold_out: 'Sold out', hidden: 'Hidden' };
 
 export default function TicketEditor({ event, tiers, onSaved }: { event: string; tiers?: Tier[]; onSaved: () => void }) {
-  const [editing, setEditing] = useState<Tier | 'new' | null>(null), mutation = useMutation(), [reloading,setReloading] = useState(false);
+  const [editing, setEditing] = useState<Tier | 'new' | null>(null), mutation = useMutation(), [reloading,setReloading] = useState(false), [reloadVersion,setReloadVersion] = useState(0);
   const tier = editing && editing !== 'new' ? editing : null;
   return <>
     <div className="suite-rows">{tiers?.map(t => <article key={t.id}><div><b>{t.name}</b><p>{money(t.priceMinor)} · {t.admissionsPerUnit} admissions per package · {availabilityLabels[t.status] ?? t.status}</p><small>{t.allocated} / {t.capacity} allocated · {Math.max(0,t.capacity-t.allocated)} unallocated</small></div><button disabled={mutation.busy} onClick={() => { setEditing(t); mutation.setMessage(''); }}>Edit <span className="sr-only">{t.name}</span></button></article>)}</div>
     {tiers ? <div className="suite-actions"><button disabled={mutation.busy || tiers.length >= 12} onClick={() => { setEditing('new'); mutation.setMessage(''); }}>Add ticket grade</button><button disabled={mutation.busy} onClick={onSaved}>Refresh allocations</button></div> : null}
-    {editing ? <form className="suite-detail" aria-label="Edit ticket grade" key={tier ? `${tier.id}:${tier.updatedAt}` : 'new'} onSubmit={async e => {
+    {editing ? <RecordDialog label="Edit ticket grade" onClose={()=>{if(!mutation.busy&&!reloading)setEditing(null);}}><form className="suite-detail" aria-label="Edit ticket grade" key={tier ? `${tier.id}:${tier.updatedAt}:${reloadVersion}` : 'new'} onSubmit={async e => {
       e.preventDefault(); const form = new FormData(e.currentTarget);
       const saved = await mutation.mutate({ action: 'ticket_save', eventSlug: event, id: tier?.id, updatedAt: tier?.updatedAt, code: form.get('code'), name: form.get('name'), description: form.get('description'), priceMinor: Math.round(Number(form.get('price')) * 100), capacity: Number(form.get('capacity')), admissionsPerUnit: tier?.hasHistory ? tier.admissionsPerUnit : Number(form.get('admissions')), maxUnitsPerOrder: Number(form.get('limit')), status: form.get('status'), roomBadge: tier?.hasHistory ? tier.roomBadge : form.get('badge') || null });
       if (saved) { setEditing(null); onSaved(); }
@@ -30,10 +31,10 @@ export default function TicketEditor({ event, tiers, onSaved }: { event: string;
       {tier?.hasHistory ? <p className="suite-note">This grade has booking history. To change package size or Room access, add a new grade and mark this one Sold out.</p> : null}
       <div className="suite-actions"><button disabled={mutation.busy || reloading}>{mutation.busy ? 'Saving…' : 'Save ticket grade'}</button><button type="button" disabled={mutation.busy || reloading} onClick={() => setEditing(null)}>Cancel</button>{tier ? <button type="button" disabled={mutation.busy || reloading} onClick={async()=>{
         setReloading(true);
-        try { const response=await fetch(apiUrl('tickets',event),{cache:'no-store'});const data=await response.json() as {tiers?:Tier[];error?:string};if(!response.ok)throw new Error(data.error??'Could not reload.');const saved=data.tiers?.find(x=>x.id===tier.id);if(!saved)throw new Error('This grade is no longer available.');setEditing(saved);onSaved();mutation.setMessage('Loaded the latest saved values.'); }
+        try { const response=await fetch(apiUrl('tickets',event),{cache:'no-store'});const data=await response.json() as {tiers?:Tier[];error?:string};if(!response.ok)throw new Error(data.error??'Could not reload.');const saved=data.tiers?.find(x=>x.id===tier.id);if(!saved)throw new Error('This grade is no longer available.');setEditing(saved);setReloadVersion(value=>value+1);onSaved();mutation.setMessage('Loaded the latest saved values.'); }
         catch(error){mutation.setMessage(error instanceof Error?error.message:'Could not reload. Your draft is still here.');}finally{setReloading(false);}
       }}>{reloading?'Reloading…':'Reload saved grade'}</button> : null}</div>
-    </form> : null}
-    <Message>{mutation.message}</Message>
+    <Message>{mutation.message}</Message></form></RecordDialog> : null}
+    {!editing?<Message>{mutation.message}</Message>:null}
   </>;
 }

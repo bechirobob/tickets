@@ -1,0 +1,53 @@
+{
+  "browser": "154.0.8037.57",
+  "scenarios": [
+    {
+      "label": "desktop",
+      "width": 1440,
+      "height": 1050,
+      "touch": false,
+      "passed": true,
+      "flows": [
+        "role scopes",
+        "event details validation/discard/save",
+        "paid/RSVP records and contextual close",
+        "team invitation distinctions",
+        "Yorke read-only audience and consent",
+        "separate non-submitting recipient reference"
+      ]
+    },
+    {
+      "label": "mobile",
+      "width": 390,
+      "height": 844,
+      "touch": true,
+      "passed": true,
+      "flows": [
+        "role scopes",
+        "event details validation/discard/save",
+        "paid/RSVP records and contextual close",
+        "team invitation distinctions",
+        "Yorke read-only audience and consent",
+        "separate non-submitting recipient reference"
+      ]
+    },
+    {
+      "label": "narrow",
+      "width": 320,
+      "height": 740,
+      "touch": true,
+      "passed": true,
+      "flows": [
+        "role scopes",
+        "event details validation/discard/save",
+        "paid/RSVP records and contextual close",
+        "team invitation distinctions",
+        "Yorke read-only audience and consent",
+        "separate non-submitting recipient reference"
+      ]
+    }
+  ],
+  "errors": [],
+  "mutationRequests": [],
+  "limits": "Fictional UI only. Chromium desktop and mobile touch emulation; no real iPhone, virtual keyboard, Safari or live services."
+}

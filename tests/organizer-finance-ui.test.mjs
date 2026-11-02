@@ -14,13 +14,17 @@ function renderMoney(financialScope){
   const require=specifier=>{
    if(specifier==='./suite-shared')return {
     useRemote:()=>({data:{financialScope,totals:{collectedMinor:611,feesMinor:49,refundsMinor:208,faceMinor:611,ticketRefundsMinor:208},payoutTotals:{paidMinor:100},statements:[{id:'s',eventTitle:'My event',periodEnd:'2026-10-12',grossMinor:611,feesMinor:49,refundsMinor:225,netMinor:386,status:'ready'}],transfers:[]}}),
-    RemoteState:()=>null,apiUrl:()=>'/export',money:value=>`GHS ${value}`,date:value=>value,readable:value=>value,
+    Pager:()=>null,RemoteState:()=>null,apiUrl:()=>'/export',money:value=>`GHS ${value}`,date:value=>value,readable:value=>value,
    };
+   if(specifier.endsWith('/table/table'))return Object.fromEntries(Object.entries({Table:'table',TableHeader:'thead',TableColumn:'th',TableBody:'tbody',TableRow:'tr',TableCell:'td'}).map(([name,tag])=>[name,({children})=>createElement(tag,null,children)]));
+   if(specifier.endsWith('/input/input'))return {Input:()=>null};
+   if(specifier.endsWith('/buttons/button'))return {Button:({children})=>createElement('button',null,children)};
+   if(specifier==='@/components/workspace/record-dialog')return {};
    if(specifier.startsWith('../../'))return {__esModule:true,default:()=>null};
    return requireDependency(specifier);
   };
   runInNewContext(compiled.code,{module:componentModule,exports:componentModule.exports,require});
-  return renderToStaticMarkup(createElement(componentModule.exports.Money,{event:'mine'}));
+  return renderToStaticMarkup(createElement(componentModule.exports.Money,{event:'mine'}))+renderToStaticMarkup(createElement(componentModule.exports.StatementRecord,{financialScope,statement:{eventTitle:'My event',periodEnd:'2026-10-12',grossMinor:611,feesMinor:49,refundsMinor:225,netMinor:386,status:'ready'}}));
  });
 }
 test('host money renders ticket accounting and payout status without platform fee widgets even if extra fields arrive',async()=>{
@@ -29,9 +33,9 @@ test('host money renders ticket accounting and payout status without platform fe
  assert.match(html,/Ticket sales/u);assert.match(html,/Ticket refunds/u);
  assert.match(html,/GHS 386/u);assert.match(html,/Paid out/u);
 });
-test('owner money retains booking fees and statement fee columns',async()=>{
+test('owner money retains booking fees and statement fee detail',async()=>{
  const html=await renderMoney('platform');
- assert.match(html,/Booking fees/u);assert.match(html,/<th>Fees<\/th>/u);assert.match(html,/GHS 49/u);
+ assert.match(html,/Booking fees/u);assert.match(html,/<dt>Fees<\/dt>/u);assert.match(html,/GHS 49/u);
 });
 
 async function renderAnalytics(financialScope){

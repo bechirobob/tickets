@@ -1,5 +1,8 @@
 "use client";
 
+import { Input } from '@/components/boardui/components/base/input/input';
+import { Pagination } from '@/components/boardui/components/base/pagination/pagination';
+import { RecordDialog } from '@/components/workspace/record-dialog';
 import EventHostPass from "./event-host-pass";
 import OrganizerAccess from "../organizer-access";
 
@@ -16,6 +19,7 @@ type StaffAccount = { id: string; email: string; displayName: string; role: Staf
 type EventOption = { slug: string; title: string; startsAt: string };
 
 export default function StaffAccounts({ actor, role }: { actor: string; role: StaffRole }) {
+  const [query,setQuery]=useState(''),[page,setPage]=useState(1),[editorOpen,setEditorOpen]=useState(false);
   const [accounts, setAccounts] = useState<StaffAccount[]>([]);
   const [events, setEvents] = useState<EventOption[]>([]);
   const [selectedId, setSelectedId] = useState<string>("new");
@@ -45,6 +49,8 @@ export default function StaffAccounts({ actor, role }: { actor: string; role: St
       .catch(() => { setMessage("Accounts could not be loaded."); setLoading(false); });
   }, []);
   const selected = useMemo(() => accounts.find((account) => account.id === selectedId) ?? null, [accounts, selectedId]);
+  const filtered=accounts.filter(account=>`${account.displayName} ${account.email} ${STAFF_ROLE_DEFINITIONS[account.role].label} ${account.status}`.toLowerCase().includes(query.toLowerCase()));
+  const pages=Math.max(1,Math.ceil(filtered.length/10)),current=Math.min(page,pages);
   const roleDefinition = STAFF_ROLE_DEFINITIONS[draftRole];
 
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -80,17 +86,17 @@ export default function StaffAccounts({ actor, role }: { actor: string; role: St
       if (!response.ok) { setMessage(result.error ?? "The account could not be removed."); return; }
       setAccounts(current => current.filter(account => account.id !== selected.id));
       setSelectedId("new"); setDraftRole("organizer"); setConfirmRemoval(false);
-      setMessage("Account removed. Their devices are signed out.");
+      setEditorOpen(false); setMessage("Account removed. Their devices are signed out.");
     } catch { setMessage("Connection lost. Try removing the account again."); }
     finally { setBusy(false); }
   }
 
-  return <main className="curation-page staff-page">
+  return <main className="curation-page staff-page workspace-boardui">
     <OperationsNav actor={actor} role={role} active="/admin/accounts" />
     <section className="curation-main"><header><div><p>Operations team</p><h1>People & permissions</h1></div></header>
-      {loading ? <div className="curation-empty"><Loader2 className="spin" /> Loading accounts…</div> : <div className="staff-workspace">
-        <div className="staff-list"><button disabled={busy} className={`staff-list__new${selectedId === "new" ? " active" : ""}`} onClick={() => { setSelectedId("new"); setConfirmRemoval(false); setDraftRole("organizer"); setMessage(""); }}><span><UserPlus size={15} /></span><b>New person</b><small>Add a team member</small></button>{accounts.map((account) => <button disabled={busy} key={account.id} className={selectedId === account.id ? "active" : ""} onClick={() => { setSelectedId(account.id); setConfirmRemoval(false); setDraftRole(account.role); setMessage(""); }}><span>{account.displayName.slice(0, 2).toUpperCase()}</span><b>{account.displayName}</b><small>{STAFF_ROLE_DEFINITIONS[account.role].label} · {account.status}</small></button>)}</div>
-        <form key={selected?.id ?? "new"} className="staff-editor" onSubmit={save}>
+      {!editorOpen&&message?<p role="status">{message}</p>:null}{loading ? <div className="curation-empty"><Loader2 className="spin" /> Loading accounts…</div> : <div className="staff-workspace">
+        <div className="staff-list"><Input label="Find a team account" value={query} onChange={value=>{setQuery(value);setPage(1);}} placeholder="Name, email, role or status" fieldClassName="workspace-input"/><button disabled={busy} className={`staff-list__new${selectedId === "new" ? " active" : ""}`} onClick={() => { setEditorOpen(true); setSelectedId("new"); setConfirmRemoval(false); setDraftRole("organizer"); setMessage(""); }}><span><UserPlus size={15} /></span><b>New person</b><small>Add a team member</small></button>{filtered.slice((current-1)*10,current*10).map((account) => <button disabled={busy} key={account.id} className={selectedId === account.id ? "active" : ""} onClick={() => { setEditorOpen(true); setSelectedId(account.id); setConfirmRemoval(false); setDraftRole(account.role); setMessage(""); }}><span>{account.displayName.slice(0, 2).toUpperCase()}</span><b>{account.displayName}</b><small>{STAFF_ROLE_DEFINITIONS[account.role].label} · {account.status}</small></button>)}{!filtered.length?<p>No accounts match this view.</p>:null}<Pagination aria-label="Team account pages" page={current} totalPages={pages} onChange={setPage}/></div>
+        {editorOpen?<RecordDialog label="Team account" onClose={()=>{if(!busy){setEditorOpen(false);setConfirmRemoval(false);}}}><form key={selected?.id ?? "new"} className="staff-editor" onSubmit={save}>
           <p className="night-kicker"><span /> {selected ? "Account controls" : "New team member"}</p><h2>{selected?.displayName ?? "Add someone to operations"}</h2>
           <div className="ops-grid"><label>Name<input name="displayName" defaultValue={selected?.displayName} required /></label><label>Email<input name="email" type="email" defaultValue={selected?.email} required /></label><label>Role<select name="role" value={draftRole} onChange={(event) => setDraftRole(event.target.value as StaffRole)}>{STAFF_ROLES.map((value) => <option key={value} value={value}>{STAFF_ROLE_DEFINITIONS[value].label}</option>)}</select></label><label>Status<select name="status" defaultValue={selected?.status ?? "active"}><option value="active">Active</option><option value="disabled">Disabled</option></select></label><label className="wide"><KeyRound size={14} /> {selected ? "Reset with temporary password (optional)" : "Temporary password"}<input name="temporaryPassword" type="password" minLength={12} required={!selected} /></label></div>
           <section className="role-boundary" aria-live="polite"><header><span>{roleDefinition.workspace}</span><h3>{roleDefinition.label}</h3><p>{roleDefinition.summary}</p></header><div><section><b><Check size={13} /> Can</b>{roleDefinition.can.map((item) => <p key={item}>{item}</p>)}</section><section><b><ShieldX size={13} /> Cannot</b>{roleDefinition.cannot.map((item) => <p key={item}>{item}</p>)}</section></div></section>
@@ -101,7 +107,7 @@ export default function StaffAccounts({ actor, role }: { actor: string; role: St
           {selected && selected.id !== currentAccountId ? <section className="staff-removal" aria-label="Remove account">
             {confirmRemoval ? <><h3>Remove {selected.displayName}?</h3><p>They’ll lose Operations access and be signed out of every device. Their past work stays in the activity history.</p><div><ActionButton disabled={busy} onClick={() => void removeAccount()}>{busy ? "Removing…" : "Confirm removal"}</ActionButton><ActionButton variant="secondary" disabled={busy} onClick={() => setConfirmRemoval(false)}>Keep account</ActionButton></div></> : <ActionButton variant="text" disabled={busy} onClick={() => setConfirmRemoval(true)}>Remove from Operations</ActionButton>}
           </section> : selected ? <p className="staff-self-note">You’re signed in with this account.</p> : null}
-        </form>
+        <button type="button" disabled={busy} onClick={()=>{setEditorOpen(false);setConfirmRemoval(false);}}>Close account</button></form></RecordDialog>:null}
       </div>}
     </section>
   </main>;

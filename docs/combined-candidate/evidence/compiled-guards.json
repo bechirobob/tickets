@@ -1,0 +1,102 @@
+{
+  "checks": [
+    {
+      "path": "/admin",
+      "status": 307,
+      "location": "/admin/login?returnTo=%2Fadmin"
+    },
+    {
+      "path": "/admin/accounts",
+      "status": 307,
+      "location": "/admin/login?returnTo=%2Fadmin%2Faccounts"
+    },
+    {
+      "path": "/admin/support",
+      "status": 307,
+      "location": "/admin/login?returnTo=%2Fadmin%2Fsupport"
+    },
+    {
+      "path": "/admin/promoters",
+      "status": 307,
+      "location": "/admin/login?returnTo=%2Fadmin%2Fpromoters"
+    },
+    {
+      "path": "/admin/hosts",
+      "status": 307,
+      "location": "/admin/login?returnTo=%2Fadmin%2Fhosts"
+    },
+    {
+      "path": "/admin/account",
+      "status": 307,
+      "location": "/admin/login?returnTo=%2Fadmin%2Faccount"
+    },
+    {
+      "path": "/admin/orders",
+      "status": 307,
+      "location": "/admin/login?returnTo=%2Fadmin%2Forders"
+    },
+    {
+      "path": "/admin/events",
+      "status": 307,
+      "location": "/admin/login?returnTo=%2Fadmin%2Fevents"
+    },
+    {
+      "path": "/admin/yorkeway-audience",
+      "status": 307,
+      "location": "/admin/login?returnTo=%2Fadmin%2Fyorkeway-audience"
+    },
+    {
+      "path": "/organizer/workspace?area=money",
+      "status": 307,
+      "location": "/admin/login?returnTo=%2Forganizer%2Fworkspace%3Farea%3Dmoney"
+    },
+    {
+      "path": "/organizer/workspace?area=team",
+      "status": 307,
+      "location": "/admin/login?returnTo=%2Forganizer%2Fworkspace%3Farea%3Dteam"
+    },
+    {
+      "path": "/api/admin/accounts",
+      "status": 403
+    },
+    {
+      "path": "/api/admin/support",
+      "status": 403
+    },
+    {
+      "path": "/api/admin/promoters",
+      "status": 403
+    },
+    {
+      "path": "/api/admin/host-applications",
+      "status": 403
+    },
+    {
+      "path": "/api/admin/passkeys",
+      "status": 401
+    },
+    {
+      "path": "/api/admin/submissions",
+      "status": 401
+    },
+    {
+      "path": "/api/admin/orders",
+      "status": 403
+    },
+    {
+      "path": "/api/admin/events",
+      "status": 403
+    },
+    {
+      "path": "/api/admin/yorkeway-audience",
+      "status": 403
+    },
+    {
+      "path": "/api/organizer/business?section=money&event=all",
+      "status": 403
+    }
+  ],
+  "authenticated": false,
+  "databaseFixture": false,
+  "productionBindings": false
+}

@@ -43,3 +43,9 @@
 .host-profile--branded .host-profile__bio { margin-top: 24px; }
 .host-directory-brand { display: block; margin-top: 8px; font-size: 15px; font-weight: 650; }
 .host-profile__verified { color: #d9e89a; }
+
+/* Fixed mobile navigation is outside the browser's default scroll viewport.
+   Reserve its real clearance for host links scrolled into view or focused. */
+@media (max-width: 700px) {
+  html:has(.host-page):has(.customer-dock) { scroll-padding-bottom: calc(88px + max(12px, env(safe-area-inset-bottom))); }
+}

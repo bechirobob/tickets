@@ -114,7 +114,12 @@ test('privacy follow-up rejects a changed production identity and records both s
 
 
 test('ordinary deployment excludes only the finite reviewed tooling paths without changing its guards', () => {
-  const workflow = readFileSync(new URL('../.github/workflows/deploy.yml', import.meta.url), 'utf8');
+  const currentWorkflow = readFileSync(new URL('../.github/workflows/deploy.yml', import.meta.url), 'utf8');
+  // Pin the complete reviewed maintenance overlay before reconstructing history.
+  assert.equal(createHash('sha1').update(`blob ${Buffer.byteLength(currentWorkflow)}\0`).update(currentWorkflow).digest('hex'), '268260bd7642ee1430568aaeeff0a788389535e8');
+  const maintenance = ['.github/workflows/d1-recovery-rehearsal.yml', 'scripts/check-d1-recovery-runtime.mjs', 'tests/d1-recovery-privacy.test.mjs', 'docs/runbooks/d1-recovery.md'];
+  const maintenanceAddition = '      # Recovery maintenance is not an application release.\n' + maintenance.map(path => `      - '${path}'\n`).join('');
+  const workflow = currentWorkflow.replace(maintenanceAddition, '').replace(/      - name: Classify exact recovery maintenance\n[\s\S]*?(?=      - name: Verify exact source ancestry)/, '').replaceAll("        if: steps.recovery_maintenance.outputs.matches != 'true'\n", '');
   const added = [
     '.github/workflows/tickets-release-operator-checks.yml',
     '.github/workflows/browser-followup.yml',
@@ -151,7 +156,12 @@ test('ordinary deployment excludes only the finite reviewed tooling paths withou
   assert.equal(digest, 'b18eb81d65fd5a93fabebe7ae98c6cf99067076e');
   // These reviewed entries are literal files, not directories/globs. GitHub skips
   // paths-ignore only if every changed path matches; mixed changes still run.
-  const passesNewFilter = paths => paths.some(path => ![...added, ...hygiene, ...evidence].includes(path));
+  const passesNewFilter = paths => paths.some(path => ![...added, ...hygiene, ...evidence, ...maintenance].includes(path));
+  for (const path of maintenance) {
+    assert.equal(passesNewFilter([path]), false);
+    assert.equal(passesNewFilter([`${path}/extra`]), true);
+    assert.equal(passesNewFilter([path, 'app/page.tsx']), true);
+  }
   for (const path of evidence) assert.equal(passesNewFilter([path]), false);
   for (const path of hygiene) assert.equal(passesNewFilter([path]), false);
   for (const path of added) assert.equal(passesNewFilter([path]), false);

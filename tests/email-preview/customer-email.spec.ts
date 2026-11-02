@@ -1,7 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
-import { previewData, renderCustomerEmailPreviews, renderFirstHostEmailPreview, renderHostPassEmailPreview } from '../../scripts/customer-email-previews.mjs';
+import { waitForEmailImagePaint, previewData, renderCustomerEmailPreviews, renderFirstHostEmailPreview, renderHostPassEmailPreview } from '../../scripts/customer-email-previews.mjs';
 import { expectVisibleLettering } from '../e2e/text-visibility';
 
 const names = ['purchase-confirmation', 'rsvp-confirmed', 'email-verification', 'ticket-recovery', 'ticket-transfer', 'waitlist-offer', 'abandoned-checkout', 'support-update', 'purchase-announcement-verification', 'rsvp-announcement-verification', 'first-host-post', 'host-pass-invitation'];
@@ -109,7 +109,8 @@ for (const name of names) {
         expect(geometry.fit).not.toBe('cover');
       }
       await expectReadableEmail(page);
-      const pixels = await page.screenshot({ fullPage: true, ...(colorScheme === 'light' ? { path: info.outputPath(`${name}.png`) } : {}) });
+      await page.evaluate(waitForEmailImagePaint);
+      const pixels = await page.screenshot({ fullPage: true, path: info.outputPath(`${name}-${colorScheme}.png`) });
       const digest = createHash('sha256').update(pixels).digest('hex');
       if (colorScheme === 'light') lightDigest = digest;
       else expect(digest, 'The complete email must preserve its explicit colors in a dark host.').toBe(lightDigest);

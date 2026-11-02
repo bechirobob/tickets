@@ -37,6 +37,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
   const [network, setNetwork] = useState("mtn");
   const [paymentMethod, setPaymentMethod] = useState<"mobile_money" | "card" | "crypto" | null>(null);
   const [message, setMessage] = useState("");
+  const [invalidField, setInvalidField] = useState<"name" | "email" | "phone" | "payment" | "policies" | null>(null);
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -80,27 +81,32 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
     if (!ready || quoting || paying.current || (!paystackEnabled && !seevEnabled)) return;
     if (!paymentMethod) {
       setMessage("Choose a payment method before continuing.");
+      setInvalidField("payment");
       paymentChoice.current?.focus();
       return;
     }
     if (!fullName.trim()) {
       setMessage("Add your full name so we know who the ticket belongs to.");
+      setInvalidField("name");
       nameInput.current?.focus();
       return;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email.trim())) {
       setMessage("Add a valid email for your ticket and receipt.");
+      setInvalidField("email");
       emailInput.current?.focus();
       return;
     }
     const normalizedPhone = phone.replace(/[^\d+]/gu, "");
     if (normalizedPhone.length < 7 || normalizedPhone.length > 40) {
       setMessage("Add a reachable phone number before continuing.");
+      setInvalidField("phone");
       phoneInput.current?.focus();
       return;
     }
     if (!acceptedPolicies) {
       setMessage("Tick the ticket terms, refund rules and privacy checkbox to continue.");
+      setInvalidField("policies");
       policyChoice.current?.focus();
       return;
     }
@@ -148,7 +154,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
   function chooseTier(tierId: typeof selectedTierId) {
     setSelectedTierId(tierId);
     setQuantity(1);
-    setMessage("");
+    setMessage(""); setInvalidField(null);
   }
 
   return (
@@ -205,9 +211,9 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
             <div><small>Delivery details</small><h2>Where should the good news find you?</h2></div>
           </div>
           <div className="form-grid">
-            <label>Full name<input disabled={!ready} ref={nameInput} type="text" placeholder="Your full name" autoComplete="name" value={fullName} onChange={(event) => { setFullName(event.target.value); setMessage(""); }} /></label>
-            <label>Phone number<input disabled={!ready} ref={phoneInput} type="tel" placeholder="024 000 0000" autoComplete="tel" value={phone} onChange={(event) => { setPhone(event.target.value); setMessage(""); }} /></label>
-            <label className="full-field">Email address<input disabled={!ready} ref={emailInput} type="email" placeholder="you@example.com" autoComplete="email" value={email} onChange={(event) => { setEmail(event.target.value); setMessage(""); }} /></label>
+            <label><span id="checkout-name-label">Full name</span><input disabled={!ready} ref={nameInput} aria-labelledby="checkout-name-label" aria-invalid={invalidField === "name" || undefined} aria-describedby={invalidField === "name" ? "checkout-name-error" : undefined} type="text" placeholder="Your full name" autoComplete="name" value={fullName} onChange={(event) => { setFullName(event.target.value); setMessage(""); setInvalidField(null); }} />{invalidField === "name" ? <span className="checkout-field-error" id="checkout-name-error">{message}</span> : null}</label>
+            <label><span id="checkout-phone-label">Phone number</span><input disabled={!ready} ref={phoneInput} aria-labelledby="checkout-phone-label" aria-invalid={invalidField === "phone" || undefined} aria-describedby={invalidField === "phone" ? "checkout-phone-error" : undefined} type="tel" placeholder="024 000 0000" autoComplete="tel" value={phone} onChange={(event) => { setPhone(event.target.value); setMessage(""); setInvalidField(null); }} />{invalidField === "phone" ? <span className="checkout-field-error" id="checkout-phone-error">{message}</span> : null}</label>
+            <label className="full-field"><span id="checkout-email-label">Email address</span><input disabled={!ready} ref={emailInput} aria-labelledby="checkout-email-label" aria-invalid={invalidField === "email" || undefined} aria-describedby={invalidField === "email" ? "checkout-email-error" : undefined} type="email" inputMode="email" autoCapitalize="none" spellCheck={false} placeholder="you@example.com" autoComplete="email" value={email} onChange={(event) => { setEmail(event.target.value); setMessage(""); setInvalidField(null); }} />{invalidField === "email" ? <span className="checkout-field-error" id="checkout-email-error">{message}</span> : null}</label>
           </div>
 
           <div className="checkout-step checkout-step--second">
@@ -217,14 +223,14 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
             <legend className="sr-only">Choose payment method</legend>
             <section className={`payment-option${paymentMethod === "mobile_money" ? " selected" : ""}`}>
               <label className="payment-method-choice">
-                <input ref={paymentChoice} type="radio" name="paymentMethod" value="mobile_money" checked={paymentMethod === "mobile_money"} onChange={() => { setPaymentMethod("mobile_money"); setMessage(""); }} />
+                <input ref={paymentChoice} aria-invalid={invalidField === "payment" || undefined} aria-describedby={invalidField === "payment" ? "checkout-payment-message" : undefined} type="radio" name="paymentMethod" value="mobile_money" checked={paymentMethod === "mobile_money"} onChange={() => { setPaymentMethod("mobile_money"); setMessage(""); setInvalidField(null); }} />
                 <Smartphone size={20} aria-hidden="true" /><span>Mobile Money<small>MTN MoMo, Telecel Cash or AT Money</small></span>
               </label>
               {paymentMethod === "mobile_money" ? <div className="payment-method-detail">
                 {seevEnabled && paystackEnabled ? <fieldset className="checkout-provider-choice" disabled={isPaying}>
                   <legend>Pay through</legend>
-                  <label><input type="radio" name="momoProvider" value="paystack" checked={momoProvider === "paystack"} onChange={() => { setMomoProvider("paystack"); setMessage(""); }} />Paystack</label>
-                  <label><input type="radio" name="momoProvider" value="seevplus" checked={momoProvider === "seevplus"} onChange={() => { setMomoProvider("seevplus"); setMessage(""); }} />SeevPlus</label>
+                  <label><input type="radio" name="momoProvider" value="paystack" checked={momoProvider === "paystack"} onChange={() => { setMomoProvider("paystack"); setMessage(""); setInvalidField(null); }} />Paystack</label>
+                  <label><input type="radio" name="momoProvider" value="seevplus" checked={momoProvider === "seevplus"} onChange={() => { setMomoProvider("seevplus"); setMessage(""); setInvalidField(null); }} />SeevPlus</label>
                 </fieldset> : null}
                 {momoProvider === "seevplus" ? <>
                   <ul className="supported-momo-networks" aria-label="Available mobile money networks">
@@ -243,7 +249,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
             </section>
             {paystackEnabled ? <section className={`payment-option${paymentMethod === "card" ? " selected" : ""}`}>
               <label className="payment-method-choice">
-                <input type="radio" name="paymentMethod" value="card" checked={paymentMethod === "card"} onChange={() => { setPaymentMethod("card"); setMessage(""); }} />
+                <input type="radio" name="paymentMethod" value="card" checked={paymentMethod === "card"} onChange={() => { setPaymentMethod("card"); setMessage(""); setInvalidField(null); }} />
                 <CreditCard size={20} aria-hidden="true" /><span>Cards<small>Visa or Mastercard through Paystack</small></span>
               </label>
               {paymentMethod === "card" ? <div className="payment-method-detail"><div className="card-payment-detail">
@@ -252,7 +258,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
             </section> : null}
             {seevEnabled && seevCryptoEnabled ? <section className={`payment-option${paymentMethod === "crypto" ? " selected" : ""}`}>
               <label className="payment-method-choice">
-                <input type="radio" name="paymentMethod" value="crypto" checked={paymentMethod === "crypto"} onChange={() => { setPaymentMethod("crypto"); setMessage(""); }} />
+                <input type="radio" name="paymentMethod" value="crypto" checked={paymentMethod === "crypto"} onChange={() => { setPaymentMethod("crypto"); setMessage(""); setInvalidField(null); }} />
                 <Wallet size={20} aria-hidden="true" /><span>Crypto<small>USDC through SeevPlus</small></span>
               </label>
               {paymentMethod === "crypto" ? <div className="payment-method-detail"><p className="secure-note">Continue to SeevPlus and review the USDC amount. Use only the asset and network shown there, then follow the payment instructions. Your tickets appear once payment is confirmed.</p></div> : null}
@@ -260,7 +266,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
           </fieldset>
           <div className="checkout-consents" role="group" aria-label="Email updates and terms">
           <label className="checkout-consent"><input disabled={!ready} type="checkbox" checked={platformAnnouncementsOptIn} onChange={(event) => setPlatformAnnouncementsOptIn(event.target.checked)} /><span>Keep me posted on new nights from BeCore Tickets.</span></label>
-          <label className="checkout-consent"><input disabled={!ready} ref={policyChoice} type="checkbox" checked={acceptedPolicies} onChange={(event) => { setAcceptedPolicies(event.target.checked); setMessage(""); }} /><span>I accept the <Link href="/terms#purchase" target="_blank">ticket terms</Link>, <Link href="/terms#refund" target="_blank">refund rules</Link> and <Link href="/privacy" target="_blank">privacy notice</Link>.</span></label>
+          <label className="checkout-consent"><input disabled={!ready} ref={policyChoice} aria-invalid={invalidField === "policies" || undefined} aria-describedby={invalidField === "policies" ? "checkout-payment-message" : undefined} type="checkbox" checked={acceptedPolicies} onChange={(event) => { setAcceptedPolicies(event.target.checked); setMessage(""); setInvalidField(null); }} /><span>I accept the <Link href="/terms#purchase" target="_blank">ticket terms</Link>, <Link href="/terms#refund" target="_blank">refund rules</Link> and <Link href="/privacy" target="_blank">privacy notice</Link>.</span></label>
           </div>
           </>}
         </section>

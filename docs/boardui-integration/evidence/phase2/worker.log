@@ -1,0 +1,17 @@
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ RUN  v4.1.12 /workspace/tickets-integration
+
+
+ Test Files  6 passed (6)
+      Tests  122 passed (122)
+   Start at  23:08:31
+   Duration  6.23s (transform 2.68s, setup 4.18s, import 2.97s, tests 2.91s, environment 0ms)
+
+npm notice
+npm notice New major version of npm available! 11.9.0 -> 12.2.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+npm notice To update run: npm install -g npm@12.2.1
+npm notice

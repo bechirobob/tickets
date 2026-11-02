@@ -1,0 +1,441 @@
+{
+  "branch": "integrate/boardui-workspace-20261101",
+  "workflowChanges": false,
+  "triggers": [
+    {
+      "file": "backup-transport-checks.yml",
+      "push": {
+        "branches": [
+          "main"
+        ],
+        "paths": [
+          ".github/workflows/deploy.yml",
+          ".github/backup/**",
+          ".github/workflows/backup-transport-checks.yml",
+          ".github/workflows/tickets-backup.yml"
+        ]
+      }
+    },
+    {
+      "file": "candidate-parallel-checks.yml",
+      "push": {
+        "branches": [
+          "improve/release-evidence-parallel-20261013"
+        ]
+      }
+    },
+    {
+      "file": "cinco-confirmation-release-20261019.yml",
+      "push": {
+        "branches": [
+          "main"
+        ],
+        "paths": [
+          ".github/workflows/cinco-confirmation-release-20261019.yml"
+        ]
+      }
+    },
+    {
+      "file": "d1-recovery-rehearsal.yml",
+      "push": {
+        "branches": [
+          "main"
+        ],
+        "paths": [
+          "drizzle/**",
+          "scripts/rehearse-d1-recovery.sh",
+          ".github/workflows/d1-recovery-rehearsal.yml"
+        ]
+      }
+    },
+    {
+      "file": "dependency-security.yml",
+      "push": {
+        "branches": [
+          "main"
+        ],
+        "paths": [
+          "package.json",
+          "package-lock.json",
+          "mobile/package.json",
+          "mobile/package-lock.json",
+          ".github/dependabot.yml",
+          ".github/workflows/dependency-security.yml"
+        ]
+      }
+    },
+    {
+      "file": "deploy.yml",
+      "push": {
+        "branches": [
+          "main"
+        ],
+        "paths-ignore": [
+          ".gitignore",
+          "tests/staff-app-launch.test.mjs",
+          "ops/vps/operator_evidence.py",
+          "ops/vps/test_operator_evidence.py",
+          ".github/workflows/tickets-backup.yml",
+          ".github/workflows/backup-transport-checks.yml",
+          ".github/backup/**",
+          ".github/workflows/tickets-vps-diagnostics.yml",
+          ".github/workflows/deploy.yml",
+          ".github/workflows/tickets-handover.yml",
+          "ops/handover/**",
+          "tests/handover-loopback-health.test.mjs",
+          "docs/operations/dual-hosting.md",
+          ".github/workflows/tickets-release-operator-checks.yml",
+          ".github/workflows/browser-followup.yml",
+          "tests/browser-environment.test.mjs",
+          "tests/test_operator_retry_workflow.py",
+          "ops/vps/test_code_release.py",
+          ".github/workflows/candidate-parallel-checks.yml",
+          ".github/workflows/tickets-code-release.yml",
+          "ops/vps/candidate_build.py",
+          "ops/vps/code-release.py",
+          "ops/vps/parallel_candidate_retry.py",
+          "ops/vps/parallel_candidate_retry_control.py",
+          "ops/vps/test_candidate_build.py",
+          "ops/vps/test_parallel_candidate_retry.py",
+          "ops/vps/test_parallel_candidate_retry_control.py",
+          "ops/vps/test_parallel_retry_admission.py",
+          "tests/test_candidate_parallel_workflow.py",
+          "ops/vps/test_yorkeway_release.py"
+        ]
+      }
+    },
+    {
+      "file": "event-capacity.yml",
+      "push": {
+        "branches": [
+          "perf/event-capacity-400"
+        ]
+      }
+    },
+    {
+      "file": "fallback-infrastructure.yml",
+      "push": {
+        "branches": [
+          "feat/vps-maintenance-fallback"
+        ],
+        "paths": [
+          ".github/workflows/fallback-infrastructure.yml",
+          "scripts/inspect-fallback-infrastructure.mjs"
+        ]
+      }
+    },
+    {
+      "file": "handover-preflight.yml",
+      "push": {
+        "branches": [
+          "feat/vps-live-handover-20260929"
+        ],
+        "paths": [
+          ".github/workflows/handover-preflight.yml",
+          "ops/handover/live-preflight.mjs"
+        ]
+      }
+    },
+    {
+      "file": "handover-return-diagnose.yml",
+      "push": {
+        "branches": [
+          "ops/vps-standby-completion-20260929"
+        ],
+        "paths": [
+          ".github/workflows/handover-return-diagnose.yml"
+        ]
+      }
+    },
+    {
+      "file": "handover-return-prepare.yml",
+      "push": {
+        "branches": [
+          "ops/vps-standby-completion-20260929"
+        ],
+        "paths": [
+          ".github/workflows/handover-return-prepare.yml"
+        ]
+      }
+    },
+    {
+      "file": "handover-return-verify.yml",
+      "push": {
+        "branches": [
+          "ops/vps-standby-completion-20260929"
+        ],
+        "paths": [
+          ".github/workflows/handover-return-verify.yml"
+        ]
+      }
+    },
+    {
+      "file": "handover-tools.yml",
+      "push": {
+        "branches": [
+          "ops/vps-standby-completion-20260929"
+        ],
+        "paths": [
+          "ops/handover/**",
+          "tests/handover-*.test.mjs",
+          ".github/workflows/handover-tools.yml"
+        ]
+      }
+    },
+    {
+      "file": "hosted-capacity.yml",
+      "push": {
+        "branches": [
+          "ops/hosted-capacity-readiness",
+          "ops/hosted-capacity-diagnostics",
+          "fix/room-render-and-browser-reliability"
+        ],
+        "paths": [
+          "scripts/capacity/**",
+          ".github/workflows/hosted-capacity.yml"
+        ]
+      }
+    },
+    {
+      "file": "input-modality-checks.yml",
+      "push": {
+        "branches": [
+          "fix/shared-input-focus-20261024"
+        ]
+      }
+    },
+    {
+      "file": "prepare-vps-fallback.yml",
+      "push": {
+        "branches": [
+          "feat/vps-maintenance-fallback"
+        ],
+        "paths": [
+          "ops/fallback/**",
+          ".github/workflows/prepare-vps-fallback.yml"
+        ]
+      }
+    },
+    {
+      "file": "preview-data-inventory.yml",
+      "push": {
+        "branches": [
+          "feat/full-visual-audit"
+        ],
+        "paths": [
+          "scripts/inspect-preview-data.mjs",
+          ".github/workflows/preview-data-inventory.yml"
+        ]
+      }
+    },
+    {
+      "file": "puro-access-readonly-20261020.yml",
+      "push": {
+        "branches": [
+          "main"
+        ],
+        "paths": [
+          ".github/workflows/puro-access-readonly-20261020.yml"
+        ]
+      }
+    },
+    {
+      "file": "puro-access-release-20261019.yml",
+      "push": {
+        "branches": [
+          "main"
+        ],
+        "paths": [
+          ".github/workflows/puro-access-release-20261019.yml"
+        ]
+      }
+    },
+    {
+      "file": "puro-approval-readonly-20261019.yml",
+      "push": {
+        "branches": [
+          "main"
+        ],
+        "paths": [
+          ".github/workflows/puro-approval-readonly-20261019.yml"
+        ]
+      }
+    },
+    {
+      "file": "puro-delivery-readonly-20261020.yml",
+      "push": {
+        "branches": [
+          "main"
+        ],
+        "paths": [
+          ".github/workflows/puro-delivery-readonly-20261020.yml"
+        ]
+      }
+    },
+    {
+      "file": "puro-exceso-publish.yml",
+      "push": {
+        "branches": [
+          "main"
+        ],
+        "paths": [
+          "ops/handover/puro_exceso/activate.sha256"
+        ]
+      }
+    },
+    {
+      "file": "puro-first-host-delivery-readonly-20261024.yml",
+      "push": {
+        "branches": [
+          "main"
+        ],
+        "paths": [
+          ".github/workflows/puro-first-host-delivery-readonly-20261024.yml"
+        ]
+      }
+    },
+    {
+      "file": "puro-first-host-recovery-20261024.yml",
+      "push": {
+        "branches": [
+          "main"
+        ],
+        "paths": [
+          ".github/workflows/puro-first-host-recovery-20261024.yml"
+        ]
+      }
+    },
+    {
+      "file": "seev-production-secrets.yml",
+      "push": {
+        "branches": [
+          "release/seev-live-checkout"
+        ],
+        "paths": [
+          ".github/workflows/seev-production-secrets.yml"
+        ]
+      }
+    },
+    {
+      "file": "staff-entry-previews.yml",
+      "push": {
+        "branches": [
+          "feat/staff-entry"
+        ]
+      }
+    },
+    {
+      "file": "tickets-bounce-codes-readonly-20261024.yml",
+      "push": {
+        "branches": [
+          "main"
+        ],
+        "paths": [
+          ".github/workflows/tickets-bounce-codes-readonly-20261024.yml"
+        ]
+      }
+    },
+    {
+      "file": "tickets-mail-room-upgrade.yml",
+      "push": {
+        "branches": [
+          "main"
+        ],
+        "paths": [
+          ".github/workflows/tickets-mail-room-upgrade.yml"
+        ]
+      }
+    },
+    {
+      "file": "tickets-mail-service-readonly-20261024.yml",
+      "push": {
+        "branches": [
+          "main"
+        ],
+        "paths": [
+          ".github/workflows/tickets-mail-service-readonly-20261024.yml"
+        ]
+      }
+    },
+    {
+      "file": "tickets-readiness-audit.yml",
+      "push": {
+        "branches": [
+          "main"
+        ],
+        "paths": [
+          ".github/workflows/tickets-readiness-audit.yml"
+        ]
+      }
+    },
+    {
+      "file": "tickets-vps-access.yml",
+      "push": {
+        "branches": [
+          "main"
+        ],
+        "paths": [
+          ".github/workflows/tickets-vps-access.yml"
+        ]
+      }
+    },
+    {
+      "file": "tickets-vps-diagnostics.yml",
+      "push": {
+        "branches": [
+          "main"
+        ],
+        "paths": [
+          ".github/workflows/tickets-vps-diagnostics.yml"
+        ]
+      }
+    },
+    {
+      "file": "tickets-yorkeway-mail-inspect.yml",
+      "push": {
+        "branches": [
+          "main"
+        ],
+        "paths": [
+          ".github/workflows/tickets-yorkeway-mail-inspect.yml"
+        ]
+      }
+    },
+    {
+      "file": "tickets-yorkeway-mail-upgrade.yml",
+      "push": {
+        "branches": [
+          "main"
+        ],
+        "paths": [
+          ".github/workflows/tickets-yorkeway-mail-upgrade.yml"
+        ]
+      }
+    },
+    {
+      "file": "vps-runtime.yml",
+      "push": {
+        "branches": [
+          "main"
+        ],
+        "paths": [
+          ".github/workflows/vps-runtime.yml",
+          "runtime/**",
+          "ops/vps/**",
+          "ops/handover/**",
+          "scripts/**",
+          "worker/**",
+          "lib/**",
+          "app/**",
+          "db/**",
+          "drizzle/**",
+          "public/**",
+          "styles/**",
+          "tests/**",
+          "package*.json",
+          "*config*"
+        ]
+      }
+    }
+  ]
+}

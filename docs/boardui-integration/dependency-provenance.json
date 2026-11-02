@@ -1,0 +1,79 @@
+{
+  "sourcePR": 392,
+  "sourceCommit": "a17fd73f31a19eba1be725fbbf29e5c798ec0392",
+  "files": [
+    {
+      "path": "eslint.config.mjs",
+      "sourceSha256": "0b6e38327795711226ed4bc5b8d1aa450c56e01d26d8c4c5a32dc9aef78cae39",
+      "localSha256": "0b6e38327795711226ed4bc5b8d1aa450c56e01d26d8c4c5a32dc9aef78cae39",
+      "byteIdentical": true
+    },
+    {
+      "path": "mobile/package-lock.json",
+      "sourceSha256": "028f801ec773a3902812a39b4c336dbf46b767f2b742f89f388ace7236a509ee",
+      "localSha256": "028f801ec773a3902812a39b4c336dbf46b767f2b742f89f388ace7236a509ee",
+      "byteIdentical": true
+    },
+    {
+      "path": "mobile/package.json",
+      "sourceSha256": "eda77d250748d9943cc246efc47ab040016151a108ba1aa64cd1cf606f12171b",
+      "localSha256": "eda77d250748d9943cc246efc47ab040016151a108ba1aa64cd1cf606f12171b",
+      "byteIdentical": true
+    },
+    {
+      "path": "package-lock.json",
+      "sourceSha256": "8016343f7c6600633137108fc00d5d55ce3e1305b7c7b96a4026d75a1d6dd72e",
+      "localSha256": "806a3c7c6a8ac1a4b569882757b9a5c03a9d901df34c268dca2f039eab09f8d7",
+      "byteIdentical": false
+    },
+    {
+      "path": "package.json",
+      "sourceSha256": "bb74454c2706c9f9f50439358f291c6912e69b981d7bb2df7e86e6ae684c3d6e",
+      "localSha256": "967ba32aeed773ae7d8eef897f7097d0dbcdb725dc9adc507d687db474594b27",
+      "byteIdentical": false
+    },
+    {
+      "path": "tests/tooling-glob.test.mjs",
+      "sourceSha256": "44c75a8b0ad968d18c321e9e9808bee8b7696c30ddd291f6325216799b4eb7b2",
+      "localSha256": "44c75a8b0ad968d18c321e9e9808bee8b7696c30ddd291f6325216799b4eb7b2",
+      "byteIdentical": true
+    },
+    {
+      "path": "vendor/minimatch-compat/index.cjs",
+      "sourceSha256": "b3136ada3ff644f6e9f923e41e3616d13ebe39668d48d3183fced7696828c528",
+      "localSha256": "b3136ada3ff644f6e9f923e41e3616d13ebe39668d48d3183fced7696828c528",
+      "byteIdentical": true
+    },
+    {
+      "path": "vendor/minimatch-compat/index.d.ts",
+      "sourceSha256": "e47e50b7418655ea00da4d8a1f153d8ec4999ec8b68915ab28abdf4d2953aa2d",
+      "localSha256": "e47e50b7418655ea00da4d8a1f153d8ec4999ec8b68915ab28abdf4d2953aa2d",
+      "byteIdentical": true
+    },
+    {
+      "path": "vendor/minimatch-compat/index.js",
+      "sourceSha256": "31734d12d8901fee4cf6dd457c19e50717c0ae327b4f14ef144a0b3ee1b3ba19",
+      "localSha256": "31734d12d8901fee4cf6dd457c19e50717c0ae327b4f14ef144a0b3ee1b3ba19",
+      "byteIdentical": true
+    },
+    {
+      "path": "vendor/minimatch-compat/package.json",
+      "sourceSha256": "0433540e87c9ee3994440e08ae986f015a475b64d529cd61910e71db2ba8bea8",
+      "localSha256": "0433540e87c9ee3994440e08ae986f015a475b64d529cd61910e71db2ba8bea8",
+      "byteIdentical": true
+    },
+    {
+      "path": "vendor/tooling-glob/package.json",
+      "sourceSha256": "a892f54b9d23c458e7c0735a138e871ecaeb3a189d62f4221d89c51c4850c136",
+      "localSha256": "a892f54b9d23c458e7c0735a138e871ecaeb3a189d62f4221d89c51c4850c136",
+      "byteIdentical": true
+    }
+  ],
+  "rootManifestException": "Retains react-aria-components 1.17.0 and tailwind-merge 3.6.0 and their eleven added package entries from b74a529. Every non-root package entry in the reviewed PR lock is identical.",
+  "notIncluded": [
+    "scanner page correction",
+    "scanner tests",
+    "release admission changes"
+  ],
+  "released": false
+}

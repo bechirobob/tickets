@@ -1,0 +1,9 @@
+.yorkeway-workspace { max-width:1100px; }
+.yorkeway-workspace>header { display:flex; align-items:start; justify-content:space-between; gap:20px; }
+.yorkeway-workspace h1 { font:700 28px/1.2 var(--font-system); letter-spacing:-.03em; }
+.yorkeway-workspace>header p,.yorkeway-scope { color:var(--muted); }
+.yorkeway-counts { display:flex; gap:40px; padding:20px 0; border-block:1px solid var(--line); margin:20px 0; }
+.yorkeway-counts span { display:block; color:var(--muted); font-size:13px; }
+.yorkeway-counts b { font-size:26px; font-weight:650; }
+.yorkeway-workspace .audience-pagination { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-top:24px; }
+@media(max-width:650px) { .yorkeway-workspace>header { flex-wrap:wrap; } .yorkeway-workspace .bui-table th:nth-child(2) { width:70px; } }

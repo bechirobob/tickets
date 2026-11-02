@@ -1,0 +1,1030 @@
+
+> becore-tickets@0.1.0 test
+> npm run test:tooling && npm run test:repo && npm run test:ui && npm run test:password-client && npm run test:rendered && npm run test:worker
+
+
+> becore-tickets@0.1.0 test:tooling
+> node --test tests/tooling-glob.test.mjs tests/browser-environment.test.mjs
+
+✔ prepared image matches the root and mobile locked Playwright versions (2.326148ms)
+✔ readiness rejects mutable image tag (0.714266ms)
+✔ readiness rejects wrong image version (0.210548ms)
+✔ readiness rejects installed package mismatch (0.414807ms)
+✔ readiness rejects unreviewed Node runtime (0.283184ms)
+✔ readiness rejects wrong Linux distribution (0.195366ms)
+✔ readiness rejects wrong Ubuntu release (0.165132ms)
+✔ readiness rejects changed dependency lock (0.128208ms)
+✔ candidate-checks.yml/verify uses prepared browsers without installation (0.45079ms)
+✔ candidate-parallel-checks.yml/desktop_chromium uses prepared browsers without installation (0.313069ms)
+✔ candidate-parallel-checks.yml/mobile_chromium uses prepared browsers without installation (0.16341ms)
+✔ candidate-parallel-checks.yml/mobile_webkit uses prepared browsers without installation (0.100858ms)
+✔ tickets-code-release.yml/retired_preview uses prepared browsers without installation (0.070002ms)
+✔ booking-consent-previews.yml/preview uses prepared browsers without installation (0.160625ms)
+✔ customer-email-previews.yml/preview uses prepared browsers without installation (0.094678ms)
+✔ yorkeway-previews.yml/preview uses prepared browsers without installation (0.187755ms)
+✔ browser-followup.yml/verify uses prepared browsers without installation (0.119104ms)
+✔ input-modality-checks.yml/browser uses prepared browsers without installation (0.056423ms)
+✔ native-apps.yml/web-client uses prepared browsers without installation (0.066077ms)
+✔ focused browser diagnostics retain first failures without uploading green-run traces (0.842044ms)
+✔ privacy follow-up rejects a changed production identity and records both source revisions (19.928309ms)
+✔ ordinary deployment excludes only the finite reviewed tooling paths without changing its guards (1.264973ms)
+✔ existing maintenance covers both npm locks and pinned actions without automatic adoption (8.626828ms)
+✔ installed packages have the owned identities and pinned provider (2.264377ms)
+✔ ordinary extension discovery is ordered, file-only, and excludes hidden files (12.35522ms)
+✔ negative directory patterns prune descendants and normalize leading dots (3.640694ms)
+✔ explicit pattern priority and duplicate elimination survive per-pattern sorting (1.553896ms)
+✔ root directories include followed symlinks and their descendants (1.943707ms)
+✔ directory-suffix globs never return symlinks to regular files (2.965565ms)
+✔ absolute directory patterns keep absolute path forms (0.657924ms)
+✔ spy-provider guard: unknown option (0.230128ms)
+✔ spy-provider guard: invalid cwd (0.091964ms)
+✔ spy-provider guard: length boundary (0.673316ms)
+✔ spy-provider guard: length over boundary (0.07518ms)
+✔ spy-provider guard: aggregate boundary (2.472042ms)
+✔ spy-provider guard: aggregate over boundary (1.558333ms)
+✔ spy-provider guard: count boundary (1.138518ms)
+✔ spy-provider guard: count over boundary (0.088119ms)
+✔ spy-provider guard: nesting boundary (0.098334ms)
+✔ spy-provider guard: nesting over boundary (0.055882ms)
+✔ spy-provider guard: unclosed nesting rejected (0.04101ms)
+✔ spy-provider guard: mismatched closing delimiter rejected (0.071274ms)
+✔ spy-provider guard: mixed nesting rejected (0.059036ms)
+✔ spy-provider guard: escaped delimiters are not nesting (0.043624ms)
+✔ CJS dynamic import strict keeps js/ts precedence (26.163348ms)
+✔ CJS dynamic import strict keeps file/index precedence (2.938134ms)
+✔ CJS dynamic import strict keeps combined precedence (10.208767ms)
+✔ CJS dynamic import strict keeps cjs/mjs/js/ts precedence (2.753133ms)
+✔ CJS dynamic import strict keeps mjs/js precedence (2.49787ms)
+✔ CJS dynamic import strict keeps mjs/ts precedence (3.53648ms)
+✔ CJS dynamic import strict keeps cjs/index precedence (2.152102ms)
+✔ CJS dynamic import loose keeps js/ts precedence (1.894606ms)
+✔ CJS dynamic import loose keeps file/index precedence (2.192512ms)
+✔ CJS dynamic import loose keeps combined precedence (2.872878ms)
+✔ CJS dynamic import loose keeps cjs/mjs/js/ts precedence (2.346848ms)
+✔ CJS dynamic import loose keeps mjs/js precedence (2.017706ms)
+✔ CJS dynamic import loose keeps mjs/ts precedence (1.975885ms)
+✔ CJS dynamic import loose keeps cjs/index precedence (2.460985ms)
+✔ ESM dynamic import strict keeps js/ts precedence (6.866569ms)
+✔ ESM dynamic import strict keeps file/index precedence (5.181871ms)
+✔ ESM dynamic import strict keeps combined precedence (2.004537ms)
+✔ ESM dynamic import strict keeps cjs/mjs/js/ts precedence (1.939601ms)
+✔ ESM dynamic import strict keeps mjs/js precedence (1.714792ms)
+✔ ESM dynamic import strict keeps mjs/ts precedence (1.69981ms)
+✔ ESM dynamic import strict keeps cjs/index precedence (2.10907ms)
+✔ ESM dynamic import loose keeps js/ts precedence (1.929977ms)
+✔ ESM dynamic import loose keeps file/index precedence (2.06871ms)
+✔ ESM dynamic import loose keeps combined precedence (3.409535ms)
+✔ ESM dynamic import loose keeps cjs/mjs/js/ts precedence (1.969215ms)
+✔ ESM dynamic import loose keeps mjs/js precedence (2.485221ms)
+✔ ESM dynamic import loose keeps mjs/ts precedence (1.771264ms)
+✔ ESM dynamic import loose keeps cjs/index precedence (1.914724ms)
+✔ legacy callable and modern minimatch imports share the patched matching behavior (16.393286ms)
+✔ upgraded glob rejects an already-aborted traversal (1.432208ms)
+✔ pinned import lint rule preserves forbidden and allowed module matching (181.614368ms)
+ℹ tests 75
+ℹ suites 0
+ℹ pass 75
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 442.705127
+npm notice
+npm notice New major version of npm available! 11.9.0 -> 12.2.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+npm notice To update run: npm install -g npm@12.2.1
+npm notice
+
+> becore-tickets@0.1.0 test:repo
+> node --test tests/repository-boundaries.test.mjs tests/owner-recovery-issuer.test.mjs tests/app-navigation.test.mjs tests/wallet-provider-actions.test.mjs tests/customer-email-rendering.test.mjs tests/room-host-email.test.mjs tests/room-host-handover.test.mjs tests/event-host-pass-handover.test.mjs tests/host-brand-migration.test.mjs tests/host-brand-preview-package.test.mjs tests/room-update-client.test.mjs tests/room-lifecycle.test.mjs tests/scanner-browser-lifecycle.test.mjs tests/scanner-app-launch.test.mjs tests/staff-app-launch.test.mjs
+
+✔ owner prompt and settings use shared account identity in both existing workspaces (1.298062ms)
+✔ primary notification action retains explicit hover contrast (0.173794ms)
+✔ Yorke Way owner push offers the audience action and opens its exact private destination (3.617889ms)
+✔ owner push cannot be redirected to an external origin or another admin page (2.972144ms)
+✔ attendee and host notifications cannot select the owner audience destination (3.486928ms)
+✔ owner push reuses an owner window instead of replacing an attendee or host workspace (0.857927ms)
+✔ owner push opens a new owner destination when only attendee windows exist (0.599909ms)
+✔ an opening header panel focuses its first control on the next frame (3.282028ms)
+✔ close cancels opening focus before restoring the trigger (reduced motion: true) (1.236881ms)
+✔ close cancels opening focus before restoring the trigger (reduced motion: false) (0.76421ms)
+✔ a frame from the old layout cannot focus a remounted header panel (1.851032ms)
+✔ close invalidates a dequeued opening callback before passive cleanup (0.695749ms)
+✔ outside dismissal preserves the destination focus before passive cleanup (0.64181ms)
+✔ sibling dismissal preserves the destination focus before passive cleanup (0.598707ms)
+✔ a dequeued stale callback cannot steal focus or consume a reopened panel's frame (0.631905ms)
+✔ unmount cancels opening focus and invalidates an already dequeued callback (1.107963ms)
+✔ back restores trigger focus without waiting for passive cleanup (0.588472ms)
+✔ escape restores trigger focus without waiting for passive cleanup (0.681168ms)
+✔ a route change cleans up pending focus without restoring the old trigger (0.653918ms)
+✔ a competing panel ends an animated exit immediately without moving focus (0.559579ms)
+✔ a delayed panel destination cannot overwrite a newer route (0.808404ms)
+✔ an uninterrupted destination routes once after releasing its layer (0.738482ms)
+✔ a reopened disclosure cancels a previous pending destination (0.803737ms)
+✔ a competing disclosure cancels a closed panel's pending destination (0.645486ms)
+✔ Room demo prepares typing before viewport entry without advancing unseen messages (4.618375ms)
+✔ Room demo keeps all 4 items readable without hydration (1.050489ms)
+✔ Room demo individually inserts all 4 items including the first two (2.108159ms)
+✔ Room demo keeps all 5 items readable without hydration (0.535424ms)
+✔ Room demo individually inserts all 5 items including the first two (1.021126ms)
+✔ Room demo cancels delayed startup when paused and restarts only when allowed (0.94906ms)
+✔ Room demo cancels delayed startup when hidden and restarts only when allowed (0.819931ms)
+✔ Room demo mounted with paused stays static in the correct readable fallback or staged scene (0.633498ms)
+✔ Room demo mounted with hidden stays static in the correct readable fallback or staged scene (0.617995ms)
+✔ Room demo mounted with reducedMotion stays static in the correct readable fallback or staged scene (0.593699ms)
+✔ Room demo freezes its current beat while offscreen and resumes without skipping (1.055987ms)
+✔ Room demo freezes its current beat while hidden and resumes without skipping (0.877816ms)
+✔ Room demo freezes its current beat while paused and resumes without skipping (2.106546ms)
+✔ Room demo exposes complete content when paused interrupts its reset (0.988729ms)
+✔ Room demo exposes complete content when hidden interrupts its reset (0.934099ms)
+✔ Room demo exposes complete content when offscreen interrupts its reset (0.854562ms)
+✔ enabling reduced motion settles a message insertion rather than freezing it midway (0.945415ms)
+✔ a stopped Room reset disables the opacity transition before animation pausing (11.218977ms)
+✔ unmount removes pending Room demo work and its intersection observer (0.79805ms)
+✔ Room demo cancels its first offset when visibility is lost (0.665475ms)
+✔ leaving reduced motion restages the scene without replaying unseen items (0.816406ms)
+✔ a tall phone starts within a short viewport even when total visible area cannot reach 55 percent (1.364268ms)
+✔ short-screen eligibility still excludes horizontal neighbor slivers and insufficient chat height (0.948099ms)
+✔ missing observer root bounds uses the real viewport height without admitting zero geometry (0.775566ms)
+✔ reenabling Room animation offscreen waits for visibility instead of advancing unseen messages (0.776778ms)
+✔ Room showcase autoplays without playback or motion controls (4.435708ms)
+✔ Room touch and keyboard inspection resume automatically without creating a lasting stop (2.317946ms)
+✔ Room system reduced motion silently disables autoplay and restores it when cleared (0.68263ms)
+✔ push navigation keeps external and staff destinations inside the customer inbox (6.955018ms)
+✔ notification taps preserve staff windows and wait for customer navigation before focus (1.26244ms)
+✔ ticket confirmations open My Nights without Room mute actions (1.824763ms)
+✔ host RSVP taps open only the host workspace and preserve guest windows (7.682635ms)
+✔ worker installation accepts canonical and VPS static offline pages, rejecting failed fallback (3.394644ms)
+✔ host purchase notifications open the event guest desk and reject foreign destinations (5.799416ms)
+✔ all eight customer paths and both consent variants produce branded HTML and usable plain text without outbound email (217.247789ms)
+✔ token-bound disclosure is the only change to genuine verification and stays inside the approved body (95.997929ms)
+✔ proof for an already saved RSVP is optional updates confirmation, never a booking prerequisite (56.802974ms)
+✔ genuine RSVP and interest verification retain the original subject and full approved HTML (18.612196ms)
+✔ ordinary recovery never binds or discloses announcement consent without a source or explicit preference (11.423245ms)
+✔ purchase confirmation includes truthful receipt, event timing, admissions and one-time access (9.035095ms)
+✔ complimentary and undated confirmations never describe a payment or invent an event date (10.576575ms)
+✔ RSVP confirmation retains its delivery key and gives passes, date, venue and party size (7.397608ms)
+✔ RSVP waitlisted updates do not imply confirmed admission (6.200944ms)
+✔ RSVP cancelled updates do not imply confirmed admission (26.065641ms)
+✔ RSVP declined updates do not imply confirmed admission (8.86047ms)
+✔ verification keeps its expiring fragment token, grant hash, throttle and pre-confirmation warning (16.960997ms)
+✔ recovery, transfers, waitlist, checkout and support preserve their existing delivery semantics (40.863775ms)
+✔ untrusted event, customer, receipt and support fields cannot become HTML (57.065039ms)
+✔ shared shell escapes fields and preserves only explicitly trusted body markup (9.097007ms)
+✔ unsafe primary URLs fail closed before an email is queued (14.435859ms)
+✔ public email flyers allow only canonical JPEG/PNG artwork and the verified Guest List derivative (13.279554ms)
+✔ private, absent, unsupported or untrusted artwork is omitted without leaking a URL (8.92872ms)
+✔ flyer alt text cannot inject markup or attributes (10.211889ms)
+✔ the email JPEG retains the full original public flyer without cropping or redesign (141.952355ms)
+✔ purchase and RSVP deliveries include only public artwork and retain all text when artwork is unavailable (111.514715ms)
+✔ short customer emails retain useful information without placeholders or empty names (18.550034ms)
+✔ missing customer names use a neutral greeting and supplied names remain escaped (6.908151ms)
+✔ host attribution preserves the recorded host or co-host role without inventing another identity (7.62501ms)
+✔ public purchase and confirmed RSVP emails open with the real host in HTML and plain text (29.416464ms)
+✔ missing, blank and non-host primary identities are omitted while co-host attribution stays accurate (122.79485ms)
+✔ host names are escaped at the HTML boundary while plain text keeps the literal public name (17.708353ms)
+✔ private confirmations, unconfirmed RSVP and recovery never look up or disclose a host (71.120909ms)
+✔ public listing media flyers retain strict origin, identifier and JPEG/PNG boundaries (9.982043ms)
+✔ Host invitation identity, consumed hash and state survive the existing SQL snapshot and write fence (3.777164ms)
+✔ Sending and uncertain private invite emails block handover drain (0.765862ms)
+✔ the real brand migration preserves every event, organizer, finance and access table and existing host identity (83.755209ms)
+✔ the migration requires both the exact host id and slug, never a matching display name or partial identity (82.354056ms)
+✔ the migration is safe when the specific host is absent (119.223568ms)
+✔ the circular logo embeds the approved original JPEG byte-for-byte and stays separate from the host portrait (2.663552ms)
+✔ host preview package preserves only the ten named PNGs with exact source and hashes (53.374661ms)
+✔ host preview package rejects mixed dimensions, duplicate images and malformed source identity (49.644938ms)
+✔ spacing evidence rejects changed type size, shrunken targets and mismatched source (74.550594ms)
+✔ candidate screenshots remain reviewable when optional comparison is unavailable (56.406764ms)
+✔ actual browser geometry is checked before the explicit isolated-preview comparison gate (0.869674ms)
+✔ owner issuance only inserts a grant for the confirmed owner and never reissues (2.10186ms)
+✔ owner issuance fails closed for an unmatched email (1.062386ms)
+✔ a stale authorisation cannot issue on a future deployment (0.442699ms)
+✔ explicit new-owner approval creates only a disabled pending owner and binds its grant to the approved email hash (1.011542ms)
+✔ new-owner creation refuses to take over an existing account with the approved email (1.140741ms)
+✔ expired unclaimed owner setup renews the same account with the original email binding (1.017301ms)
+✔ renewal refuses an absent, changed, claimed or differently bound pending setup (0.28013ms)
+✔ an already activated owner gets a normal reset without another setup or changed email (0.238069ms)
+✔ renewal cannot be combined with creating another owner (0.216698ms)
+✔ menu geometry accepts positive bounds fully inside the viewport, including exact edges (2.04787ms)
+✔ menu geometry records but excludes only intentional CSS-hidden mobile dock duplicates (0.358915ms)
+✔ menu geometry requires every secondary destination to exist and remain visible even with a primary-route class (0.494985ms)
+✔ menu geometry does not forgive arbitrary hidden controls or mismatched duplicate conditions (0.241093ms)
+✔ menu geometry rejects controls hidden by an intermediate links container (0.302463ms)
+✔ menu geometry rejects offscreen, partly clipped, empty and non-finite rectangles (0.220753ms)
+✔ menu geometry rejects an offscreen close button or navigation control inside an otherwise valid panel (0.141617ms)
+✔ menu geometry rejects hidden, inert, missing controls and invisible ancestors despite valid bounds (0.210959ms)
+Website comparison before: home (45ec44e35f8b0e5099a328ce219df2529374f9ee)
+✔ a failed menu capture saves measured layout facts before its diagnostic screenshot and failure (318.713273ms)
+✔ metadata reads require HTTP 200 on both version and health, even for valid-looking JSON (3.270641ms)
+✔ metadata reads retain redirect rejection and accept a complete body at the 64 KiB boundary (1.080843ms)
+✔ metadata reads reject oversized UTF-8 bodies without relying on content-length (0.424792ms)
+✔ metadata reads enforce the cumulative stream limit and cancel an oversized body (0.732703ms)
+✔ accepts matching active production health/version and exact source identity (0.079266ms)
+✔ rejects absent, abbreviated and wrong service revision evidence (0.157521ms)
+✔ rejects baseline drift and candidate build/source mismatch (0.121719ms)
+✔ rejects inactive, non-VPS and mismatched production health (0.154968ms)
+✔ the screenshot-only request policy permits reads and blocks writes (0.077654ms)
+✔ captures real baseline in isolated contexts before existing native fixtures (8.151792ms)
+✔ the contract has exactly one excluded slug and only two website discovery routes (0.187374ms)
+✔ the reference removes only the exact slug, preserving every other record, field, order and the native source (0.471812ms)
+✔ native event removal, missing direct screens, duplicate exclusions and catalogue inconsistencies fail closed (0.264648ms)
+✔ website discovery uses strict reference equality and records the genuine app difference rather than claiming full parity (0.338696ms)
+✔ the exact empty discovery fallback also remains fully compared (0.300721ms)
+✔ changes to every measured field, unaffected event text, missing/extra cards and order still fail discovery parity (4.578247ms)
+✔ reappearing excluded links, title, featured hero or cards fail even when the reference has the same regression (0.299729ms)
+✔ direct event pages, including the excluded event, never receive the discovery exception (0.237708ms)
+✔ discovery evidence checks exact path segments and cards, including hidden links, without hiding prefix-matched events (0.605827ms)
+✔ capture keeps unmodified native app data and all direct routes separate from the discovery-only reference (8.310183ms)
+✔ an empty website catalogue renders the real empty state without nonfunctional discovery controls (497.910615ms)
+✔ discovery audit derives empty expectations from the website policy, never missing DOM (83.557749ms)
+✔ synthetic camera selection skips external audits before fixture setup and retains every local case (25.502981ms)
+✔ audit analytics routing matches only the exact configured first-party endpoint (4.567291ms)
+✔ disclosure expansion revisits live locators and opens every sibling exactly once (20.298737ms)
+✔ disclosure expansion reaches newly visible nested content without reopening open or hidden rows (1.746548ms)
+✔ disclosure expansion retains the caller scope and fails if clicks cannot make progress (5.283351ms)
+✔ maintained browser harnesses never restore the global header or shifting disclosure loop (32.818757ms)
+✔ bounded synthetic Candidate screenshots capture one pixel per CSS pixel without changing their extent (9.231343ms)
+{"measurement":"isolated D1, not live billing","baseline":{"rowsRead":1000,"rowsWritten":2000},"guarded":{"rowsRead":61,"rowsWritten":40},"replay":{"rowsRead":1,"rowsWritten":0}}
+✔ isolated D1 measures the index-inclusive acknowledgement saving, without live usage (875.076225ms)
+✔ public stdout and JSON contain only allowlisted health booleans and operational counts (1.190614ms)
+✔ zero health checks become booleans rather than source values (0.276005ms)
+✔ transport rejection never exports payload or partial inventory (0.311056ms)
+✔ JSON parsing never exports payload or partial inventory (0.204259ms)
+✔ HTTP error never exports payload or partial inventory (0.182938ms)
+✔ provider error never exports payload or partial inventory (0.148637ms)
+✔ query error never exports payload or partial inventory (0.22527ms)
+✔ unexpected row never exports payload or partial inventory (0.175267ms)
+✔ invalid scalar string fails closed (0.121148ms)
+✔ invalid scalar object fails closed (0.08893ms)
+✔ invalid scalar number fails closed (0.091013ms)
+✔ invalid scalar number fails closed (0.072827ms)
+✔ invalid scalar number fails closed (0.064474ms)
+✔ invalid scalar object fails closed (0.060099ms)
+✔ invalid scalar number fails closed (0.057064ms)
+✔ filesystem failure never leaks exception or emits success (0.251068ms)
+✔ CLI failure exits nonzero and replaces stale report without exposing error (75.848172ms)
+✔ invalid operational count string fails closed (0.433525ms)
+✔ invalid operational count number fails closed (0.126866ms)
+✔ invalid operational count number fails closed (0.115168ms)
+✔ invalid operational count number fails closed (0.099656ms)
+✔ database discovery failure does not leak provider details (0.179663ms)
+✔ support email SSR emits the documented comments around the fixed public address (0.503839ms)
+✔ support email SSR protects the entire fixed mailto anchor and accepts no arbitrary content (0.209477ms)
+✔ privacy email SSR protects its existing contact address with the same fixed-literal boundary (5.527547ms)
+✔ Help protects its plain-text recovery address and contact link; Terms shares the same component (0.784509ms)
+✔ staff and customer installs retain separate identities and launch destinations (11.125799ms)
+✔ only explicit standalone staff launches mark their own window (5.641474ms)
+✔ staff window restoration never selects a customer destination (10.577025ms)
+✔ public links open separately from a staff window without an opener (0.827502ms)
+✔ offline navigation chooses staff recovery without removing pending local records (7.646351ms)
+✔ staff launch and offline routes agree while animation excludes staff actions (125.78132ms)
+✔ scanner launch links open separately from the installed management window (0.864457ms)
+✔ D1 export with status 0 keeps both output streams private and removes diagnostics (48.737156ms)
+✔ SQLite import with status 0 keeps both output streams private and removes diagnostics (137.772097ms)
+✔ D1 export with status 7 keeps both output streams private and removes diagnostics (17.657997ms)
+✔ SQLite import with status 7 keeps both output streams private and removes diagnostics (34.910676ms)
+✔ D1 rehearsal uploads only existing non-sensitive proof and always removes the export (0.431352ms)
+✔ activity polls immediately and every 30 seconds only while visible (13.87718ms)
+✔ an initially hidden activity feed makes no request until visible (14.317444ms)
+✔ slow activity requests do not overlap and visibility aborts stale results (6.745572ms)
+✔ activity recovers from http failure on the next visible tick (5.862568ms)
+✔ activity recovers from network failure on the next visible tick (1.941875ms)
+✔ activity recovers from json failure on the next visible tick (13.710404ms)
+✔ mark read sends the displayed timestamp and refreshes after any older poll (1.58396ms)
+✔ mark read that finishes while hidden waits for visibility to refresh (25.675583ms)
+✔ a failed mark-read request preserves unread activity and polling (1.306884ms)
+✔ unmount aborts activity reads and mutations and prevents later work (6.881161ms)
+✔ Strict Mode replay and immediate unmount leave no duplicate or deferred poll (2.310596ms)
+✔ all 15 existing widths and AVIF, WebP, JPEG formats retain quality 75 and image headers (41.119246ms)
+✔ every other numeric quality is rejected before asset fetch or billable transformation (14.88099ms)
+✔ malformed, duplicate and unknown parameters still fail before image work (9.1366ms)
+✔ client-default quality and legacy deployment queries remain accepted without changing route ownership (3.150896ms)
+✔ offline scanner rechecks none after asynchronous QR hashing (0.984893ms)
+✔ offline scanner rechecks logout after asynchronous QR hashing (0.30038ms)
+✔ offline scanner rechecks session switch after asynchronous QR hashing (0.155337ms)
+✔ offline scanner rechecks access denial after asynchronous QR hashing (0.104864ms)
+✔ offline scanner rechecks event switch after asynchronous QR hashing (0.098134ms)
+✔ a cross-tab session refresh blocks old offline access with stale storage (5.048756ms)
+✔ a cross-tab session refresh blocks old offline access with storage failure (5.160641ms)
+✔ a cross-tab session refresh blocks old offline access with newer scanner (8.930868ms)
+✔ every scanner gate response applies the shared authorization-denial latch (0.418293ms)
+✔ confirmed workspace logout invalidates offline gate lists (15.670066ms)
+✔ scanner refresh remains visibly busy through its heartbeat and unlocks after a failed refresh (4.705093ms)
+✔ OG dependency includes the patched Satori serializer, not just an audit override (9.554977ms)
+✔ Tickets automation remains scoped to the Tickets product (16.749076ms)
+✔ AI Gateway verification checks persisted budget semantics rather than response-generated rule ids (0.596764ms)
+✔ SeeV readiness never terminates an importing production preparation process (1.05164ms)
+✔ Apple Wallet refresh state follows all authoritative ticket state (0.958263ms)
+✔ candidate CI runs core gates once and restores the same local build for every browser (5.595047ms)
+✔ candidate browser coverage retains full journeys and deliberate no-retry regressions (2.041871ms)
+✔ candidate local archive preserves hidden files, isolates browsers, and fails closed on source or byte mismatches (1006.232602ms)
+✔ production audit covers the deployed main revision while candidate CI covers the entire PR (12.397992ms)
+✔ production audit identity and main ancestry gates fail closed on mismatches and deployment drift (1303.6421ms)
+✔ first-host email preserves the shared approved template and truthful scoped copy (2.992073ms)
+✔ HTML and plain text carry the same fixed-origin Room action and event-only management link (0.526792ms)
+✔ event and public host names are escaped in HTML, literal in text, and normalized in subject (0.266651ms)
+✔ absent host names use generic wording without exposing identifiers or placeholders (0.394949ms)
+✔ opaque message identifiers are URL encoded and never become credentials or markup (0.465091ms)
+✔ invalid routing inputs fail closed rather than generating misleading or off-site links (0.531668ms)
+✔ renderer accepts metadata only, makes no network calls and never includes supplied private chat text (0.248073ms)
+✔ email renderer and approved shell typecheck without server or provider dependencies (1067.751914ms)
+✔ hosted first-host preview uses exact production HTML with no recipients or outbound delivery (182.725717ms)
+✔ Host pass preview is exact production HTML with only a nonworking sample link (52.987265ms)
+✔ host first-post receipts survive Room snapshot restore and remain writer-frozen (7.894346ms)
+✔ Room return rejects missing host receipt loss without changing the frozen target (4.801023ms)
+✔ Room return rejects empty host receipt loss without changing the frozen target (1.624009ms)
+✔ Room return rejects host_account_id host receipt loss without changing the frozen target (1.271383ms)
+✔ Room return rejects message_id host receipt loss without changing the frozen target (1.204685ms)
+✔ Room return rejects sender_attendee_id host receipt loss without changing the frozen target (2.565178ms)
+✔ Room return rejects created_at host receipt loss without changing the frozen target (5.151618ms)
+✔ Room return preserves receipt identity while carrying pending cancellation and new receipts (2.356202ms)
+✔ first-host sending and uncertain deliveries prevent handover drain without broadening other delivery kinds (0.723941ms)
+✔ manageable RSVP emits session invalidation once, only after successful response, despite duplicate submit (148.190123ms)
+✔ rsvp, ok=true, canManage=false does not announce new attendee access (2.901121ms)
+✔ rsvp, ok=false, canManage=true does not announce new attendee access (4.448186ms)
+✔ interest, ok=true, canManage=true does not announce new attendee access (5.506466ms)
+✔ failed RSVP transport does not announce new attendee access (9.100261ms)
+✔ CSS-hidden desktop dock does not fetch or poll; breakpoint entry refreshes without reviving cached Rooms (57.923456ms)
+✔ transient network acknowledgement retries at 1/2/4s, stays on its viewed boundary and stops (20.016804ms)
+✔ transient 408 acknowledgement retries at 1/2/4s, stays on its viewed boundary and stops (14.260121ms)
+✔ transient 429 acknowledgement retries at 1/2/4s, stays on its viewed boundary and stops (22.5671ms)
+✔ transient 503 acknowledgement retries at 1/2/4s, stays on its viewed boundary and stops (12.744189ms)
+✔ successful acknowledgement retry clears only its snapshot and notifies once (31.690356ms)
+✔ fresh authorized snapshots receive a new retry budget after the previous one is exhausted (20.978353ms)
+✔ disconnect cancels retry and reconnect waits for a rendered snapshot without resetting its budget (18.647317ms)
+✔ an obsolete failed acknowledgement cannot retry or replace a newer access boundary (5.829019ms)
+✔ successful acknowledgement of the old boundary leaves newer arrivals unread (9.871392ms)
+✔ hidden cancels a scheduled acknowledgement retry (8.772611ms)
+✔ hidden aborts an in-flight acknowledgement without scheduling a late retry (26.670762ms)
+✔ unmount cancels a scheduled acknowledgement retry (2.501906ms)
+✔ unmount aborts an in-flight acknowledgement without scheduling a late retry (3.134242ms)
+✔ expired boundaries still require fresh access and a rendered snapshot, with only one recovery cycle (10.150761ms)
+✔ non-transient 401 acknowledgement does not retry (3.425238ms)
+✔ non-transient 403 acknowledgement does not retry (2.792151ms)
+✔ non-transient 404 acknowledgement does not retry (16.681198ms)
+✔ Room update hook typechecks with browser-only types and no server modules (922.895595ms)
+✔ same-path session invalidation clears private counts before a replacement response and aborts stale reads (4.003895ms)
+✔ successful wallet sign-out emits invalidation only after the server confirms it (46.789623ms)
+✔ returning from a disabled Room route cannot restore a prior cached summary (1.699009ms)
+✔ scanner install has a third identity and a scanner launch URL (20.961948ms)
+✔ scanner identity is explicit and local to an installed window (4.048401ms)
+✔ restoration keeps scanner, install and required password change inside the app (10.560822ms)
+✔ offline scanner navigation returns to the scanner without changing saved records (9.026392ms)
+✔ scanner fallback feedback does not claim admission for HTTP 200 (45.194368ms)
+✔ scanner fallback feedback does not claim admission for HTTP 409 (34.197618ms)
+✔ scanner fallback feedback does not claim admission for HTTP 400 (7.283741ms)
+✔ scanner fallback feedback does not claim admission for HTTP 503 (10.87443ms)
+✔ scanner fixture drains pending handlers before closing its tab after success (6.177309ms)
+✔ scanner fixture drains pending handlers before closing its tab after failure (1.879323ms)
+✔ scanner fixture also drains when its second tab was never created (0.264228ms)
+✔ scanner fixture does not suppress a route-handler failure (0.446459ms)
+✔ staff and customer installs retain separate identities and launch destinations (36.120538ms)
+✔ only explicit standalone staff launches mark their own window (10.695459ms)
+✔ staff window restoration never selects a customer destination (11.735742ms)
+✔ public links open separately from a staff window without an opener (0.899447ms)
+✔ offline navigation chooses staff recovery without removing pending local records (13.921439ms)
+✔ staff launch and offline routes agree while animation excludes staff actions (200.36512ms)
+✔ scanner launch links open separately from the installed management window (1.166809ms)
+Apple Wallet update authentication secret already exists.
+Apple Wallet update authentication secret provisioned without exposing key material.
+✔ Wallet secret preparation returns to its importing build (existing secret) (13.416144ms)
+✔ Wallet secret preparation returns to its importing build (new secret) (1.198847ms)
+✔ ticket Wallet actions stay provider-aware and off invalid passes (6.985864ms)
+ℹ tests 288
+ℹ suites 0
+ℹ pass 288
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 6063.724442
+npm notice
+npm notice New major version of npm available! 11.9.0 -> 12.2.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+npm notice To update run: npm install -g npm@12.2.1
+npm notice
+
+> becore-tickets@0.1.0 test:ui
+> node --test tests/input-modality.test.mjs tests/mobile-ui.test.mjs tests/organizer-finance-ui.test.mjs tests/owner-notification-wiring.test.mjs tests/host-brand-rendering.test.mjs tests/registration-readiness.test.mjs tests/my-nights-refresh.test.mjs tests/header-panel-focus.test.mjs tests/header-origin-menu.test.mjs tests/menu-option-a.test.mjs tests/brand-arrival.test.mjs tests/yorke-motion.test.mjs tests/flash-photo-filters.test.mjs tests/flash-camera-state.test.mjs tests/pwa-resume.test.mjs
+
+✔ fresh public document is eligible: /staff (14.236115ms)
+✔ fresh public document is eligible: /staff?returnTo=%2Fscan (1.103687ms)
+✔ fresh public document is eligible: / (0.850956ms)
+✔ fresh public document is eligible: /the-yorke-way (0.906708ms)
+✔ fresh public document is eligible: /the-yorke-way/ (9.47522ms)
+✔ fresh public document is eligible: /the-yorke-way?utm_source=message (0.923913ms)
+✔ fresh public document is eligible: /events (0.898767ms)
+✔ fresh public document is eligible: /events?utm_source=message (4.869524ms)
+✔ fresh public document is eligible: /event/one?ref=PROMOTER (1.097909ms)
+✔ fresh public document is eligible: /hosts (0.933357ms)
+✔ fresh public document is eligible: /hosts/one (0.786883ms)
+✔ fresh public document is eligible: /about (3.008417ms)
+✔ fresh public document is eligible: /help (0.84626ms)
+✔ fresh public document is eligible: /privacy (0.77829ms)
+✔ fresh public document is eligible: /terms (0.745913ms)
+✔ fresh public document is eligible: /my-nights (0.811649ms)
+✔ fresh public document is eligible: /my-nights?source=pwa (0.758902ms)
+✔ fresh public document is eligible: /my-nights?view=rsvps (0.852378ms)
+✔ critical or unapproved document is ineligible: /the-yorke-way/confirm (1.315056ms)
+✔ critical or unapproved document is ineligible: /the-yorke-way/unsubscribe (2.733935ms)
+✔ critical or unapproved document is ineligible: /the-yorke-way/other (0.896854ms)
+✔ critical or unapproved document is ineligible: /the-yorke-way-extra (0.826421ms)
+✔ critical or unapproved document is ineligible: /the-yorke-way?token=secret (0.765301ms)
+✔ critical or unapproved document is ineligible: /the-yorke-way#token=secret (0.558027ms)
+✔ critical or unapproved document is ineligible: /payment/return (0.51882ms)
+✔ critical or unapproved document is ineligible: /checkout/one (0.759673ms)
+✔ critical or unapproved document is ineligible: /rsvp/access#token=secret (0.7781ms)
+✔ critical or unapproved document is ineligible: /rsvp/one (0.787244ms)
+✔ critical or unapproved document is ineligible: /tickets (0.739002ms)
+✔ critical or unapproved document is ineligible: /my-nights/one?view=passes (0.782917ms)
+✔ critical or unapproved document is ineligible: /my-nights/access (0.81215ms)
+✔ critical or unapproved document is ineligible: /scan (0.736228ms)
+✔ critical or unapproved document is ineligible: /admin/login (0.865989ms)
+✔ critical or unapproved document is ineligible: /organizer/workspace (0.829675ms)
+✔ critical or unapproved document is ineligible: /room/one (0.752413ms)
+✔ critical or unapproved document is ineligible: /account/privacy (0.784469ms)
+✔ critical or unapproved document is ineligible: /auth/callback (0.724551ms)
+✔ critical or unapproved document is ineligible: /api/customer/session (0.779151ms)
+✔ critical or unapproved document is ineligible: /notifications (0.768125ms)
+✔ critical or unapproved document is ineligible: /unknown (0.871406ms)
+✔ explicit staff launches retain the opening scene without covering direct workspace actions (10.320418ms)
+✔ callback, recovery and direct-pass intents never animate on an otherwise public route (26.245578ms)
+✔ initial navigation URL remains authoritative after callback parameters are removed (2.245099ms)
+✔ critical same-origin and known payment/auth provider referrers skip the public destination (20.846123ms)
+✔ reload is a new eligible document; history restore, discarded and prerender documents skip (4.591596ms)
+✔ capture is stable within a document and fail-open without browser timing (1.943607ms)
+✔ each fresh document gets its own opportunity without a persistent suppression flag (2.343413ms)
+✔ delayed JavaScript and input/scroll before module evaluation never cover a usable page (2.111183ms)
+✔ first-input between document capture and hydration prevents arrival (3.830341ms)
+✔ first-input after mounting is checked again before the emblem reveals (3.897199ms)
+✔ scroll between document capture and hydration prevents arrival (0.72339ms)
+✔ scroll after mounting is checked again before the emblem reveals (9.907694ms)
+✔ interaction timing failure after capture or mount remains fail-open (2.49838ms)
+✔ malformed URL or referrer data fails closed without changing the real page (1.491865ms)
+✔ normal arrival becomes visible only after a ready image and ends at its hard deadline (1.088745ms)
+✔ the animation frame deadline also removes an arrival when its timer is unavailable (1.208019ms)
+✔ StrictMode pending setup-cleanup-setup starts exactly once and invalidates stale work (1.345962ms)
+✔ an excluded document cannot gain eligibility through client navigation or later remount (0.895131ms)
+✔ route change closes pending arrival and prevents replay (0.929522ms)
+✔ route change closes shown arrival and prevents replay (1.115845ms)
+✔ a changed current URL or late mount cannot start an old document entry (9.43399ms)
+✔ startup failure/preference is fail-open: {"hidden":true} (1.093441ms)
+✔ startup failure/preference is fail-open: {"reducedMotion":true} (3.03742ms)
+✔ startup failure/preference is fail-open: {"cssReady":false} (1.306984ms)
+✔ startup failure/preference is fail-open: {"cssFailure":true} (1.004902ms)
+✔ startup failure/preference is fail-open: {"motionFailure":true} (0.766342ms)
+✔ startup failure/preference is fail-open: {"imageFailure":true} (1.347264ms)
+✔ missing image, image error and failed reveal never leave an overlay (2.850275ms)
+✔ early keydown cancels pending work without swallowing the underlying action (0.997261ms)
+✔ early wheel cancels pending work without swallowing the underlying action (0.892748ms)
+✔ early pointerdown cancels pending work without swallowing the underlying action (1.432148ms)
+✔ pointer dismissal cannot click through, while Skip click and keyboard dismiss synchronously (2.875112ms)
+✔ mouse dismissal suppresses its up and synthesized click after the scene hides (1.01038ms)
+✔ touch dismissal suppresses its up and synthesized click after the scene hides (0.908891ms)
+✔ pen dismissal suppresses its up and synthesized click after the scene hides (0.863635ms)
+✔ a long-held dismissal still owns its legacy touch click after the visual deadline (0.92845ms)
+✔ touchend retains the guard through its delayed click even without pointerup (1.354304ms)
+✔ touch cancellation releases the guard without delaying a later tap (0.725243ms)
+✔ another touch ending cannot cancel or expire a still-held dismissing gesture (0.684663ms)
+✔ another pointer cannot end the dismissing gesture guard (0.680407ms)
+✔ pointerdown releases the old gesture without swallowing a later intentional action (0.570386ms)
+✔ keydown releases the old gesture without swallowing a later intentional action (0.656122ms)
+✔ pointercancel releases the old gesture without swallowing a later intentional action (0.6209ms)
+✔ keyboard or assistive clicks are not mistaken for the dismissing pointer click (0.589874ms)
+✔ a completed pointer with no click releases the guard after a bounded fallback (0.616703ms)
+✔ a completed touch with no compatibility click releases every listener (0.58057ms)
+✔ unmount also removes the separate dismissing gesture guard (1.941474ms)
+✔ pagehide also removes the separate dismissing gesture guard (1.955024ms)
+✔ hidden also removes the separate dismissing gesture guard (0.845698ms)
+✔ hidden ends pending arrival permanently, with all resources released (1.808279ms)
+✔ motion ends pending arrival permanently, with all resources released (0.883624ms)
+✔ pagehide ends pending arrival permanently, with all resources released (1.027756ms)
+✔ bfcache ends pending arrival permanently, with all resources released (0.948069ms)
+✔ popstate ends pending arrival permanently, with all resources released (0.843625ms)
+✔ hashchange ends pending arrival permanently, with all resources released (0.831588ms)
+✔ hidden ends shown arrival permanently, with all resources released (0.824958ms)
+✔ motion ends shown arrival permanently, with all resources released (0.804508ms)
+✔ pagehide ends shown arrival permanently, with all resources released (1.043208ms)
+✔ bfcache ends shown arrival permanently, with all resources released (0.816516ms)
+✔ popstate ends shown arrival permanently, with all resources released (0.798329ms)
+✔ hashchange ends shown arrival permanently, with all resources released (0.86004ms)
+✔ initial pageshow/focus do not restart or cancel an ordinary active arrival (1.199337ms)
+✔ unmount invalidates a dequeued callback and a second cleanup cannot harm a newer mount (0.965094ms)
+✔ SSR, missing JavaScript and reduced-motion CSS preserve an immediately usable page (94.692603ms)
+✔ actual server markup keeps the scene hidden without JavaScript (39.586711ms)
+✔ staff arrival preserves Skip, reduced motion and workspace/history exclusions (4.918756ms)
+✔ Original uses the captured bytes and consent plus loaded preview gate every send (51.738343ms)
+✔ the reviewed filtered Blob, not CSS or the original, becomes the upload (3.250722ms)
+✔ rapid changes and retakes cannot send stale jobs, even if a cancelled job resolves (5.315096ms)
+✔ selecting the active look or unchanged strength does not cancel its pending render (4.482326ms)
+✔ zero strength returns exact original without re-encoding and cancels pending grades (4.808153ms)
+✔ hold/cancel and accessible toggle compare Original without accidentally sending it (2.747845ms)
+✔ failed grades are retryable and Original remains available (2.045096ms)
+✔ front camera preserves the entire sensor then mirrors once; backgrounding stops camera (5.100463ms)
+✔ closing aborts render and revokes all retained photo URLs (2.135238ms)
+✔ live looks are selectable before shutter and the chosen grade survives capture (2.721607ms)
+✔ live rendering uses the export kernel at bounded full-frame dimensions and throttles work (2.849123ms)
+✔ live changes invalidate the old preview, mirror once, resize and preserve strength (1.777755ms)
+✔ live failures never mark the selected look ready and offer an Original fallback (1.995313ms)
+✔ a later live frame failure removes a stale visible grade (1.07224ms)
+✔ expensive live frames adapt their cadence without expanding resolution (0.773523ms)
+Flash pixel kernel: 113.9 ms for 2.56M pixels (runner, not iPhone).
+✔ Original and zero strength preserve every byte, including alpha (6.434376ms)
+✔ strength is finite and bounded, with exact endpoint grades and intermediate blending (1.795396ms)
+✔ all looks are deterministic, finite, geometry-free and preserve transparency (0.487073ms)
+✔ Noir is luminance monochrome; Chrome retains neutral greys (0.170329ms)
+✔ grain is independent of chunk boundaries, subtle and repeatable (80.05851ms)
+✔ capture preserves the entire sensor in either orientation without upscaling (0.632486ms)
+✔ camera constraints never request a portrait crop, microphone or digital zoom (0.18389ms)
+✔ the ten looks remain distinct rather than duplicate colour presets (3.812805ms)
+✔ renderer yields, preserves the source, uses one JPEG encoding and releases its canvas (177.591709ms)
+✔ stale rendering cancels between chunks before encoding; failures release buffers (283.509655ms)
+✔ thumbnail and full export share the same pixel kernel, with a hard dimension ceiling (264.536167ms)
+✔ the maximum still-photo grade stays within a conservative CPU budget (119.052824ms)
+✔ menu uses exact button rectangle at 320px, not the header bottom (58.961865ms)
+✔ menu uses exact button rectangle at 390px, not the header bottom (1.518525ms)
+✔ menu uses exact button rectangle at 1280px, not the header bottom (1.323379ms)
+✔ scroll, resize and visual viewport changes remeasure; cleanup removes listeners (1.705338ms)
+✔ transient hidden or zero viewport never closes or poisons menu placement; foreground remeasures (1.561618ms)
+✔ unusable visible viewport closes safely instead of rendering inaccessible controls (1.020996ms)
+✔ closed state does not subscribe to layout; exiting state remains mounted for reverse motion (1.671749ms)
+✔ a 44px cap preserves taps but captures a real downward swipe, including over its close button (12.678283ms)
+✔ subpixel anchor clipping clamps placement without crossing the dock at viewport offset 0 (1.774169ms)
+✔ subpixel anchor clipping clamps placement without crossing the dock at viewport offset 12 (1.717476ms)
+✔ an opening header panel focuses its first control on the next frame (3.145508ms)
+✔ close cancels opening focus before restoring the trigger (reduced motion: true) (1.56295ms)
+✔ close cancels opening focus before restoring the trigger (reduced motion: false) (0.749157ms)
+✔ a frame from the old layout cannot focus a remounted header panel (0.693586ms)
+✔ close invalidates a dequeued opening callback before passive cleanup (0.83972ms)
+✔ outside dismissal preserves the destination focus before passive cleanup (0.633208ms)
+✔ sibling dismissal preserves the destination focus before passive cleanup (0.720716ms)
+✔ a dequeued stale callback cannot steal focus or consume a reopened panel's frame (0.791139ms)
+✔ unmount cancels opening focus and invalidates an already dequeued callback (1.147141ms)
+✔ back restores trigger focus without waiting for passive cleanup (0.627499ms)
+✔ escape restores trigger focus without waiting for passive cleanup (0.64231ms)
+✔ a route change cleans up pending focus without restoring the old trigger (0.680106ms)
+✔ a competing panel ends an animated exit immediately without moving focus (1.032242ms)
+✔ a delayed panel destination cannot overwrite a newer route (0.864546ms)
+✔ an uninterrupted destination routes once after releasing its layer (0.633889ms)
+✔ a reopened disclosure cancels a previous pending destination (0.720816ms)
+✔ a competing disclosure cancels a closed panel's pending destination (0.647058ms)
+✔ event rendering retains the legacy primary-host contract, portrait and person alongside the brand (87.129804ms)
+✔ event rendering includes branded secondary hosts and multiple brands without replacing host roles or identity (8.678624ms)
+✔ unbranded, nameless-brand and missing-logo profiles render without empty brand labels or changing portraits (47.788546ms)
+✔ events without host relationships render no host branding, including an explicitly empty current host list (17.353245ms)
+✔ shared profile host portrait preserves the person and approved brand seal (1.121162ms)
+✔ shared directory host portrait preserves the person and approved brand seal (0.571607ms)
+✔ shared event host portrait preserves the person and approved brand seal (0.359066ms)
+✔ shared portrait handles missing brands, logos and portraits without inventing identity (1.16091ms)
+✔ pointer focus is local to modality, keyboard restores cues on hybrid/mobile devices (2.516987ms)
+✔ returning from hidden document retains native unknown-input defaults (0.795506ms)
+✔ shared root installs policy without removing editing or keyboard focus (16.9291ms)
+✔ leaving page focus forgets pointer mode before keyboard return from browser chrome (0.8945ms)
+✔ Option A gives existing destinations clearer labels without changing routes or roles (81.043948ms)
+✔ closed Option A remains inert and keeps every destination outside keyboard navigation (8.000149ms)
+✔ header-origin menu keeps a narrow contiguous surface and accessible targets without a sheet (3.882778ms)
+✔ header-origin menu scrolls the list without moving the close control, with a reduced-motion fallback (1.555915ms)
+✔ Option A gives existing destinations clearer labels without changing routes or roles (73.631715ms)
+✔ closed Option A remains inert and keeps every destination outside keyboard navigation (14.148858ms)
+✔ header-origin menu keeps a narrow contiguous surface and accessible targets without a sheet (15.341003ms)
+✔ header-origin menu scrolls the list without moving the close control, with a reduced-motion fallback (3.684943ms)
+✔ crypto labels name the integrated USDC method while checkout and event availability stay conditional (1.78873ms)
+✔ message controls cannot inherit a full-page footer layout (1.474831ms)
+✔ Room text controls keep iOS at the existing page scale (2.166804ms)
+✔ the compact homepage hero stays within a deliberate desktop and mobile height (0.994998ms)
+✔ The Drop uses compact filters, bounded cards and a dedicated full page (2.375701ms)
+✔ notification history stays behind the verified My Nights entrance (1.589719ms)
+✔ The Room is promoted as a ticket-locked preview without exposing a public chat (3.098479ms)
+✔ The Room preview omits its scene caption and reserved caption spacing (0.761055ms)
+✔ The Room reconnects when a ticket holder returns to the page (4.138158ms)
+✔ VIP value is visible at decision points without duplicating the interface (2.584496ms)
+✔ homepage sections reveal once without overriding reduced-motion preferences (10.381724ms)
+✔ Polished Nightlife motion stays purposeful, scoped and accessibility-aware (2.726544ms)
+✔ featured nights coordinate the hero, Drop and Room without moving content under readers (2.673326ms)
+✔ mobile customers retain wallet access and form controls do not trigger iOS zoom (2.060949ms)
+✔ public navigation belongs to each header on mobile and desktop (6.90804ms)
+✔ the program-wide type scale never returns to ant-sized visible text (3.53605ms)
+✔ returning buyers recover and manage the whole purchase through My Nights (1.437716ms)
+✔ event-day journeys remain available beyond the open browser tab (1.307545ms)
+✔ roadmap 5–7 stays inside compact existing journeys (43.191297ms)
+✔ checkout conversion actions look and behave like primary controls (3.136265ms)
+✔ customer and staff journeys do not load Cloudflare challenges (2.264828ms)
+✔ public organiser actions keep submission public and named workspaces protected (1.922015ms)
+✔ organiser consent stays aligned with the submission content on desktop and mobile (1.644369ms)
+✔ organiser submission controls end in straight baselines (1.396096ms)
+✔ About us has its own open page and no longer interrupts the landing page (3.418838ms)
+✔ first-owner setup explains its one-use key without exposing a credential (1.009129ms)
+✔ fees and named staff stay inside one compact, role-bound operations system (1.804544ms)
+✔ every role-scoped workspace link has an exhaustive renderable icon mapping (0.631195ms)
+✔ every private workspace shares role-scoped navigation and collapsible tools (0.869844ms)
+✔ workplace dashboards choose one event without horizontal event rails (1.286144ms)
+✔ project dropdowns use a soft progressively enhanced picker (0.719504ms)
+✔ operations lists stay bounded and dashboard selections use straight markers (0.901771ms)
+✔ controls keep soft corners while information flows in open straight-edged sections (1.298602ms)
+✔ the interface has no effective shadows, tinted fills or curved text-edge controls (4.843836ms)
+✔ Room moderation stays scoped and the last mobile cascade prevents focus zoom (1.258003ms)
+✔ staff passwords derive in the browser and never ask the Worker to exceed its PBKDF2 cap (0.811038ms)
+✔ approved Hosts and ticket-holder preparation reach only the assigned organiser workspace (1.176623ms)
+✔ help is searchable by role and organiser records follow the verified submission identity (44.430928ms)
+✔ public host metadata leaves the shared brand suffix to the root layout (6.405343ms)
+✔ help search keeps one clear control outside the input's accessible name (1.449823ms)
+✔ ticket entry uses a protected real scanner and printable QR receipt (1.408263ms)
+✔ launch inventory is database-backed and public defects stay closed (1.949526ms)
+✔ public browsing is edge-cached without caching private customer journeys (0.788666ms)
+✔ homepage footer stays useful without duplicating the customer dock (1.374764ms)
+✔ Flashes stay camera-first with shared compact markers and private viewing sessions (5.284597ms)
+✔ semantic states and route-matched skeletons stay accessible (2.958193ms)
+✔ public typography keeps compact copy readable without shrinking header labels (3.225204ms)
+✔ organiser analytics has a dedicated compact responsive workspace (4.009123ms)
+✔ fee timestamps and labelled order actions retain room for their full contents (1.377017ms)
+✔ booking forms replace event marketing with one optional platform announcement choice (1.121172ms)
+✔ compact booking consent rows preserve alignment and unobstructed evidence (1.504845ms)
+✔ checkout quantity uses a labelled native boxed dropdown within existing inventory limits (2.275473ms)
+✔ mobile checkout header hides optional reassurance without suppressing the logo or back link (1.124457ms)
+✔ checkout keeps semantic section headings without decorative step numbers (0.686532ms)
+✔ Host announcements share the conversation bubbles without changing authority or actions (1.258454ms)
+✔ workspace metric tiles share equal content-sized rows without clipping labels (1.502271ms)
+✔ approval refreshes Upcoming passes and Room without changing the RSVP count (52.177396ms)
+✔ unchanged pending polls do not reload the parent feed (7.445327ms)
+✔ a confirmed first snapshot repairs an approval that raced the initial feed (4.165982ms)
+✔ resume revalidates without overlapping reads, and entitlement changes supersede stale results (12.967587ms)
+✔ focus and reconnect do no work while hidden or offline; returning refreshes (4.700716ms)
+✔ unmount aborts both reads, removes resume listeners and ignores late responses (6.842414ms)
+✔ explicit recovery remains available with a different valid session and sends nothing automatically (3.341045ms)
+✔ explicit recovery server HTML disables entry and submission with accessible readiness feedback (60.487741ms)
+✔ recovery becomes interactive only after readiness and does not post during hydration (3.302459ms)
+✔ early recovery entry survives initial authenticated feed and registration reads and submits once (14.831517ms)
+✔ hub clears private state on 401 and stays locked during focus reauthentication (27.169001ms)
+✔ hub clears private state on 401 and stays locked during online reauthentication (8.797848ms)
+✔ hub clears private state on 401 and stays locked during visibilitychange reauthentication (7.943867ms)
+✔ hub clears private state on 401 and stays locked during button reauthentication (8.085615ms)
+✔ hub clears private state on 403 and stays locked during focus reauthentication (7.77567ms)
+✔ hub clears private state on 403 and stays locked during online reauthentication (6.578498ms)
+✔ hub clears private state on 403 and stays locked during visibilitychange reauthentication (4.030674ms)
+✔ hub clears private state on 403 and stays locked during button reauthentication (4.005548ms)
+✔ hub retries cannot unlock on network errors or malformed private responses (2.264988ms)
+✔ hub ignores superseded success and cleans up pending access checks on unmount (7.952299ms)
+✔ optional wallet failure does not prevent validated private access recovery (4.646537ms)
+✔ host money renders ticket accounting and payout status without platform fee widgets even if extra fields arrive (86.377442ms)
+✔ owner money retains booking fees and statement fee detail (39.653454ms)
+✔ host analytics never renders owner fee detail while owner analytics retains it (111.874408ms)
+✔ owner prompt and settings use shared account identity in both existing workspaces (6.786552ms)
+✔ primary notification action retains explicit hover contrast (0.388629ms)
+✔ Yorke Way owner push offers the audience action and opens its exact private destination (4.898155ms)
+✔ owner push cannot be redirected to an external origin or another admin page (4.190319ms)
+✔ attendee and host notifications cannot select the owner audience destination (2.495146ms)
+✔ owner push reuses an owner window instead of replacing an attendee or host workspace (1.240257ms)
+✔ owner push opens a new owner destination when only attendee windows exist (0.674648ms)
+✔ suspension never records hidden or zero geometry; foreground repairs without a resize event (2.564207ms)
+✔ BFCache pageshow and repeated resumes coalesce and retain keyboard/pinch geometry (0.827011ms)
+✔ resume frame cannot mutate a rehidden or unmounted document; StrictMode can remount (0.668259ms)
+✔ nonfinite geometry cannot poison viewport CSS (0.644534ms)
+✔ root error renders independently and reloads only on explicit user action (9.17407ms)
+✔ optional PWA registration rejection and unavailable storage do not break the shell (53.200916ms)
+✔ viewport lifecycle leaves healthy/empty/loading routes, drafts, storage and offline state alone (1.162713ms)
+✔ recovery styling is allowed by production CSP and static offline entry is packaged (6.581446ms)
+✔ installed Vinext boundary renders custom global fallback for an actual error state (14.429058ms)
+✔ Room retains its full height during suspension and restores on foreground/BFCache without resize (5.002639ms)
+✔ Room keeps valid keyboard sizes, ignores pinch/invalid measurements, and cleans all lifecycle listeners (1.92468ms)
+✔ Room wiring preserves conditional near-bottom scrolling and does not alter draft or navigation state (9.444596ms)
+✔ rsvp server opener is disabled and busy until hydration (8.269684ms)
+✔ rsvp direct server form disables inputs and submission without carrying consent (2.23885ms)
+✔ interest server opener is disabled and busy until hydration (0.441156ms)
+✔ interest direct server form disables inputs and submission without carrying consent (0.965024ms)
+✔ website/PWA rsvp keeps private registration status in its owning runtime (1.285053ms)
+✔ website/PWA interest keeps private registration status in its owning runtime (0.952896ms)
+✔ secure-browser wrapper rsvp keeps private registration status in its owning runtime (6.540671ms)
+✔ secure-browser wrapper interest keeps private registration status in its owning runtime (2.746894ms)
+✔ editorial waits for actual doorway completion, then shares one scene origin (3.901695ms)
+✔ an already skipped opening starts on the next frame, not after a guessed two seconds (0.779392ms)
+✔ static readable bypass: {"reduce":true} (0.738151ms)
+✔ static readable bypass: {"hidden":true} (0.525129ms)
+✔ static readable bypass: {"scrollY":1} (0.613148ms)
+✔ static readable bypass: {"interacted":true} (0.725042ms)
+✔ static readable bypass: {"noAnimation":true} (0.729318ms)
+✔ static readable bypass: {"entry":{"late":true}} (0.509596ms)
+✔ static readable bypass: {"entry":{"capturedAt":-500}} (1.041175ms)
+✔ static readable bypass: {"entry":{"href":"https://tickets.becoreops.com/events","navigationHref":"https://tickets.becoreops.com/events","phase":"done"}} (0.670342ms)
+✔ static readable bypass: {"entry":{"navigationType":"back_forward"}} (0.575493ms)
+✔ static readable bypass: {"entry":{"href":"https://tickets.becoreops.com/the-yorke-way?token=x"}} (0.484449ms)
+✔ pointerdown immediately reveals everything without preventing signup input (0.797568ms)
+✔ keydown immediately reveals everything without preventing signup input (0.872708ms)
+✔ wheel immediately reveals everything without preventing signup input (0.823617ms)
+✔ focusin immediately reveals everything without preventing signup input (0.808474ms)
+✔ reduced motion changes, hidden documents and route departure cancel pending effects (6.659165ms)
+✔ rerender or SPA return does not replay, while a fresh document gets its own scene (1.163535ms)
+✔ StrictMode cleanup before first frame can safely retry; duplicate mounts cannot claim the scene (0.697522ms)
+✔ unresolved intro and partial animation failure fail open with full cleanup (1.832915ms)
+✔ server content is complete without animation and the form remains outside its controller (10.472993ms)
+ℹ tests 308
+ℹ suites 0
+ℹ pass 308
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1999.016092
+npm notice
+npm notice New major version of npm available! 11.9.0 -> 12.2.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+npm notice To update run: npm install -g npm@12.2.1
+npm notice
+
+> becore-tickets@0.1.0 test:password-client
+> node --test tests/staff-password-client.test.mjs
+
+✔ staff login server HTML keeps input and submission disabled until React is ready (86.055525ms)
+✔ the browser-compatible Web Crypto path derives the 600,000-round production vector (117.16953ms)
+✔ staff entry continues owner only to an allowed workspace (122.250468ms)
+✔ staff entry continues curator only to an allowed workspace (125.343529ms)
+✔ staff entry continues finance only to an allowed workspace (117.781091ms)
+✔ staff entry continues support only to an allowed workspace (139.115724ms)
+✔ staff entry continues organizer only to an allowed workspace (87.067918ms)
+✔ staff entry continues gate only to an allowed workspace (105.668617ms)
+✔ staff entry continues moderator only to an allowed workspace (113.283532ms)
+✔ missing or rejected staff session renders the existing login form (10.862242ms)
+✔ customer notifications do not replace an open staff entry tab (6.645034ms)
+ℹ tests 11
+ℹ suites 0
+ℹ pass 11
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1119.875535
+npm notice
+npm notice New major version of npm available! 11.9.0 -> 12.2.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+npm notice To update run: npm install -g npm@12.2.1
+npm notice
+
+> becore-tickets@0.1.0 test:rendered
+> npm run build && node scripts/prepare-deploy.mjs && node --test tests/rendered-html.test.mjs
+
+
+> becore-tickets@0.1.0 build
+> node scripts/clean-build.mjs && vinext build
+
+
+  vinext build  (Vite 8.2.4)
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+[1/5] analyze client references...
+[2Ktransforming...✓ 1101 modules transformed.
+rendering chunks...
+✓ built in 3.01s
+[2/5] analyze server references...
+[2Ktransforming...✓ 1771 modules transformed.
+rendering chunks...
+✓ built in 2.40s
+[3/5] build rsc environment...
+[2Ktransforming...✓ 1092 modules transformed.
+rendering chunks...
+computing gzip size...
+✓ built in 2.73s
+[4/5] build client environment...
+[2Ktransforming...✓ 3236 modules transformed.
+rendering chunks...
+computing gzip size...
+✓ built in 2.84s
+[5/5] build ssr environment...
+[2Ktransforming...✓ 1834 modules transformed.
+rendering chunks...
+computing gzip size...
+✓ built in 2.34s
+[0m
+  Route (app)
+  ┌ ƒ /                                                                                            
+  ├ ? /about                                                                                       
+  ├ ? /account/privacy                                                                             
+  ├ ƒ /admin                                                                                       
+  ├ ƒ /admin/account                                                                               
+  ├ ƒ /admin/accounts                                                                              
+  ├ ƒ /admin/bootstrap                                                                             
+  ├ ƒ /admin/events                                                                                
+  ├ ƒ /admin/fees                                                                                  
+  ├ ƒ /admin/help                                                                                  
+  ├ ƒ /admin/hosts                                                                                 
+  ├ ƒ /admin/login                                                                                 
+  ├ ƒ /admin/operations                                                                            
+  ├ ƒ /admin/orders                                                                                
+  ├ ƒ /admin/platform-audience                                                                     
+  ├ ƒ /admin/promoters                                                                             
+  ├ ƒ /admin/recover                                                                               
+  ├ ƒ /admin/registrations                                                                         
+  ├ ? /admin/rooms                                                                                 
+  ├ ƒ /admin/support                                                                               
+  ├ ƒ /admin/yorkeway-audience                                                                     
+  ├ ƒ /announcements/unsubscribe                                                                   
+  ├ λ /api/admin/accounts                                                                          
+  ├ λ /api/admin/audience                                                                          
+  ├ λ /api/admin/bootstrap                                                                         
+  ├ λ /api/admin/campaigns                                                                         
+  ├ λ /api/admin/check-in                                                                          
+  ├ λ /api/admin/door                                                                              
+  ├ λ /api/admin/events                                                                            
+  ├ λ /api/admin/events/archive                                                                    
+  ├ λ /api/admin/events/archive/cleanup                                                            
+  ├ λ /api/admin/events/archive/deletion                                                           
+  ├ λ /api/admin/events/removal                                                                    
+  ├ λ /api/admin/host-applications                                                                 
+  ├ λ /api/admin/host-pass                                                                         
+  ├ λ /api/admin/operations                                                                        
+  ├ λ /api/admin/orders                                                                            
+  ├ λ /api/admin/organizer-activity                                                                
+  ├ λ /api/admin/organizer-invitations                                                             
+  ├ λ /api/admin/passkeys                                                                          
+  ├ λ /api/admin/platform-audience                                                                 
+  ├ λ /api/admin/promoters                                                                         
+  ├ λ /api/admin/recovery                                                                          
+  ├ λ /api/admin/registrations                                                                     
+  ├ λ /api/admin/rooms                                                                             
+  ├ λ /api/admin/rooms/flashes/:id                                                                 
+  ├ λ /api/admin/session                                                                           
+  ├ λ /api/admin/submissions                                                                       
+  ├ λ /api/admin/support                                                                           
+  ├ λ /api/admin/workspace                                                                         
+  ├ λ /api/admin/yorkeway-audience                                                                 
+  ├ λ /api/analytics                                                                               
+  ├ λ /api/announcements/unsubscribe                                                               
+  ├ λ /api/calendar/:slug                                                                          
+  ├ λ /api/config/booking-fee                                                                      
+  ├ λ /api/customer/experience/:slug                                                               
+  ├ λ /api/customer/host-pass/claim                                                                
+  ├ λ /api/customer/my-nights                                                                      
+  ├ λ /api/customer/notifications                                                                  
+  ├ λ /api/customer/notifications/preferences/:slug                                                
+  ├ λ /api/customer/notifications/subscription                                                     
+  ├ λ /api/customer/notifications/test                                                             
+  ├ λ /api/customer/platform-announcements                                                         
+  ├ λ /api/customer/preferences                                                                    
+  ├ λ /api/customer/privacy                                                                        
+  ├ λ /api/customer/recovery                                                                       
+  ├ λ /api/customer/recovery/claim                                                                 
+  ├ λ /api/customer/registrations                                                                  
+  ├ λ /api/customer/returns                                                                        
+  ├ λ /api/customer/room-updates                                                                   
+  ├ λ /api/customer/session                                                                        
+  ├ λ /api/customer/support/:slug                                                                  
+  ├ λ /api/customer/tickets                                                                        
+  ├ λ /api/customer/transfers                                                                      
+  ├ λ /api/customer/transfers/claim                                                                
+  ├ λ /api/customer/wallet/:ticketId                                                               
+  ├ λ /api/customer/wallet/config                                                                  
+  ├ λ /api/email/webhook                                                                           
+  ├ λ /api/host-applications                                                                       
+  ├ λ /api/host-applications/confirm                                                               
+  ├ λ /api/media/:id                                                                               
+  ├ λ /api/organizer/activate                                                                      
+  ├ λ /api/organizer/analytics                                                                     
+  ├ λ /api/organizer/assistant                                                                     
+  ├ λ /api/organizer/assistant/events                                                              
+  ├ λ /api/organizer/business                                                                      
+  ├ λ /api/organizer/notifications/subscription                                                    
+  ├ λ /api/organizer/reports                                                                       
+  ├ λ /api/organizer/team/accept                                                                   
+  ├ λ /api/organizer/workspace                                                                     
+  ├ λ /api/payments/initialize                                                                     
+  ├ λ /api/payments/quote                                                                          
+  ├ λ /api/payments/seevplus/webhook                                                               
+  ├ λ /api/payments/webhook                                                                        
+  ├ λ /api/platform-announcements/unsubscribe                                                      
+  ├ λ /api/platform-announcements/verification                                                     
+  ├ λ /api/promoter                                                                                
+  ├ λ /api/public/events                                                                           
+  ├ λ /api/registrations                                                                           
+  ├ λ /api/registrations/claim                                                                     
+  ├ λ /api/rooms/:slug/access                                                                      
+  ├ λ /api/rooms/:slug/block                                                                       
+  ├ λ /api/rooms/:slug/flashes                                                                     
+  ├ λ /api/rooms/:slug/flashes/:id                                                                 
+  ├ λ /api/rooms/:slug/flashes/:id/report                                                          
+  ├ λ /api/rooms/:slug/report                                                                      
+  ├ λ /api/rooms/:slug/updates/read                                                                
+  ├ λ /api/rooms/:slug/vip                                                                         
+  ├ λ /api/submissions                                                                             
+  ├ λ /api/version                                                                                 
+  ├ λ /api/waitlist                                                                                
+  ├ λ /api/wallet/apple/v1/devices/:deviceLibraryId/registrations/:passTypeIdentifier              
+  ├ λ /api/wallet/apple/v1/devices/:deviceLibraryId/registrations/:passTypeIdentifier/:serialNumber
+  ├ λ /api/wallet/apple/v1/log                                                                     
+  ├ λ /api/wallet/apple/v1/passes/:passTypeIdentifier/:serialNumber                                
+  ├ λ /api/yorkeway                                                                                
+  ├ λ /api/yorkeway/withdraw                                                                       
+  ├ ? /boardui-trial                                                                               
+  ├ ? /boardui-trial/workspace                                                                     
+  ├ ? /boardui-trial/yorke-way                                                                     
+  ├ ? /boardui-trial/yorke-way/signup                                                              
+  ├ ƒ /checkout/:slug                                                                              
+  ├ ƒ /event/:slug                                                                                 
+  ├ ƒ /events                                                                                      
+  ├ ƒ /help                                                                                        
+  ├ ƒ /hosts                                                                                       
+  ├ ƒ /hosts/:slug                                                                                 
+  ├ ? /my-nights                                                                                   
+  ├ ƒ /my-nights/:slug                                                                             
+  ├ ? /my-nights/access                                                                            
+  ├ ƒ /notifications                                                                               
+  ├ ? /organizer                                                                                   
+  ├ ƒ /organizer/activate                                                                          
+  ├ ƒ /organizer/analytics                                                                         
+  ├ ? /organizer/assistant                                                                         
+  ├ ? /organizer/join                                                                              
+  ├ ? /organizer/join/confirm                                                                      
+  ├ ƒ /organizer/submit                                                                            
+  ├ ? /organizer/team/accept                                                                       
+  ├ ƒ /organizer/workspace                                                                         
+  ├ ? /payment/return                                                                              
+  ├ ƒ /platform-announcements/unsubscribe                                                          
+  ├ ? /privacy                                                                                     
+  ├ ? /promoter                                                                                    
+  ├ ƒ /room/:slug                                                                                  
+  ├ ƒ /rsvp/:slug                                                                                  
+  ├ ? /rsvp/access                                                                                 
+  ├ ƒ /scan                                                                                        
+  ├ ƒ /scan/app                                                                                    
+  ├ ? /scan/install                                                                                
+  ├ ƒ /staff                                                                                       
+  ├ ? /staff/install                                                                               
+  ├ ? /terms                                                                                       
+  ├ ? /the-yorke-way                                                                               
+  ├ ? /the-yorke-way/unsubscribe                                                                   
+  └ ? /tickets                                                                                     
+
+  λ API  ƒ Dynamic  ? Unknown
+
+  ? Some routes could not be classified. vinext currently uses static analysis
+    and cannot detect dynamic API usage (headers(), cookies(), etc.) at build time.
+    Automatic classification will be improved in a future release.
+
+  Build complete. Run `vinext start` to start the production server.
+
+npm notice
+npm notice New major version of npm available! 11.9.0 -> 12.2.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+npm notice To update run: npm install -g npm@12.2.1
+npm notice
+✔ keeps the production Worker configuration portable and preserves The Room (6.378585ms)
+✔ the Worker applies the production browser security baseline (1.874245ms)
+✔ does not ship editor preview metadata or workspace paths in customer assets (2.352416ms)
+✔ ships the BeCore Tickets tab icon in modern and fallback formats (2.020029ms)
+✔ every RSC script and stylesheet points to an emitted client asset (25.986008ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 97.568853
+npm notice
+npm notice New major version of npm available! 11.9.0 -> 12.2.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+npm notice To update run: npm install -g npm@12.2.1
+npm notice
+
+> becore-tickets@0.1.0 test:worker
+> vitest run
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+
+ RUN  v4.1.12 /workspace/tickets-combined
+
+uncaught exception; source = Uncaught (in promise); stack = Error: D1_ERROR: Simulated fanout interruption: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_TRIGGER)
+    at D1DatabaseSessionAlwaysPrimary._sendOrThrow (cloudflare-internal:d1-api:146:19)
+    at cloudflare-internal:d1-api:97:27
+    at queueHostAnnouncement (/workspace/tickets-combined/lib/notifications.ts:247:5)
+    at notifyRoomMessage (/workspace/tickets-combined/lib/notifications.ts:103:29)
+    at TheRoom.publishAnnouncementUntracked (/workspace/tickets-combined/worker/the-room.ts:556:78)
+    at /workspace/tickets-combined/worker/the-room.ts:215:20
+    at trackedOperation (/workspace/tickets-combined/worker/handover-control.ts:34:16)
+uncaught exception; source = Uncaught (in promise); stack = Error: This announcement changed. Start a new announcement.
+    at TheRoom.publishAnnouncementUntracked (/workspace/tickets-combined/worker/the-room.ts:542:13)
+    at /workspace/tickets-combined/worker/the-room.ts:169:77
+    at /workspace/tickets-combined/worker/the-room.ts:215:26
+    at trackedOperation (/workspace/tickets-combined/worker/handover-control.ts:34:22)
+uncaught exception; source = Uncaught (in promise); stack = Error: This announcement changed. Start a new announcement.
+    at TheRoom.publishAnnouncementUntracked (/workspace/tickets-combined/worker/the-room.ts:542:13)
+    at /workspace/tickets-combined/worker/the-room.ts:169:77
+    at /workspace/tickets-combined/worker/the-room.ts:215:26
+    at trackedOperation (/workspace/tickets-combined/worker/handover-control.ts:34:22)
+
+ Test Files  90 passed (90)
+      Tests  1145 passed (1145)
+   Start at  00:09:18
+   Duration  60.78s (transform 8.02s, setup 24.33s, import 22.02s, tests 79.61s, environment 6ms)
+
+npm notice
+npm notice New major version of npm available! 11.9.0 -> 12.2.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+npm notice To update run: npm install -g npm@12.2.1
+npm notice
+npm notice
+npm notice New major version of npm available! 11.9.0 -> 12.2.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+npm notice To update run: npm install -g npm@12.2.1
+npm notice

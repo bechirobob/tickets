@@ -1,0 +1,40 @@
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+[31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mFailed to write to log file Error: ENOENT: no such file or directory, mkdir '/home/agent/.config/.wrangler'[0m
+
+      at async Object.mkdir (node:internal/fs/promises:916:10)
+      at async ensureDirectoryExists (/workspace/tickets-integration/node_modules/wrangler/wrangler-dist/cli.js:60876:3)
+      at async /workspace/tickets-integration/node_modules/wrangler/wrangler-dist/cli.js:60962:7
+      at async Mutex.runWith (/workspace/tickets-integration/node_modules/miniflare/dist/src/index.js:85626:48)
+      at async appendToDebugLogFile (/workspace/tickets-integration/node_modules/wrangler/wrangler-dist/cli.js:60960:3) {
+    errno: -2,
+    code: 'ENOENT',
+    syscall: 'mkdir',
+    path: '/home/agent/.config/.wrangler'
+  }
+
+
+[31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mWould have written: [0m
+
+  --- 2026-11-01T23:30:11.021Z debug
+  🪵  Writing logs to "/home/agent/.config/.wrangler/logs/wrangler-2026-11-01_23-30-10_584.log"
+  ---
+  
+
+
+
+ RUN  v4.1.12 /workspace/tickets-integration
+
+
+ Test Files  6 passed (6)
+      Tests  72 passed (72)
+   Start at  23:30:11
+   Duration  7.77s (transform 5.29s, setup 3.67s, import 9.00s, tests 2.73s, environment 0ms)
+
+🪵  Logs were written to "/home/agent/.config/.wrangler/logs/wrangler-2026-11-01_23-30-10_584.log"
+npm notice
+npm notice New major version of npm available! 11.9.0 -> 12.2.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+npm notice To update run: npm install -g npm@12.2.1
+npm notice

@@ -1,0 +1,18 @@
+
+> becore-tickets@0.1.0 lint
+> eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern .vinext --ignore-pattern .wrangler --ignore-pattern '.release-dry-run*' --ignore-pattern 'rbac-dry-run*' --ignore-pattern 'live-audit.*' --ignore-pattern 'workers-types-latest.*' --ignore-pattern '.tmp-*' --ignore-pattern worker-configuration.d.ts
+
+
+/workspace/tickets/app/boardui-trial/layout.tsx
+  4:12  warning  Do not include stylesheets manually. See: https://nextjs.org/docs/messages/no-css-tags  @next/next/no-css-tags
+
+/workspace/tickets/ops/moderation/worker.ts
+  4:1  warning  Assign object to a variable before exporting as module default  import/no-anonymous-default-export
+
+✖ 2 problems (0 errors, 2 warnings)
+
+npm notice
+npm notice New major version of npm available! 11.9.0 -> 12.2.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+npm notice To update run: npm install -g npm@12.2.1
+npm notice

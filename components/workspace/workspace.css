@@ -1,0 +1,105 @@
+/* Tickets adapter for the pinned free BoardUI primitives; no theme reset. */
+.workspace-boardui button { min-height:44px; min-width:44px; height:auto; border-radius:7px; padding:8px 10px; color:var(--ink); font:600 14px/1.25 var(--font-system); background:transparent; cursor:pointer; }
+.workspace-boardui button:hover { text-decoration:underline; text-underline-offset:3px; }
+.workspace-boardui button:disabled { opacity:.45; cursor:default; text-decoration:none; }
+.workspace-boardui button:focus-visible, .workspace-boardui select:focus-visible, .workspace-boardui input:focus-visible, .workspace-boardui [data-focus-visible] { outline:2px solid var(--ink); outline-offset:2px; }
+.workspace-boardui [data-label], .workspace-boardui .workspace-filter { color:var(--ink); font:600 13px/1.4 var(--font-system); }
+.workspace-boardui .workspace-input, .workspace-boardui select { min-height:44px; border:1px solid var(--line); background:var(--white); border-radius:7px; padding:10px; width:100%; }
+.workspace-boardui .workspace-input:focus-within { outline:2px solid var(--ink); outline-offset:2px; }
+.workspace-boardui .workspace-input input { font:400 16px/1.4 var(--font-system); color:var(--ink); outline:none; }
+.workspace-boardui .workspace-input input::placeholder { color:var(--muted); }
+.workspace-boardui .bui-table { width:100%; border-collapse:collapse; text-align:left; table-layout:fixed; }
+.workspace-boardui .bui-table th { border-block:1px solid var(--line); color:var(--muted); font-size:12px; font-weight:600; padding:12px 8px; }
+.workspace-boardui .bui-table th:first-child { width:66%; }
+.workspace-boardui .bui-table th:last-child { width:70px; }
+.workspace-boardui .bui-table td { padding:9px 8px; border-bottom:1px solid var(--line); vertical-align:middle; overflow-wrap:anywhere; }
+.workspace-boardui .workspace-record-name { display:block; font-weight:600; }
+.workspace-boardui .workspace-record-meta { display:block; margin-top:3px; font-size:12px; color:var(--muted); }
+.workspace-boardui [slot='errorMessage'] { color:var(--status-danger); font-size:13px; }
+.workspace-boardui [data-invalid] .workspace-input { border-color:var(--status-danger); }
+.workspace-boardui { color:var(--ink); font-family:var(--font-system); }
+.workspace-boardui .workspace-input input { border:0; background:transparent; padding:0; min-height:0; }
+.workspace-boardui [data-input-size] { min-width:0; }
+.workspace-boardui .bui-table th:first-child { width:auto; }
+.workspace-boardui .bui-table th:last-child { width:88px; }
+.workspace-boardui .workspace-list-controls { display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:end; gap:16px; margin:20px 0; }
+.workspace-boardui .workspace-list-controls label { margin:0; }
+.workspace-boardui .workspace-list-controls select { min-height:44px; }
+.workspace-boardui .workspace-empty { padding:24px 8px; }
+.workspace-boardui .workspace-record-dialog { position:fixed; inset:0; margin:auto; width:min(680px,calc(100vw - 32px)); max-height:calc(100dvh - 32px); overflow:auto; padding:24px; border:1px solid var(--line); border-radius:12px; background:var(--white); color:var(--ink); }
+.workspace-record-dialog::backdrop { background:rgb(0 0 0 / .3); }
+body:has(.workspace-record-dialog[open]) { overflow:hidden; }
+.workspace-boardui .workspace-record-dialog .suite-detail { padding:0; margin:0; border:0; background:transparent; }
+.workspace-boardui .workspace-record-dialog header { display:flex; gap:16px; justify-content:space-between; align-items:start; }
+.workspace-boardui .workspace-record-dialog h2 { font-size:23px; line-height:1.2; overflow-wrap:anywhere; }
+.workspace-boardui .workspace-record-dialog p,.workspace-boardui .workspace-record-dialog dd { overflow-wrap:anywhere; }
+.workspace-boardui .workspace-record-dialog dl>div { padding:12px 0; border-bottom:1px solid var(--line); }
+.workspace-boardui .workspace-record-dialog dt { color:var(--muted); font-size:13px; }
+.workspace-boardui .workspace-record-dialog dd { margin:4px 0 0; }
+.workspace-boardui .suite-pagination ul { list-style:none; padding:0; margin:0; }
+.workspace-boardui .suite-pagination { display:block; max-width:680px; margin:auto; }
+.workspace-boardui .suite-pagination>p { font-size:13px; color:var(--muted); }
+@media(max-width:650px) {
+ .workspace-boardui .workspace-list-controls { grid-template-columns:minmax(0,1fr); gap:12px; }
+ .workspace-boardui .bui-table th,.workspace-boardui .bui-table td { padding-inline:4px; }
+ .workspace-boardui .bui-table th:last-child { width:82px; }
+ .workspace-boardui .workspace-record-dialog { padding:18px; }
+ .workspace-boardui .workspace-record-meta { font-size:12px; }
+}
+.organizer-suite.workspace-boardui { background:var(--white); }
+.workspace-boardui .suite-button--primary { background:var(--ink); color:var(--white); }
+/* Match the shared workspace shell's specificity without changing other routes. */
+main.workspace-boardui:has(>.workspace-topbar) { --ops-canvas:var(--white); --ops-ink:var(--ink); --ops-muted:var(--muted); background:var(--white); font-family:var(--font-system); }
+main.workspace-boardui:has(>.workspace-topbar) .workspace-input input { border:0; padding:0; background:transparent; min-height:0; border-radius:0; }
+main.workspace-boardui:has(>.workspace-topbar) .yorkeway-workspace button { background:transparent; color:var(--ink); box-shadow:none; border:1px solid var(--line); border-radius:7px; }
+main.workspace-boardui:has(>.workspace-topbar) .yorkeway-workspace>header p { text-transform:none; letter-spacing:normal; font-size:14px; }
+
+main.workspace-boardui:has(>.workspace-topbar) .yorkeway-workspace .bui-table button { border-color:transparent; }
+.workspace-boardui .workspace-order-record article { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; }
+.workspace-boardui .workspace-order-record h3 { font-size:14px; margin:0 0 8px; color:var(--muted); }
+.workspace-boardui .workspace-order-record small { display:block; margin-top:5px; overflow-wrap:anywhere; }
+.workspace-boardui .workspace-order-record .order-actions { flex-wrap:wrap; }
+.workspace-boardui .workspace-orders .workspace-order-search { display:grid; gap:12px; margin:20px 0; grid-template-columns:minmax(0,1fr) auto auto; align-items:end; }
+@media(max-width:650px) { .workspace-boardui .workspace-order-record article { grid-template-columns:minmax(0,1fr); } .workspace-boardui .workspace-orders .workspace-order-search { display:grid; grid-template-columns:minmax(0,1fr); } }
+
+main.workspace-boardui:has(>.workspace-topbar) .workspace-orders .ops-order-filters { background:transparent; border-radius:0; border-block:1px solid var(--line); padding:0; }
+main.workspace-boardui:has(>.workspace-topbar) .workspace-orders button { border-radius:7px; }
+.workspace-boardui .workspace-team-tabs { display:flex; gap:12px; border-bottom:1px solid var(--line); margin:20px 0; }
+.workspace-boardui .workspace-team-tabs button { border:0; border-radius:0; min-height:44px; box-shadow:none; text-shadow:none; text-decoration:none; }
+.workspace-boardui .workspace-team-tabs button[aria-pressed=true] { font-weight:750; }
+/* Static Guest tools use selection weight, without the old bottom-border indicator. */
+.workspace-boardui .suite-segments:not(.segmented-control) > button { min-height:44px; border:0; box-shadow:none; text-shadow:none; text-decoration:none; }
+.workspace-boardui .suite-segments:not(.segmented-control) > button[aria-pressed=true] { font-weight:750; }
+
+.workspace-boardui .suite-badge { color:var(--ink); background:transparent; }
+.workspace-boardui .organizer-request { background:transparent; border-bottom:1px solid var(--line); border-radius:0; }
+.workspace-boardui .organizer-request > span { color:var(--ink); }
+.workspace-boardui .organizer-panel .workspace-input input { border:0; border-radius:0; padding:0; min-height:0; background:transparent; outline:none; }
+.workspace-pager-guard { margin:0; padding:0; border:0; min-width:0; }
+.workspace-conversation-back { display:none; }
+.staff-page.workspace-boardui .staff-workspace { display:block; }
+.staff-page.workspace-boardui .staff-list { max-width:900px; }
+.workspace-boardui .staff-list > [data-input-size], .workspace-boardui .staff-list > nav { grid-column:1 / -1; }
+.workspace-boardui .staff-editor { background:transparent; padding:0; }
+.workspace-boardui .workspace-input input:not([type='checkbox']):not([type='radio']) { border:0; padding:0; min-height:0; background:transparent; outline:none; }
+@media(max-width:700px) {
+ .workspace-boardui .support-ops__layout[data-conversation-open='false'] > article { display:none; }
+ .workspace-boardui .support-ops__layout[data-conversation-open='true'] > nav { display:none; }
+ .workspace-boardui .workspace-conversation-back { display:block; margin-bottom:16px; }
+}
+.workspace-boardui .passkey-security article { background:transparent; border-bottom:1px solid var(--line); border-radius:0; }
+.workspace-boardui .passkey-security small, .workspace-boardui .passkey-security article i { color:var(--muted); }
+.workspace-boardui .account-security label { color:var(--ink); letter-spacing:0; text-transform:none; }
+.workspace-boardui .account-security small { color:var(--muted); }
+.workspace-boardui .staff-editor .role-boundary, .workspace-boardui .staff-editor .staff-events label, .workspace-boardui .staff-editor .staff-removal { background:transparent; border-top:1px solid var(--line); border-radius:0; padding:16px 0; }
+.workspace-boardui .staff-editor .role-boundary header { display:block; }
+.workspace-boardui .staff-editor .ops-grid label { text-transform:none; letter-spacing:0; font-weight:600; }
+.workspace-boardui .staff-editor .ops-grid :is(input,select) { min-height:44px; font-weight:400; }
+.workspace-boardui .support-ops button { border-radius:7px; }
+.workspace-boardui .support-ops__messages > p { background:transparent; border:1px solid var(--line); color:var(--ink); }
+.workspace-boardui.account-security-stack { min-width:0; grid-template-columns:minmax(0,1fr); }
+.workspace-boardui .passkey-security, .workspace-boardui .passkey-security article > span { min-width:0; overflow-wrap:anywhere; }
+@media(max-width:650px) {
+ .workspace-boardui .passkey-security > header, .workspace-boardui .passkey-security details > article { display:grid; grid-template-columns:minmax(0,1fr); justify-items:start; gap:10px; }
+ .workspace-boardui .passkey-security .ticket-action { width:auto; min-width:max-content; white-space:nowrap; }
+}

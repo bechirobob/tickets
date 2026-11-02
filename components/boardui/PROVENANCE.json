@@ -1,0 +1,47 @@
+{
+  "repository": "https://github.com/BoardUI/boardui",
+  "commit": "ec5c5eb3e29c2441be63b9422cd54f411ef23466",
+  "files": [
+    {
+      "upstreamPath": "components/base/buttons/button.tsx",
+      "sha256": "b147c988c73dd8c226ab6ede3d7019eac9a7125191bbd646fcdd25bea803ca41"
+    },
+    {
+      "upstreamPath": "components/base/input/input.tsx",
+      "sha256": "5b354fef767b5bb5159546cc8bc2547db64ee62a66d9f701edcd508d4450d5df"
+    },
+    {
+      "upstreamPath": "components/base/input/label.tsx",
+      "sha256": "a053bec8ad9f79f15ad8d7f031eac740588781d4e1b34d1cb1b3c5d44a4b2199"
+    },
+    {
+      "upstreamPath": "components/base/input/hint-text.tsx",
+      "sha256": "0426d70de74274486166cf3fd2279b8c70ce184012d613f87c44dbaa484ba8c3"
+    },
+    {
+      "upstreamPath": "components/base/table/table.tsx",
+      "sha256": "f960c50c679e3473328fb7e1c9c35f746a65c73011248c827274c1433a482419"
+    },
+    {
+      "upstreamPath": "components/base/pagination/pagination.tsx",
+      "sha256": "944b90dbb2bd2b16c1438fc4382c8c0643b1cfb954c984b96a169407f3f52644"
+    },
+    {
+      "upstreamPath": "utils/cx.ts",
+      "sha256": "db35ea5afa8b2e0fd51319bc49288c4df7c98ec53440b43903636a32e3319d9d"
+    },
+    {
+      "upstreamPath": "utils/directional-icon.ts",
+      "sha256": "02692ff42abfea0e3ddf0ca79cd1f816cdce65f923efb0d61d2f3663a9202c47"
+    }
+  ],
+  "adaptations": [
+    "Namespaced imports; existing Lucide icons replace Remix icons.",
+    "Pagination removes starter template localization hook; explicit English labels retained.",
+    "Compact pager shows first/current/last to preserve 44px targets at 320px.",
+    "Styles are supplied by the scoped Tickets trial CSS; global BoardUI theme not installed.",
+    "Dialog uses native HTML dialog, not a claimed BoardUI component.",
+    "React Aria 3.48.0 pressable touch-action rule is supplied as an external trial stylesheet with its expected ID, avoiding CSP inline-style injection; upgrade-sensitive adapter.",
+    "Pagination reconnects its compact-width ResizeObserver when asynchronously loaded totals first render the pager; original upstream hashes above remain unchanged."
+  ]
+}

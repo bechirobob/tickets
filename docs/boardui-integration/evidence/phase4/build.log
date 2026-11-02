@@ -1,0 +1,221 @@
+
+> becore-tickets@0.1.0 build
+> node scripts/clean-build.mjs && vinext build
+
+
+  vinext build  (Vite 8.2.4)
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+[1/5] analyze client references...
+[2Ktransforming...✓ 1101 modules transformed.
+rendering chunks...
+✓ built in 3.78s
+[33m[PLUGIN_TIMINGS] [0mYour build spent 93% of 3.7s inside plugin hooks (3.5s).
+Not measurable — 8 hooks whose calls overlap, so elapsed time covers work other calls were doing. Profile with `node --cpu-prof`:
+  - rsc:virtual-client-package resolveId (3771 calls)
+  - vinext:og-inline-fetch-assets resolveId (4326 calls)
+  - rsc:use-client transform (1101 calls)
+  … and 5 more
+See https://rolldown.rs/reference/InputOptions.checks#plugintimings for more details.
+
+[2/5] analyze server references...
+[2Ktransforming...✓ 1771 modules transformed.
+rendering chunks...
+✓ built in 2.75s
+[3/5] build rsc environment...
+[2Ktransforming...✓ 1092 modules transformed.
+rendering chunks...
+computing gzip size...
+✓ built in 3.34s
+[33m[PLUGIN_TIMINGS] [0mYour build spent 85% of 3.3s inside plugin hooks (2.8s).
+Not measurable — 8 hooks whose calls overlap, so elapsed time covers work other calls were doing. Profile with `node --cpu-prof`:
+  - rsc:virtual-client-package resolveId (3716 calls)
+  - vinext:og-inline-fetch-assets resolveId (4272 calls)
+  - rsc:use-client transform (1092 calls)
+  … and 5 more
+See https://rolldown.rs/reference/InputOptions.checks#plugintimings for more details.
+
+[4/5] build client environment...
+[2Ktransforming...✓ 3236 modules transformed.
+rendering chunks...
+computing gzip size...
+✓ built in 3.83s
+[5/5] build ssr environment...
+[2Ktransforming...✓ 1834 modules transformed.
+rendering chunks...
+computing gzip size...
+✓ built in 4.13s
+[0m
+  Route (app)
+  ┌ ƒ /                                                                                            
+  ├ ? /about                                                                                       
+  ├ ? /account/privacy                                                                             
+  ├ ƒ /admin                                                                                       
+  ├ ƒ /admin/account                                                                               
+  ├ ƒ /admin/accounts                                                                              
+  ├ ƒ /admin/bootstrap                                                                             
+  ├ ƒ /admin/events                                                                                
+  ├ ƒ /admin/fees                                                                                  
+  ├ ƒ /admin/help                                                                                  
+  ├ ƒ /admin/hosts                                                                                 
+  ├ ƒ /admin/login                                                                                 
+  ├ ƒ /admin/operations                                                                            
+  ├ ƒ /admin/orders                                                                                
+  ├ ƒ /admin/platform-audience                                                                     
+  ├ ƒ /admin/promoters                                                                             
+  ├ ƒ /admin/recover                                                                               
+  ├ ƒ /admin/registrations                                                                         
+  ├ ? /admin/rooms                                                                                 
+  ├ ƒ /admin/support                                                                               
+  ├ ƒ /admin/yorkeway-audience                                                                     
+  ├ ƒ /announcements/unsubscribe                                                                   
+  ├ λ /api/admin/accounts                                                                          
+  ├ λ /api/admin/audience                                                                          
+  ├ λ /api/admin/bootstrap                                                                         
+  ├ λ /api/admin/campaigns                                                                         
+  ├ λ /api/admin/check-in                                                                          
+  ├ λ /api/admin/door                                                                              
+  ├ λ /api/admin/events                                                                            
+  ├ λ /api/admin/events/archive                                                                    
+  ├ λ /api/admin/events/archive/cleanup                                                            
+  ├ λ /api/admin/events/archive/deletion                                                           
+  ├ λ /api/admin/events/removal                                                                    
+  ├ λ /api/admin/host-applications                                                                 
+  ├ λ /api/admin/host-pass                                                                         
+  ├ λ /api/admin/operations                                                                        
+  ├ λ /api/admin/orders                                                                            
+  ├ λ /api/admin/organizer-activity                                                                
+  ├ λ /api/admin/organizer-invitations                                                             
+  ├ λ /api/admin/passkeys                                                                          
+  ├ λ /api/admin/platform-audience                                                                 
+  ├ λ /api/admin/promoters                                                                         
+  ├ λ /api/admin/recovery                                                                          
+  ├ λ /api/admin/registrations                                                                     
+  ├ λ /api/admin/rooms                                                                             
+  ├ λ /api/admin/rooms/flashes/:id                                                                 
+  ├ λ /api/admin/session                                                                           
+  ├ λ /api/admin/submissions                                                                       
+  ├ λ /api/admin/support                                                                           
+  ├ λ /api/admin/workspace                                                                         
+  ├ λ /api/admin/yorkeway-audience                                                                 
+  ├ λ /api/analytics                                                                               
+  ├ λ /api/announcements/unsubscribe                                                               
+  ├ λ /api/calendar/:slug                                                                          
+  ├ λ /api/config/booking-fee                                                                      
+  ├ λ /api/customer/experience/:slug                                                               
+  ├ λ /api/customer/host-pass/claim                                                                
+  ├ λ /api/customer/my-nights                                                                      
+  ├ λ /api/customer/notifications                                                                  
+  ├ λ /api/customer/notifications/preferences/:slug                                                
+  ├ λ /api/customer/notifications/subscription                                                     
+  ├ λ /api/customer/notifications/test                                                             
+  ├ λ /api/customer/platform-announcements                                                         
+  ├ λ /api/customer/preferences                                                                    
+  ├ λ /api/customer/privacy                                                                        
+  ├ λ /api/customer/recovery                                                                       
+  ├ λ /api/customer/recovery/claim                                                                 
+  ├ λ /api/customer/registrations                                                                  
+  ├ λ /api/customer/returns                                                                        
+  ├ λ /api/customer/room-updates                                                                   
+  ├ λ /api/customer/session                                                                        
+  ├ λ /api/customer/support/:slug                                                                  
+  ├ λ /api/customer/tickets                                                                        
+  ├ λ /api/customer/transfers                                                                      
+  ├ λ /api/customer/transfers/claim                                                                
+  ├ λ /api/customer/wallet/:ticketId                                                               
+  ├ λ /api/customer/wallet/config                                                                  
+  ├ λ /api/email/webhook                                                                           
+  ├ λ /api/host-applications                                                                       
+  ├ λ /api/host-applications/confirm                                                               
+  ├ λ /api/media/:id                                                                               
+  ├ λ /api/organizer/activate                                                                      
+  ├ λ /api/organizer/analytics                                                                     
+  ├ λ /api/organizer/assistant                                                                     
+  ├ λ /api/organizer/assistant/events                                                              
+  ├ λ /api/organizer/business                                                                      
+  ├ λ /api/organizer/notifications/subscription                                                    
+  ├ λ /api/organizer/reports                                                                       
+  ├ λ /api/organizer/team/accept                                                                   
+  ├ λ /api/organizer/workspace                                                                     
+  ├ λ /api/payments/initialize                                                                     
+  ├ λ /api/payments/quote                                                                          
+  ├ λ /api/payments/seevplus/webhook                                                               
+  ├ λ /api/payments/webhook                                                                        
+  ├ λ /api/platform-announcements/unsubscribe                                                      
+  ├ λ /api/platform-announcements/verification                                                     
+  ├ λ /api/promoter                                                                                
+  ├ λ /api/public/events                                                                           
+  ├ λ /api/registrations                                                                           
+  ├ λ /api/registrations/claim                                                                     
+  ├ λ /api/rooms/:slug/access                                                                      
+  ├ λ /api/rooms/:slug/block                                                                       
+  ├ λ /api/rooms/:slug/flashes                                                                     
+  ├ λ /api/rooms/:slug/flashes/:id                                                                 
+  ├ λ /api/rooms/:slug/flashes/:id/report                                                          
+  ├ λ /api/rooms/:slug/report                                                                      
+  ├ λ /api/rooms/:slug/updates/read                                                                
+  ├ λ /api/rooms/:slug/vip                                                                         
+  ├ λ /api/submissions                                                                             
+  ├ λ /api/version                                                                                 
+  ├ λ /api/waitlist                                                                                
+  ├ λ /api/wallet/apple/v1/devices/:deviceLibraryId/registrations/:passTypeIdentifier              
+  ├ λ /api/wallet/apple/v1/devices/:deviceLibraryId/registrations/:passTypeIdentifier/:serialNumber
+  ├ λ /api/wallet/apple/v1/log                                                                     
+  ├ λ /api/wallet/apple/v1/passes/:passTypeIdentifier/:serialNumber                                
+  ├ λ /api/yorkeway                                                                                
+  ├ λ /api/yorkeway/withdraw                                                                       
+  ├ ? /boardui-trial                                                                               
+  ├ ? /boardui-trial/workspace                                                                     
+  ├ ? /boardui-trial/yorke-way                                                                     
+  ├ ? /boardui-trial/yorke-way/signup                                                              
+  ├ ƒ /checkout/:slug                                                                              
+  ├ ƒ /event/:slug                                                                                 
+  ├ ƒ /events                                                                                      
+  ├ ƒ /help                                                                                        
+  ├ ƒ /hosts                                                                                       
+  ├ ƒ /hosts/:slug                                                                                 
+  ├ ? /my-nights                                                                                   
+  ├ ƒ /my-nights/:slug                                                                             
+  ├ ? /my-nights/access                                                                            
+  ├ ƒ /notifications                                                                               
+  ├ ? /organizer                                                                                   
+  ├ ƒ /organizer/activate                                                                          
+  ├ ƒ /organizer/analytics                                                                         
+  ├ ? /organizer/assistant                                                                         
+  ├ ? /organizer/join                                                                              
+  ├ ? /organizer/join/confirm                                                                      
+  ├ ƒ /organizer/submit                                                                            
+  ├ ? /organizer/team/accept                                                                       
+  ├ ƒ /organizer/workspace                                                                         
+  ├ ? /payment/return                                                                              
+  ├ ƒ /platform-announcements/unsubscribe                                                          
+  ├ ? /privacy                                                                                     
+  ├ ? /promoter                                                                                    
+  ├ ƒ /room/:slug                                                                                  
+  ├ ƒ /rsvp/:slug                                                                                  
+  ├ ? /rsvp/access                                                                                 
+  ├ ƒ /scan                                                                                        
+  ├ ƒ /scan/app                                                                                    
+  ├ ? /scan/install                                                                                
+  ├ ƒ /staff                                                                                       
+  ├ ? /staff/install                                                                               
+  ├ ? /terms                                                                                       
+  ├ ? /the-yorke-way                                                                               
+  ├ ? /the-yorke-way/unsubscribe                                                                   
+  └ ? /tickets                                                                                     
+
+  λ API  ƒ Dynamic  ? Unknown
+
+  ? Some routes could not be classified. vinext currently uses static analysis
+    and cannot detect dynamic API usage (headers(), cookies(), etc.) at build time.
+    Automatic classification will be improved in a future release.
+
+  Build complete. Run `vinext start` to start the production server.
+
+npm notice
+npm notice New major version of npm available! 11.9.0 -> 12.2.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+npm notice To update run: npm install -g npm@12.2.1
+npm notice

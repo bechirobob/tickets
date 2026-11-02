@@ -195,6 +195,28 @@ describe('Yorke Way isolated single opt-in', () => {
     expect(body.emailOwnershipVerified).toBe(false); expect(body.deliveryEnabled).toBe(false);
     expect(body.contacts.every(contact => !contact.verifiedAt)).toBe(true); expect(JSON.stringify(body)).not.toMatch(/withdrawal_hash|token_hash|yorkeway-welcome\//u);
   });
+  it('searches eligible contacts before cursor pagination and treats query text literally', async () => {
+    const prefix = `workspace-${crypto.randomUUID()}`;
+    for (let index = 0; index < 28; index++) {
+      const address = `${prefix}-${String(index).padStart(2, '0')}@example.test`;
+      fixtureEmails.add(address);
+      await captureYorkewaySignup(env.DB, { email: address, name: 'A searchable guest' });
+    }
+    const cookie = await staffCookie();
+    const load = async (q: string, after = '') => {
+      const response = await audience(new Request(`${origin}/api/admin/yorkeway-audience?${new URLSearchParams({ q, after })}`, { headers: { cookie } }));
+      expect(response.status).toBe(200);
+      return response.json() as Promise<{ contacts: { email: string }[]; matching: number; nextCursor: string | null }>;
+    };
+    const first = await load(prefix.toUpperCase());
+    expect(first.matching).toBe(28); expect(first.contacts).toHaveLength(25); expect(first.nextCursor).toBeTruthy();
+    const second = await load(prefix, first.nextCursor!);
+    expect(second.contacts).toHaveLength(3); expect(second.nextCursor).toBeNull();
+    expect(new Set([...first.contacts, ...second.contacts].map(contact => contact.email)).size).toBe(28);
+    expect((await load("%' OR 1=1 --")).matching).toBe(0);
+    await withdrawYorkewaySignup(env.DB, await withdrawalToken(first.contacts[0].email));
+    expect((await load(prefix)).matching).toBe(27);
+  });
   it('suppresses a queued welcome after withdrawal without a provider call', async () => {
     const address = email(); await captureYorkewaySignup(env.DB, { email: address, name: 'Guest' });
     await withdrawYorkewaySignup(env.DB, await withdrawalToken(address)); await retryFailedDeliveries(env);

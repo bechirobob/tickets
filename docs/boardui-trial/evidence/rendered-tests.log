@@ -1,0 +1,13 @@
+✔ keeps the production Worker configuration portable and preserves The Room (16.094661ms)
+✔ the Worker applies the production browser security baseline (7.935636ms)
+✔ does not ship editor preview metadata or workspace paths in customer assets (7.840566ms)
+✔ ships the BeCore Tickets tab icon in modern and fallback formats (7.739337ms)
+✔ every RSC script and stylesheet points to an emitted client asset (70.920434ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 204.703459

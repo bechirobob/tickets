@@ -1,0 +1,32 @@
+[
+  {
+    "source": "scripts/customer-preview/serve.mjs",
+    "sourceSha256": "cf96f609870775b486e12322136a9edbd34154d9785ce5d61564152cacd2f160",
+    "temporaryAdapter": "scripts/customer-preview/.tmp-combined-serve.mjs",
+    "adapterSha256": "d188799fdd6575eb8db2b6fb67ca11fab04e8c578ccb191c80cc6e2879edd3fe"
+  },
+  {
+    "source": "scripts/customer-preview/check.mjs",
+    "sourceSha256": "d02cd7c3ac4f42e5b1ba637737c88f6a55fab5eed00bb0ab4826e683c2603bf2",
+    "temporaryAdapter": "scripts/customer-preview/.tmp-combined-check.mjs",
+    "adapterSha256": "a6f7d1f34f0012ba33c35be1a4cbabe3c649b1db78362c53eaa707cd15aab5ef"
+  },
+  {
+    "source": "scripts/boardui-integration/serve.mjs",
+    "sourceSha256": "2cab13e81993321f9258f57666c0470e67d0d31a3d664a57ec10055f620e9817",
+    "temporaryAdapter": "scripts/boardui-integration/.tmp-combined-serve.mjs",
+    "adapterSha256": "8ed4012e9b36116d1d61f0415ea5bde5c747f70a4ac8c1cac8449684c2d9a9ee"
+  },
+  {
+    "source": "scripts/boardui-integration/dashboard-check.mjs",
+    "sourceSha256": "37852ff3a4ef1e1d85da87cfd4d52f8904d96a5c8b60415a2dacd78a001b31e2",
+    "temporaryAdapter": "scripts/boardui-integration/.tmp-combined-dashboard.mjs",
+    "adapterSha256": "276c805048d7225c8b28b105a1c3561726cc142f2070f09a99352897b155dd2e"
+  },
+  {
+    "source": "scripts/boardui-integration/compiled-guards.mjs",
+    "sourceSha256": "2ce375b940c112787bc2fa9dc8d8826913abe2976633d059b1ae454cb3365ec6",
+    "temporaryAdapter": "scripts/boardui-integration/.tmp-combined-guards.mjs",
+    "adapterSha256": "b5d4b29c8cad4a4dbb738032714a061800344890f1f4d16ec0c34ca4c0f61aca"
+  }
+]

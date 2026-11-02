@@ -1,0 +1,92 @@
+
+> becore-tickets@0.1.0 test:tooling
+> node --test tests/tooling-glob.test.mjs tests/browser-environment.test.mjs
+
+✔ prepared image matches the root and mobile locked Playwright versions (5.54736ms)
+✔ readiness rejects mutable image tag (0.879499ms)
+✔ readiness rejects wrong image version (6.898409ms)
+✔ readiness rejects installed package mismatch (0.564657ms)
+✔ readiness rejects unreviewed Node runtime (0.29349ms)
+✔ readiness rejects wrong Linux distribution (0.304616ms)
+✔ readiness rejects wrong Ubuntu release (0.153295ms)
+✔ readiness rejects changed dependency lock (0.203378ms)
+✔ candidate-checks.yml/verify uses prepared browsers without installation (0.447506ms)
+✔ candidate-parallel-checks.yml/desktop_chromium uses prepared browsers without installation (3.539883ms)
+✔ candidate-parallel-checks.yml/mobile_chromium uses prepared browsers without installation (0.216978ms)
+✔ candidate-parallel-checks.yml/mobile_webkit uses prepared browsers without installation (0.110002ms)
+✔ tickets-code-release.yml/retired_preview uses prepared browsers without installation (0.105845ms)
+✔ booking-consent-previews.yml/preview uses prepared browsers without installation (0.200684ms)
+✔ customer-email-previews.yml/preview uses prepared browsers without installation (0.105225ms)
+✔ yorkeway-previews.yml/preview uses prepared browsers without installation (0.060699ms)
+✔ browser-followup.yml/verify uses prepared browsers without installation (0.079736ms)
+✔ input-modality-checks.yml/browser uses prepared browsers without installation (0.108259ms)
+✔ native-apps.yml/web-client uses prepared browsers without installation (0.165132ms)
+✔ focused browser diagnostics retain first failures without uploading green-run traces (0.650513ms)
+✔ privacy follow-up rejects a changed production identity and records both source revisions (15.29266ms)
+✔ ordinary deployment excludes only the finite reviewed tooling paths without changing its guards (1.123937ms)
+✔ existing maintenance covers both npm locks and pinned actions without automatic adoption (8.539554ms)
+✔ installed packages have the owned identities and pinned provider (3.280587ms)
+✔ ordinary extension discovery is ordered, file-only, and excludes hidden files (12.913985ms)
+✔ negative directory patterns prune descendants and normalize leading dots (4.4015ms)
+✔ explicit pattern priority and duplicate elimination survive per-pattern sorting (1.656157ms)
+✔ root directories include followed symlinks and their descendants (3.252957ms)
+✔ directory-suffix globs never return symlinks to regular files (3.661346ms)
+✔ absolute directory patterns keep absolute path forms (0.917334ms)
+✔ spy-provider guard: unknown option (0.433205ms)
+✔ spy-provider guard: invalid cwd (0.190219ms)
+✔ spy-provider guard: length boundary (0.701167ms)
+✔ spy-provider guard: length over boundary (0.075811ms)
+✔ spy-provider guard: aggregate boundary (3.360354ms)
+✔ spy-provider guard: aggregate over boundary (1.341706ms)
+✔ spy-provider guard: count boundary (1.236502ms)
+✔ spy-provider guard: count over boundary (2.399686ms)
+✔ spy-provider guard: nesting boundary (0.168597ms)
+✔ spy-provider guard: nesting over boundary (0.07554ms)
+✔ spy-provider guard: unclosed nesting rejected (0.04789ms)
+✔ spy-provider guard: mismatched closing delimiter rejected (0.050384ms)
+✔ spy-provider guard: mixed nesting rejected (0.063723ms)
+✔ spy-provider guard: escaped delimiters are not nesting (0.046338ms)
+✔ CJS dynamic import strict keeps js/ts precedence (20.450519ms)
+✔ CJS dynamic import strict keeps file/index precedence (3.879355ms)
+✔ CJS dynamic import strict keeps combined precedence (3.266567ms)
+✔ CJS dynamic import strict keeps cjs/mjs/js/ts precedence (2.74348ms)
+✔ CJS dynamic import strict keeps mjs/js precedence (2.464882ms)
+✔ CJS dynamic import strict keeps mjs/ts precedence (3.73243ms)
+✔ CJS dynamic import strict keeps cjs/index precedence (2.14958ms)
+✔ CJS dynamic import loose keeps js/ts precedence (1.995504ms)
+✔ CJS dynamic import loose keeps file/index precedence (2.065477ms)
+✔ CJS dynamic import loose keeps combined precedence (2.69509ms)
+✔ CJS dynamic import loose keeps cjs/mjs/js/ts precedence (2.091355ms)
+✔ CJS dynamic import loose keeps mjs/js precedence (2.295374ms)
+✔ CJS dynamic import loose keeps mjs/ts precedence (2.05386ms)
+✔ CJS dynamic import loose keeps cjs/index precedence (2.226472ms)
+✔ ESM dynamic import strict keeps js/ts precedence (6.875126ms)
+✔ ESM dynamic import strict keeps file/index precedence (2.236897ms)
+✔ ESM dynamic import strict keeps combined precedence (2.001784ms)
+✔ ESM dynamic import strict keeps cjs/mjs/js/ts precedence (1.985179ms)
+✔ ESM dynamic import strict keeps mjs/js precedence (1.873065ms)
+✔ ESM dynamic import strict keeps mjs/ts precedence (1.791756ms)
+✔ ESM dynamic import strict keeps cjs/index precedence (2.184471ms)
+✔ ESM dynamic import loose keeps js/ts precedence (2.269746ms)
+✔ ESM dynamic import loose keeps file/index precedence (1.994323ms)
+✔ ESM dynamic import loose keeps combined precedence (3.622378ms)
+✔ ESM dynamic import loose keeps cjs/mjs/js/ts precedence (1.858523ms)
+✔ ESM dynamic import loose keeps mjs/js precedence (2.052488ms)
+✔ ESM dynamic import loose keeps mjs/ts precedence (1.698268ms)
+✔ ESM dynamic import loose keeps cjs/index precedence (1.765477ms)
+✔ legacy callable and modern minimatch imports share the patched matching behavior (17.761479ms)
+✔ upgraded glob rejects an already-aborted traversal (1.147251ms)
+✔ pinned import lint rule preserves forbidden and allowed module matching (191.435718ms)
+ℹ tests 75
+ℹ suites 0
+ℹ pass 75
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 483.0242
+npm notice
+npm notice New major version of npm available! 11.9.0 -> 12.2.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+npm notice To update run: npm install -g npm@12.2.1
+npm notice

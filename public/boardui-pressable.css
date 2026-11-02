@@ -1,0 +1,6 @@
+/* Static equivalent of react-aria 3.48.0's injected pressable rule.
+   The matching link id in the trial page prevents duplicate inline injection.
+   Recheck against usePress on dependency upgrades; CSP remains unchanged. */
+@layer {
+  [data-react-aria-pressable] { touch-action: pan-x pan-y pinch-zoom; }
+}

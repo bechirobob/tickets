@@ -1,0 +1,11 @@
+{
+  "totals": {
+    "files": 200,
+    "bytes": 2404869,
+    "gzip": 671491
+  },
+  "previousIntegrationGzip": 667243,
+  "approvedTrialGzip": 663028,
+  "originalBaselineGzip": 577482,
+  "note": "Emitted JS/CSS totals including trial routes; dependency-corrected candidate differs from previous baseline lock. Not route-download or speed measurements."
+}
