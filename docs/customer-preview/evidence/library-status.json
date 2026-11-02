@@ -1,0 +1,6 @@
+{
+  "status": "failed before upload",
+  "reason": "hosted apps tools/list request failed: network",
+  "confirmedLibraryIds": [],
+  "retried": false
+}

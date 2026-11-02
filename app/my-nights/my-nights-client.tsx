@@ -109,9 +109,10 @@ export default function MyNightsClient() {
 
   function chooseView(next: View) {
     setView(next);
+    setQuery("");
     const url = new URL(window.location.href);
     url.searchParams.set("view", next);
-    window.history.replaceState(window.history.state, "", url);
+    if (next !== requestedView) window.history.pushState(window.history.state, "", url);
   }
   async function requestRecovery(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();

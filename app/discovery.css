@@ -281,3 +281,8 @@ dialog.ticket-transfer-modal :is(form, .ticket-return-card) { max-height: calc(1
 @media (max-width: 359px) {
   .discovery-explorer .drop-controls > .segmented-control.discovery-window { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* Keep applied refinements visible without another panel or a row of pills. */
+.discovery-active-filters { color: #eee9df; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 18px; border-bottom: 1px solid #746779; }
+.discovery-active-filters p { min-width: 0; overflow-wrap: anywhere; font-size: 14px; }
+.discovery-active-filters button { flex-shrink: 0; min-height: 44px; padding: 8px; border: 0; background: transparent; color: inherit; font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }

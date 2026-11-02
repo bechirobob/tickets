@@ -31,3 +31,7 @@
 @media (max-width: 640px) {
   .checkout-consents { margin-left: 0; }
 }
+
+/* Validation stays beside the delivery field when the mobile summary is below it. */
+.checkout-page .checkout-field-error { color: #9c2d0b; font-size: 14px; line-height: 1.5; font-weight: 400; }
+.checkout-page .form-grid input[aria-invalid="true"] { border-color: #9c2d0b; }
