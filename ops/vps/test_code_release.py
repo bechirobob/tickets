@@ -3629,7 +3629,139 @@ def scanner_dependency_source_family(root):
 
 
 
+COMBINED_TEST_FILE = Path(__file__).resolve()
+COMBINED_OPERATOR_BLOB = 'c19b3ac97e456b22ac847f9539e04f306fcef9b7'
+COMBINED_STAGED_PINS = {'.github/scripts/verify-audit-control.py': ('100644', '87cd21e095c76efc9e607484b8c0836db9bc58b5'),
+ '.github/scripts/verify-caption-control.py': ('100644', '19366f37243794bba916dd6cff0b7731aaec8f1c'),
+ '.github/workflows/candidate-checks.yml': ('100644', 'fce0c733744bf53af146a1c707d347935ce80fd3'),
+ '.github/workflows/candidate-parallel-checks.yml': ('100644', '7256549ed343b8308553c01f8591379515460c28'),
+ '.github/workflows/deploy.yml': ('100644', '268260bd7642ee1430568aaeeff0a788389535e8'),
+ '.github/workflows/tickets-code-release.yml': ('100644', 'f7877dec7c650e4a14600c3c24347444e38aefed'),
+ '.github/workflows/tickets-release-operator-checks.yml': ('100644', 'df578c820a2102b6749c2296a1933a47e494f52e'),
+ '.github/workflows/vps-runtime.yml': ('100644', '1828a8f0a00aa407a3f5bd9fa1f8c650e70b3a08'),
+ 'ops/email/mailer.py': ('100644', 'e5abf1bda64ea8b3b6829df09eed22bf81ac78bb'),
+ 'ops/vps/audit-readiness.py': ('100644', '2cc3374dade0210e76b386ce7387cd51fdc02f05'),
+ 'ops/vps/backup.mjs': ('100644', 'ca2c1a0fa1aa4cb075fa0b90d9d46218666c7967'),
+ 'ops/vps/becore-tickets-preview.service': ('100644', '889233505917ae749ee276050d7f9060c975ed4a'),
+ 'ops/vps/becore-tickets-retention.service': ('100644', '68f4ab992f05742a086f23af7983f9c5561b1b13'),
+ 'ops/vps/becore-tickets-retention.timer': ('100644', '7d77baf5059b0fc725976e8d4eceeb53a53ed2ff'),
+ 'ops/vps/candidate_build.py': ('100644', '5207b85c785f8dff938af5ce32c4a5c38abb7b1c'),
+ 'ops/vps/candidate_evidence.py': ('100644', 'd65fcd4941bf8b2b5eb7eadae1e92fcd13d0b3ba'),
+ 'ops/vps/code-release.py': ('100644', 'f7f14c990174d872451ea14ea26f1e3680462a1b'),
+ 'ops/vps/initialize-preview.mjs': ('100644', '6171616a2d73ed536aad0896d3016d2d41a6ba95'),
+ 'ops/vps/inspect-bounce-codes-readonly.py': ('100644', '6e344e7047c9897047c9dffda27e0f699d25e893'),
+ 'ops/vps/inspect-mail-service-readonly.py': ('100644', '819baa97ef82c687c52ed288daf49db6486f0a21'),
+ 'ops/vps/install-preview.py': ('100644', '0fb837d72409234a074b2891c784f0f7605e600f'),
+ 'ops/vps/journal-limits.conf': ('100644', 'bd9c88d6d78144830b5d4ce26dce2d86825b84e5'),
+ 'ops/vps/operator_evidence.py': ('100644', 'c13b14b53d9310c71b9ca99b23fbf1b072471c00'),
+ 'ops/vps/parallel_candidate.py': ('100644', 'a63444b9c650da5a13c770efd2a286af634304f4'),
+ 'ops/vps/parallel_candidate_control.py': ('100644', '28fce119dc22b65780a3461ca5da9d1b435bca46'),
+ 'ops/vps/parallel_candidate_retry.py': ('100644', 'f77d1c006859176c20f629e94084fd97badc2436'),
+ 'ops/vps/parallel_candidate_retry_control.py': ('100644', '34c65b714662acaea3e97729fb39b741965e3512'),
+ 'ops/vps/prepare-origin.py': ('100644', '8939073562dd7e73073f092a09c3c973003c6b63'),
+ 'ops/vps/public_runtime_guard.py': ('100644', '9a9739f1bd88cbd02dc420001efa3de5b85e3538'),
+ 'ops/vps/recover-puro-first-host-20261024.py': ('100644', 'e4d2fecee02ad2b24304beec755f1b161ad6b4b0'),
+ 'ops/vps/recovery_maintenance.py': ('100644', '8c248256b21378cfa650e98985244351cdbb8c80'),
+ 'ops/vps/recovery_maintenance_test_support.py': ('100644', 'd9ad0e89b53381f8d188d0c867de6d4d4b5f5517'),
+ 'ops/vps/restore-backup.mjs': ('100644', '0a05f18c17205ef4c2f59e2d50bd06180035b8c6'),
+ 'ops/vps/retention.py': ('100644', '9ab0304f00d2a96fd6fbb8e4c992d96db5eb08a1'),
+ 'ops/vps/runtime_release.py': ('100644', '043e310a41ff28d23adc20383c88566b181232a6'),
+ 'ops/vps/test_audit_readiness.py': ('100644', '7a431017c03e99ad0b358b17399b1313cd935606'),
+ 'ops/vps/test_bounce_codes_readonly.py': ('100644', '6d105f85df2362711ab5b128592d3d3a18342d02'),
+ 'ops/vps/test_candidate_build.py': ('100644', '96dd4740c985cddf2e99b6e9dbeeecb194a6062b'),
+ 'ops/vps/test_candidate_evidence.py': ('100644', '5683f38b8cb10b02abc687f35be02a8a6749b996'),
+ 'ops/vps/test_code_release.py': ('100644', 'c2cf5f6fc323163dec5b0dbbbeadca5039fdd3cc'),
+ 'ops/vps/test_first_host_recovery.py': ('100644', '9f9579d7ffa30b54249a5126b85f60032c9f7d05'),
+ 'ops/vps/test_mail_service_readonly.py': ('100644', 'f02a6d1e30d0dfe464af9d3d4ade87726e67eb94'),
+ 'ops/vps/test_mail_upgrade.py': ('100644', 'bed5cdca2491fe06345044f395721d82b09029e0'),
+ 'ops/vps/test_operator_evidence.py': ('100644', '635df0cd5cb58ce1dc4f7d240c9f85a9b035695c'),
+ 'ops/vps/test_parallel_admission.py': ('100644', 'ec9fc0edd8abc210749b4eb6f962ad8a898dd4a8'),
+ 'ops/vps/test_parallel_candidate.py': ('100644', '808359153e33f74681056bba586dbcf7c8df7601'),
+ 'ops/vps/test_parallel_candidate_control.py': ('100644', '87dac06c7b8f71332e32e89a1e2858d5f849abf6'),
+ 'ops/vps/test_parallel_candidate_retry.py': ('100644', 'af3d5e1b510d0f900b138a7fac3987b8d9d1ba3a'),
+ 'ops/vps/test_parallel_candidate_retry_control.py': ('100644', 'f52727b48b1e2308ccbd07c0e432ad607875bf20'),
+ 'ops/vps/test_parallel_retry_admission.py': ('100644', 'd05626f3051a39d2a787b4da1874c37f95cb0da1'),
+ 'ops/vps/test_parallel_source_family.py': ('100644', '54ac92e721b51dda03bca69862816fa78d1c0737'),
+ 'ops/vps/test_pink_edition.py': ('100644', 'be26c898ac1e19f7f737dbe5112c5e40b6e90c68'),
+ 'ops/vps/test_public_runtime_guard.py': ('100644', 'eb1fd8a6909c7c0634326da1d35c7a4606fbebe7'),
+ 'ops/vps/test_recovery_maintenance.py': ('100644', 'ebf88843a6b76f818426c2f41a578d66a89634de'),
+ 'ops/vps/test_release_approval.py': ('100644', '48a8e82d6bf64e21a8bd5f99719f6f0d1022de6f'),
+ 'ops/vps/test_release_source.py': ('100644', 'ec8a7a5bbbe585941583f50624823b85ec51e586'),
+ 'ops/vps/test_retention.py': ('100644', 'f35d71212ec6ae521e3144c57e708297c513dce0'),
+ 'ops/vps/test_runtime_packaging.py': ('100644', '6f215f441ff1d9b92b3c870a6f438a54e5ccc1a1'),
+ 'ops/vps/test_runtime_release.py': ('100644', '210a2cd8f445c0fc2e0716fa8bcbbe00dbd48a14'),
+ 'ops/vps/test_runtime_workflow_contract.py': ('100644', 'e51855add54a576f91744607bf9e7fffd90e1217'),
+ 'ops/vps/test_yorkeway_mail_upgrade.py': ('100644', 'e3cfbdcb713204e0c71c13ff40fb3d4eb3bf5c89'),
+ 'ops/vps/test_yorkeway_release.py': ('100644', '4ccb75cb49ae7a9604e29986f186dac521ec36e8'),
+ 'ops/vps/upgrade-room-mail.py': ('100644', '0f8b77d5bf2ed3df86a17475923cd1ea5a0d1358'),
+ 'ops/vps/upgrade-yorkeway-mail.py': ('100644', '9c3fc4896f10e25eb61b7937eea2035b0757ad4f'),
+ 'scripts/audit-checkbox-hotfix.py': ('100644', '5313d8cdc4076b36d434fe8017cc0e7b4824e876'),
+ 'scripts/audit-release-dependencies.py': ('100644', '47c7951e8db95ac666680bd2bf32fde3f1748c8e'),
+ 'scripts/audit-release-manifest.json': ('100644', 'bcb787e744f9fc5fc201e8068d553c1543b35b86'),
+ 'scripts/caption-source-manifest.json': ('100644', '1b178a1a371ae047f8bf26498d249e272c11497d'),
+ 'scripts/verify-audit-release-source.py': ('100644', '129d7bdbd2d631ad385a9edd7be4ea9895f173cf'),
+ 'scripts/verify-caption-source.py': ('100644', 'fa474c5d8cfaad8df53e77004c063e1511ed0b68'),
+ 'tests/test_audit_release_dependencies.py': ('100644', '6983998bf40fc1cb424e6dafbb7ba35e5653336d'),
+ 'tests/test_audit_release_source.py': ('100644', '6516f3f4b8582d3874ceda34e1fc3e3b799fec8d'),
+ 'tests/test_caption_source.py': ('100644', '6871fcc1ab410acaa74d8bd953ac9e0e61f4f670'),
+ 'tests/test_checkbox_hotfix_audit.py': ('100644', '421ec5fd992b1ba258e357ff4a65f6c3a647d2ce')}
+
+
+def combined_source_family(root):
+    root = Path(root)
+    digest = lambda raw: release.hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
+    operator = root/'ops/vps/code-release.py'
+    selected = (root/'ops/vps/test_code_release.py').resolve() == COMBINED_TEST_FILE
+    marked = operator.is_file() and not operator.is_symlink() and digest(operator.read_bytes()) == COMBINED_OPERATOR_BLOB
+    if not selected and not marked:
+        return None
+    controls = {'ops/vps/code-release.py': ('100644', COMBINED_OPERATOR_BLOB),
+                'ops/vps/test_code_release.py': ('100644', digest(COMBINED_TEST_FILE.read_bytes()))}
+    full = os.path.lexists(root/'package.json') or os.path.lexists(root/'app')
+    if full:
+        choices = []
+        for revision, tree in ((release.COMBINED_BASE, release.COMBINED_BASE_TREE),
+                               (release.COMBINED_SNAPSHOT, release.COMBINED_SNAPSHOT_TREE)):
+            if checkout_git(root, 'rev-parse', revision+'^{tree}').decode().strip() != tree:
+                raise AssertionError('Combined reviewed tree differs')
+            manifest = {}
+            for record in checkout_git(root, 'ls-tree', '-rz', '--full-tree', revision).split(b'\0'):
+                if record:
+                    meta, name = record.split(b'\t', 1); mode, kind, blob = meta.decode().split()
+                    if kind != 'blob' or mode not in ('100644', '100755'):
+                        raise AssertionError('Combined unsupported file mode')
+                    manifest[os.fsdecode(name)] = (mode, blob)
+            manifest.update(controls); choices.append(manifest)
+        index = {}
+        for record in checkout_git(root, 'ls-files', '--stage', '-z').split(b'\0'):
+            if record:
+                meta, name = record.split(b'\t', 1); mode, blob, stage = meta.decode().split()
+                if stage != '0': raise AssertionError('Combined unmerged index')
+                index[os.fsdecode(name)] = (mode, blob)
+        if checkout_git(root, 'ls-files', '--others', '--exclude-standard', '-z') or index not in choices:
+            raise AssertionError('Combined complete index inventory differs')
+        manifest = index
+    else:
+        manifest = dict(COMBINED_STAGED_PINS, **controls)
+        validate_staged_inventory(root, manifest)
+    for name, (mode, blob) in manifest.items():
+        path = root/name
+        try:
+            metadata = path.lstat()
+            if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1 or bool(metadata.st_mode & 0o111) != (mode == '100755') or any(parent.is_symlink() for parent in (path, *path.parents)):
+                raise AssertionError('Combined source requires regular files and exact modes')
+            raw = path.read_bytes()
+            if name == 'mobile/android/gradlew.bat': raw = raw.replace(b'\r\n', b'\n')
+            if digest(raw) != blob: raise AssertionError('Combined source bytes differ: '+name)
+        except OSError as error:
+            raise AssertionError('Combined source incomplete') from error
+    return {name: blob for name, (_, blob) in manifest.items()}
+
+
 def checkout_source_family(root):
+    combined = combined_source_family(root)
+    if combined is not None:
+        return combined
     dependencies = scanner_dependency_source_family(root)
     if dependencies is not None:
         return dependencies
@@ -14000,7 +14132,7 @@ class FirstHostConfigurationTests(unittest.TestCase):
 
     def test_workflow_activation_is_default_off_step_local_stdin_only(self):
         family = checkout_source_family(Path(__file__).resolve().parents[2])
-        if family.get('ops/vps/code-release.py') in (SCANNER_DEPS_CONTROL_PINS['ops/vps/code-release.py'][1], SCANNER_CONTROL_PINS['ops/vps/code-release.py'][1], STAFF_APP_CONTROL_PINS['ops/vps/code-release.py'][1], AUDIT_CONTROL_PINS['ops/vps/code-release.py'][1], STAFF_CONTROL_PINS['ops/vps/code-release.py'][1], ROOM_MAIL_VPS_OPERATOR_BLOB, YORKEWAY_OPERATOR_BLOB, OWNER_PUSH_OPERATOR_BLOB, SECURITY_OPERATOR_BLOB, PARALLEL_GATE_OUTPUTS['ops/vps/code-release.py'][1], DOWNLOAD_RETRY_OUTPUTS['ops/vps/code-release.py'][1]):
+        if family.get('ops/vps/code-release.py') in (COMBINED_OPERATOR_BLOB, SCANNER_DEPS_CONTROL_PINS['ops/vps/code-release.py'][1], SCANNER_CONTROL_PINS['ops/vps/code-release.py'][1], STAFF_APP_CONTROL_PINS['ops/vps/code-release.py'][1], AUDIT_CONTROL_PINS['ops/vps/code-release.py'][1], STAFF_CONTROL_PINS['ops/vps/code-release.py'][1], ROOM_MAIL_VPS_OPERATOR_BLOB, YORKEWAY_OPERATOR_BLOB, OWNER_PUSH_OPERATOR_BLOB, SECURITY_OPERATOR_BLOB, PARALLEL_GATE_OUTPUTS['ops/vps/code-release.py'][1], DOWNLOAD_RETRY_OUTPUTS['ops/vps/code-release.py'][1]):
             # Only the exact new family may add this public archive dependency.
             # Reconstruct the original bytes before keeping its historical pin.
             name = '.github/workflows/tickets-code-release.yml'
@@ -16301,6 +16433,118 @@ class HygieneDeployTriggerTests(unittest.TestCase):
         raw = (Path(__file__).resolve().parents[2] / name).read_bytes()
         for changed in [raw + b'# changed\n', raw.replace(b"'tests/staff-app-launch.test.mjs'", b"'tests/**'")]:
             self.assertEqual(download_retry_historical_workflow(name, changed), changed)
+
+
+
+
+class CombinedAdmissionTests(unittest.TestCase):
+    git = ScannerDependencyAdmissionTests.git
+    write = ScannerDependencyAdmissionTests.write
+    commit = ScannerDependencyAdmissionTests.commit
+    patch = ScannerDependencyAdmissionTests.patch
+
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory(); self.addCleanup(self.directory.cleanup)
+        self.root = Path(self.directory.name)
+        self.git('init', '-q'); self.git('config', 'user.email', 'fixture@example.invalid'); self.git('config', 'user.name', 'Fixture')
+        self.controls = set(release.COMBINED_CONTROLS)
+        for name in self.controls | {'package.json', 'app/page.tsx', 'stable.txt'}: self.write(name, 'live\n')
+        self.live = self.commit()
+        self.write('ops/vps/maintenance.py', 'reviewed maintenance\n'); self.base = self.commit()
+        self.write('app/page.tsx', 'reviewed combined app\n'); self.write('docs/proof.md', 'reviewed evidence\n'); self.snapshot = self.commit()
+        self.git('checkout', '-q', self.base)
+        for name in self.controls: self.write(name, 'independent controls\n')
+        self.control = self.commit(); self.git('update-ref', 'refs/remotes/origin/main', self.control)
+        self.git('merge', '-q', '--no-ff', '-m', 'combined', self.snapshot); self.source = self.git('rev-parse', 'HEAD')
+        for name,value in {'COMBINED_LIVE':self.live, 'COMBINED_BASE':self.base, 'COMBINED_BASE_TREE':self.git('rev-parse', self.base+'^{tree}'), 'COMBINED_SNAPSHOT':self.snapshot, 'COMBINED_SNAPSHOT_TREE':self.git('rev-parse', self.snapshot+'^{tree}'), '__file__':str(self.root/'ops/vps/code-release.py')}.items(): self.patch(release,name,value)
+        environment=patch.dict(os.environ,BECORE_TRUSTED_BASE=self.control);environment.start();self.addCleanup(environment.stop)
+        previous=os.getcwd();os.chdir(self.root);self.addCleanup(os.chdir,previous)
+
+    def verify(self): return release.reviewed_combined_application_blobs(self.live,self.git('rev-parse','HEAD'))
+
+    def test_exact_combined_tree_with_independent_controls_passes(self):
+        pins=self.verify();self.assertEqual(pins['app/page.tsx'],self.git('rev-parse',self.snapshot+':app/page.tsx'))
+        self.assertEqual(release.reviewed_application_blobs(self.live,self.source),pins)
+
+    def test_every_path_including_unchanged_and_control_bytes_rejects_mutation(self):
+        for name in self.verify():
+            with self.subTest(name=name):
+                self.git('reset','--hard',self.source);self.write(name,'unreviewed\n');self.commit()
+                with self.assertRaises(release.ReleaseError):self.verify()
+
+    def test_extra_missing_executable_and_symlink_paths_reject(self):
+        for kind in ('extra','missing','executable','symlink'):
+            with self.subTest(kind=kind):
+                self.git('reset','--hard',self.source);target=self.root/'app/page.tsx'
+                if kind=='extra':self.write('app/boardui-trial/page.tsx','demo\n')
+                elif kind=='missing':target.unlink()
+                elif kind=='executable':target.chmod(0o755)
+                else:target.unlink();target.symlink_to('../stable.txt')
+                self.commit()
+                with self.assertRaises(release.ReleaseError):self.verify()
+                self.git('reset','--hard',self.source)
+
+    def test_tree_pins_and_wrong_live_reject(self):
+        for name in ('COMBINED_BASE_TREE','COMBINED_SNAPSHOT_TREE'):
+            with self.subTest(name=name),patch.object(release,name,'f'*40):
+                with self.assertRaises(release.ReleaseError):self.verify()
+        with self.assertRaises(release.ReleaseError):release.reviewed_combined_application_blobs(self.base,self.source)
+
+    def test_unmerged_self_trusted_or_missing_snapshot_ancestry_reject(self):
+        for trusted in (self.base,self.snapshot,self.source):
+            with self.subTest(trusted=trusted),patch.dict(os.environ,BECORE_TRUSTED=trusted,BECORE_TRUSTED_BASE=trusted):
+                with self.assertRaises((release.ReleaseError,subprocess.CalledProcessError)):self.verify()
+        self.git('update-ref','refs/remotes/origin/main',self.live)
+        with self.assertRaises(subprocess.CalledProcessError):self.verify()
+        self.git('update-ref','refs/remotes/origin/main',self.control)
+        self.git('checkout','-q',self.control)
+        with self.assertRaises(subprocess.CalledProcessError):self.verify()
+
+    def test_trusted_branch_cannot_smuggle_noncontrol_change(self):
+        self.git('checkout','-q',self.control);self.write('stable.txt','smuggled\n');bad=self.commit()
+        self.git('update-ref','refs/remotes/origin/main',bad)
+        self.git('merge','-q','--no-ff','-m','bad combined',self.snapshot)
+        with patch.dict(os.environ,BECORE_TRUSTED_BASE=bad):
+            with self.assertRaisesRegex(release.ReleaseError,'outside'):self.verify()
+
+
+
+    def test_complete_checkout_rejects_index_worktree_and_untracked_changes(self):
+        module=sys.modules[__name__]
+        with patch.object(module,'COMBINED_TEST_FILE',self.root/'ops/vps/test_code_release.py'), patch.object(module,'COMBINED_OPERATOR_BLOB',self.git('rev-parse',self.control+':ops/vps/code-release.py')):
+            self.assertIsNotNone(combined_source_family(self.root))
+            for mutation in ('worktree','index','untracked','symlink','hardlink'):
+                with self.subTest(mutation=mutation):
+                    self.git('reset','--hard',self.source);self.git('clean','-fd')
+                    target=self.root/'app/page.tsx';outside=self.root.parent/(self.root.name+'-link')
+                    try:
+                        if mutation=='untracked':self.write('extra.txt','unreviewed')
+                        elif mutation=='symlink':target.unlink();target.symlink_to('../stable.txt')
+                        elif mutation=='hardlink':os.link(target,outside)
+                        else:
+                            self.write('app/page.tsx','changed')
+                            if mutation=='index':self.git('add','app/page.tsx')
+                        with self.assertRaises(AssertionError):combined_source_family(self.root)
+                    finally:
+                        if outside.exists():outside.unlink()
+
+    def test_staged_control_inventory_rejects_extra_missing_and_modified_bytes(self):
+        stage=self.root/'stage';stage.mkdir()
+        for name in self.controls:
+            target=stage/name;target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes((self.root/name).read_bytes())
+        module=sys.modules[__name__]
+        with patch.object(module,'COMBINED_TEST_FILE',stage/'ops/vps/test_code_release.py'), patch.object(module,'COMBINED_OPERATOR_BLOB',self.git('rev-parse',self.control+':ops/vps/code-release.py')), patch.object(module,'COMBINED_STAGED_PINS',{}):
+            self.assertIsNotNone(combined_source_family(stage))
+            target=stage/'ops/vps/code-release.py';raw=target.read_bytes()
+            for mutation in ('extra','missing','bytes','mode'):
+                with self.subTest(mutation=mutation):
+                    if mutation=='extra':(stage/'extra').write_text('extra')
+                    elif mutation=='missing':target.unlink()
+                    elif mutation=='bytes':target.write_bytes(raw+b'changed')
+                    else:target.chmod(0o755)
+                    with self.assertRaises(AssertionError):combined_source_family(stage)
+                    if (stage/'extra').exists():(stage/'extra').unlink()
+                    target.write_bytes(raw);target.chmod(0o644)
 
 
 if __name__ == "__main__":
