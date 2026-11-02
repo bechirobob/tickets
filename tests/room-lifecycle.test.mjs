@@ -63,7 +63,7 @@ function mountResponsiveUpdates() {
   const window = new EventTarget(), document = new EventTarget(), media = new EventTarget();
   media.matches = false; document.visibilityState = 'visible';
   window.matchMedia = query => { assert.equal(query, '(max-width: 700px)'); return media; };
-  const clock = clockFor(window), requests = [], slots = [], effects = new Map();
+  const clock = clockFor(window), requests = [], slots = [], effects = new Map(), layoutEffects = new Map();
   const viewportSource = dockSource.slice(dockSource.indexOf('const dockMediaQuery'), dockSource.indexOf('export default function CustomerDock'));
   const viewport = runInNewContext(compile(viewportSource + '\n({ subscribeToDockViewport, dockIsVisible, serverDockIsVisible });'), { window });
   let cursor = 0, api, enabled = false;
@@ -77,6 +77,7 @@ function mountResponsiveUpdates() {
     useRef(value) { const index = cursor++; return slots[index] ??= { current: value }; },
     useState(value) { const index = cursor++; const state = slots[index] ??= { value }; return [state.value, next => { state.value = typeof next === 'function' ? next(state.value) : next; }]; },
     useCallback: (fn, deps) => memo(fn, deps, false), useMemo: (fn, deps) => memo(fn, deps, true),
+    useLayoutEffect(setup, dependencies) { const index = cursor++; if (!equal(slots[index]?.dependencies, dependencies)) layoutEffects.set(index, { setup, dependencies }); },
     useEffect(setup, dependencies) { const index = cursor++; if (!equal(slots[index]?.dependencies, dependencies)) effects.set(index, { setup, dependencies }); },
   };
   const component = { exports: {} };
@@ -88,7 +89,9 @@ function mountResponsiveUpdates() {
     },
   });
   const render = () => {
-    cursor = 0; effects.clear(); api = component.exports.useRoomUpdates(enabled, '/events');
+    cursor = 0; effects.clear(); layoutEffects.clear(); api = component.exports.useRoomUpdates(enabled, '/events');
+    for (const index of layoutEffects.keys()) slots[index]?.cleanup?.();
+    for (const [index, effect] of layoutEffects) slots[index] = { ...effect, cleanup: effect.setup() };
     for (const index of effects.keys()) slots[index]?.cleanup?.();
     for (const [index, effect] of effects) slots[index] = { ...effect, cleanup: effect.setup() };
   };
