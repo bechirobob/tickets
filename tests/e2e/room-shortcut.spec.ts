@@ -62,7 +62,8 @@ test('Room summaries do not poll behind the desktop breakpoint and refresh on mo
     mark('before-mobile-viewport');
     await page.setViewportSize({ width: 700, height: 800 });
     mark('after-mobile-viewport');
-    const room = dock.getByRole('link', { name: 'Room, 2 new updates' });
+    // Count actual private DOM removal at desktop width, not CSS-hidden role matches.
+    const room = dock.getByRole('link', { name: 'Room, 2 new updates', includeHidden: true });
     await expect(room).toBeVisible(); mark('before-mobile-count-assertion'); expect(requests).toBe(1);
     mark('before-mobile-fast-forward');
     await page.clock.fastForward(30_000); mark('before-mobile-poll-assertion'); await expect.poll(() => requests).toBe(2);
