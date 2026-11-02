@@ -3630,7 +3630,7 @@ def scanner_dependency_source_family(root):
 
 
 COMBINED_TEST_FILE = Path(__file__).resolve()
-COMBINED_OPERATOR_BLOB = 'c19b3ac97e456b22ac847f9539e04f306fcef9b7'
+COMBINED_OPERATOR_BLOB = '6c8a068b4f647b9e11e24c8aca4db7d701725498'
 COMBINED_STAGED_PINS = {'.github/scripts/verify-audit-control.py': ('100644', '87cd21e095c76efc9e607484b8c0836db9bc58b5'),
  '.github/scripts/verify-caption-control.py': ('100644', '19366f37243794bba916dd6cff0b7731aaec8f1c'),
  '.github/workflows/candidate-checks.yml': ('100644', 'fce0c733744bf53af146a1c707d347935ce80fd3'),
@@ -16449,9 +16449,13 @@ class CombinedAdmissionTests(unittest.TestCase):
         self.git('init', '-q'); self.git('config', 'user.email', 'fixture@example.invalid'); self.git('config', 'user.name', 'Fixture')
         self.controls = set(release.COMBINED_CONTROLS)
         for name in self.controls | {'package.json', 'app/page.tsx', 'stable.txt'}: self.write(name, 'live\n')
+        self.corrections = ('scripts/build-vps.mjs', 'tests/browser-environment.test.mjs', 'tests/e2e/registration.spec.ts', 'tests/vps-runtime-packaging.test.mjs')
+        for name in self.corrections: self.write(name, 'before correction\n')
         self.live = self.commit()
         self.write('ops/vps/maintenance.py', 'reviewed maintenance\n'); self.base = self.commit()
-        self.write('app/page.tsx', 'reviewed combined app\n'); self.write('docs/proof.md', 'reviewed evidence\n'); self.snapshot = self.commit()
+        self.write('app/page.tsx', 'reviewed combined app\n'); self.write('docs/proof.md', 'reviewed evidence\n')
+        for name in self.corrections: self.write(name, 'reviewed correction\n')
+        self.snapshot = self.commit()
         self.git('checkout', '-q', self.base)
         for name in self.controls: self.write(name, 'independent controls\n')
         self.control = self.commit(); self.git('update-ref', 'refs/remotes/origin/main', self.control)
@@ -16471,6 +16475,13 @@ class CombinedAdmissionTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.git('reset','--hard',self.source);self.write(name,'unreviewed\n');self.commit()
                 with self.assertRaises(release.ReleaseError):self.verify()
+
+    def test_partial_or_reverted_corrections_reject(self):
+        for name in self.corrections:
+            with self.subTest(name=name):
+                self.git('reset', '--hard', self.source)
+                self.write(name, self.git('show', self.live + ':' + name) + '\n'); self.commit()
+                with self.assertRaises(release.ReleaseError): self.verify()
 
     def test_extra_missing_executable_and_symlink_paths_reject(self):
         for kind in ('extra','missing','executable','symlink'):
