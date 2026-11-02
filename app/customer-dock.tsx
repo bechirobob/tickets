@@ -17,14 +17,11 @@ const dockIsVisible = () => window.matchMedia(dockMediaQuery).matches;
 const serverDockIsVisible = () => false;
 const subscribeToDockViewport = (changed: () => void) => {
   const media = window.matchMedia(dockMediaQuery);
-  const observed = () => {
-    (window as unknown as { __bctRoomTrace?: (record: Record<string, unknown>) => void }).__bctRoomTrace?.({ phase: 'dock-media-change', matches: media.matches });
-    changed();
-  };
-  media.addEventListener('change', observed);
+  media.addEventListener('change', changed);
+  // Resize also synchronizes browsers that omit a media-query change event.
   window.addEventListener('resize', changed);
   return () => {
-    media.removeEventListener('change', observed);
+    media.removeEventListener('change', changed);
     window.removeEventListener('resize', changed);
   };
 };
