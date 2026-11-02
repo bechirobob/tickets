@@ -33,6 +33,12 @@ on:
         required: false
         type: string
 
+      customer_empty_capture_only:
+        description: Capture only settled 390px WebKit empty discovery; not full verification
+        required: false
+        type: boolean
+        default: false
+
 permissions:
   contents: read
 
@@ -49,6 +55,7 @@ env:
 # deployable artifact, or a waiver of Candidate verification/security failures.
 jobs:
   preview:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/feat/customer-experience-20261102' && inputs.customer_empty_capture_only) }}
     runs-on: ubuntu-24.04
     container:
       image: mcr.microsoft.com/playwright:v1.62.1-noble@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e
@@ -225,12 +232,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        engine: [chromium, webkit]
+        engine: ${{ fromJSON(inputs.customer_empty_capture_only && '["webkit"]' || '["chromium","webkit"]') }}
     defaults:
       run:
         shell: bash
     env:
       EXPECTED_CUSTOMER_SOURCE: ${{ inputs.expected_customer_source }}
+      CUSTOMER_CAPTURE_ONLY: ${{ inputs.customer_empty_capture_only && 'empty-mobile' || '' }}
       CUSTOMER_BROWSER: ${{ matrix.engine }}
       CUSTOMER_EVIDENCE_DIR: outputs/customer-compiled-${{ matrix.engine }}
     steps:
@@ -260,7 +268,7 @@ jobs:
         if: ${{ !cancelled() && (steps.customer_ui.outcome == 'success' || steps.customer_ui.outcome == 'failure') }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: customer-compiled-${{ github.sha }}-${{ matrix.engine }}
+          name: ${{ inputs.customer_empty_capture_only && 'customer-empty' || 'customer-compiled' }}-${{ github.sha }}-${{ matrix.engine }}
           path: |
             outputs/customer-compiled-${{ matrix.engine }}/*.png
             outputs/customer-compiled-${{ matrix.engine }}/*.json

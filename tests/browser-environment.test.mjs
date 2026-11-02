@@ -208,7 +208,11 @@ test('customer compiled preview is exact-source diagnostic only with prepared br
   const job = workflow.jobs.customer_compiled;
   assert.equal(workflow.permissions.contents, 'read');
   assert.equal(job.if, "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/feat/customer-experience-20261102'");
-  assert.deepEqual(job.strategy.matrix.engine, ['chromium', 'webkit']);
+  assert.match(job.strategy.matrix.engine, /fromJSON\(inputs\.customer_empty_capture_only/);
+  assert.match(job.strategy.matrix.engine, /\["webkit"\]/);
+  assert.match(job.strategy.matrix.engine, /\["chromium","webkit"\]/);
+  assert.equal(workflow.on.workflow_dispatch.inputs.customer_empty_capture_only.default, false);
+  assert.match(workflow.jobs.preview.if, /inputs\.customer_empty_capture_only/);
   const gate = job.steps.find(step => step.name?.startsWith('Bind diagnostic'));
   assert.match(gate.run, /test "\$EXPECTED_CUSTOMER_SOURCE" = "\$GITHUB_SHA"/);
   assert.match(gate.run, /test -z "\$\{E2E_BASE_URL:-\}"/);
