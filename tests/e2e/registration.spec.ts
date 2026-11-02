@@ -3,6 +3,36 @@ import AxeBuilder from '@axe-core/playwright';
 import { captureConsentPreview } from './booking-consent';
 import { eventColourSchemes, eventPresentationVariables } from '../../lib/event-palette';
 test.beforeEach(() => { test.skip(!test.info().config.configFile?.endsWith('playwright.registration.config.ts'), 'Requires isolated registration fixtures.'); });
+// Diagnostic-only bounded records; original interactions and assertions stay intact.
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    const events: unknown[] = [];
+    Object.assign(window, { __consentEvents: events });
+    for (const type of ['pointerdown', 'pointerup', 'click', 'touchstart', 'touchend', 'toggle']) {
+      document.addEventListener(type, event => {
+        const target = event.target instanceof Element ? event.target : null;
+        const arrival = document.querySelector<HTMLElement>('[data-testid="brand-arrival"]');
+        const record = { type, at: Math.round(performance.now()), target: target?.tagName, className: target?.getAttribute('class'), text: target?.closest('button, summary')?.textContent?.trim().slice(0, 100), arrivalHidden: arrival?.hidden, arrivalRunning: arrival?.hasAttribute('data-running'), prevented: false };
+        events.push(record); if (events.length > 40) events.shift();
+        queueMicrotask(() => { record.prevented = event.defaultPrevented; });
+      }, true);
+    }
+  });
+  page.on('pageerror', error => console.log('CONSENT_PAGE_ERROR', error.message));
+});
+test.afterEach(async ({ page }, info) => {
+  if (info.project.name !== 'mobile-webkit') return;
+  const state = await page.evaluate(() => ({
+    url: location.pathname, events: (window as unknown as { __consentEvents: unknown[] }).__consentEvents,
+    forms: document.querySelectorAll('.registration-form form').length,
+    nameInputs: document.querySelectorAll('input[name="guestName"]').length,
+    details: [...document.querySelectorAll<HTMLDetailsElement>('.registration-manage')].map(element => ({ open: element.open, text: element.textContent?.trim().slice(0, 160) })),
+    headings: [...document.querySelectorAll('h1, h2')].map(element => element.textContent),
+    arrival: document.querySelector('[data-testid="brand-arrival"]')?.outerHTML.slice(0, 180),
+  }));
+  console.log('CONSENT_DIAGNOSTIC ' + JSON.stringify({ test: info.title, status: info.status, state }));
+});
+
 test('direct registration links respect the saved mode and do not imply free admission for paid events',async({page})=>{
   await page.goto('/rsvp/the-weekend-braai');await expect(page.locator('.rsvp-signup__event .eyebrow')).toContainText('Paid registration');await expect(page.getByRole('heading',{name:'The host is putting the date together. RSVPs open soon.',exact:true})).toBeVisible();await expect(page.getByLabel('Your name')).toHaveCount(0);
   await page.goto('/rsvp/sun-chasers-labadi');await expect(page.getByLabel('Your name')).toBeVisible();await expect(page.getByText('Date drops & updates')).toBeVisible();
