@@ -1,0 +1,24 @@
+{
+  "mode": "full-journeys",
+  "sourceCommit": "49a77855da8bb663e91f21752b1d540381eebf62",
+  "helperSha256": "fa88f0b470d3cfab67c69028060aa592c0f610dc28008f7f647d4cc0ef36b9f9",
+  "lockSha256": "806a3c7c6a8ac1a4b569882757b9a5c03a9d901df34c268dca2f039eab09f8d7",
+  "scope": "Compiled application and dedicated local D1; ephemeral seeded attendee session for existing bookings, no API response mocks. Nonfunctional test provider key; outbound network blocked; no queue bindings.",
+  "checks": [],
+  "pageErrors": [],
+  "browserDiagnostics": [],
+  "blockedBrowserRequests": [],
+  "outboundAttempts": 0,
+  "cleanup": {
+    "temporaryDatabaseRemoved": true,
+    "persistentCredentialsCreated": false
+  },
+  "passed": true,
+  "transport": "https",
+  "webkit": {
+    "path": "/home/agent/.cache/ms-playwright/webkit-2336/pw_run.sh",
+    "available": false,
+    "status": "not run: installed executable unavailable; no download attempted"
+  },
+  "engine": "chromium"
+}

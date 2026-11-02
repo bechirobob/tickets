@@ -1,0 +1,755 @@
+{
+  "config": {
+    "argv": [
+      "/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node",
+      "/workspace/tickets-experience/node_modules/@playwright/test/cli.js",
+      "test",
+      "tests/e2e/mobile-app-behavior.spec.ts",
+      "tests/e2e/my-nights-studio.spec.ts",
+      "tests/e2e/public-journey.spec.ts",
+      "--config=.tmp-customer-e2e.config.ts",
+      "--grep=dense My Nights headers|plans filter, search and restore|narrow My Nights selectors|/event/.*flat, readable|/checkout/.*flat, readable",
+      "--workers=1",
+      "--retries=0"
+    ],
+    "configFile": "/workspace/tickets-experience/.tmp-customer-e2e.config.ts",
+    "rootDir": "/workspace/tickets-experience/tests/e2e",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": true,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/tmp/customer40-followup/screens",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "desktop-chromium",
+        "name": "desktop-chromium",
+        "testDir": "/workspace/tickets-experience/tests/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "/tmp/customer40-followup/screens",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "mobile-chromium",
+        "name": "mobile-chromium",
+        "testDir": "/workspace/tickets-experience/tests/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "/tmp/customer40-followup/screens",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "narrow-chromium",
+        "name": "narrow-chromium",
+        "testDir": "/workspace/tickets-experience/tests/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "/tmp/customer40-followup/playwright.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.62.1",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "mobile-app-behavior.spec.ts",
+      "file": "mobile-app-behavior.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "dense My Nights headers keep the full brand and separate 44px controls at narrow widths",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "desktop-chromium",
+              "projectName": "desktop-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3201,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-02T15:15:00.165Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "member-header-geometry.json",
+                      "contentType": "application/json",
+                      "body": "WwogIHsKICAgICJ3aWR0aCI6IDMyMCwKICAgICJiYWNrIjogewogICAgICAieCI6IDE4LAogICAgICAieSI6IDcuNSwKICAgICAgIndpZHRoIjogNDQsCiAgICAgICJoZWlnaHQiOiA0NAogICAgfSwKICAgICJicmFuZCI6IHsKICAgICAgIngiOiA4OS4zNzUsCiAgICAgICJ5IjogNy41LAogICAgICAid2lkdGgiOiAxMDguNjI1LAogICAgICAiaGVpZ2h0IjogNDQKICAgIH0sCiAgICAibWVudSI6IHsKICAgICAgIngiOiAyMDYsCiAgICAgICJ5IjogNy41LAogICAgICAid2lkdGgiOiA0NCwKICAgICAgImhlaWdodCI6IDQ0CiAgICB9LAogICAgImJlbGwiOiB7CiAgICAgICJ4IjogMjU4LAogICAgICAieSI6IDcuNSwKICAgICAgIndpZHRoIjogNDQsCiAgICAgICJoZWlnaHQiOiA0NAogICAgfQogIH0sCiAgewogICAgIndpZHRoIjogMzUwLAogICAgImJhY2siOiB7CiAgICAgICJ4IjogMTgsCiAgICAgICJ5IjogNy41LAogICAgICAid2lkdGgiOiA0NCwKICAgICAgImhlaWdodCI6IDQ0CiAgICB9LAogICAgImJyYW5kIjogewogICAgICAieCI6IDExOS4zNzUsCiAgICAgICJ5IjogNy41LAogICAgICAid2lkdGgiOiAxMDguNjI1LAogICAgICAiaGVpZ2h0IjogNDQKICAgIH0sCiAgICAibWVudSI6IHsKICAgICAgIngiOiAyMzYsCiAgICAgICJ5IjogNy41LAogICAgICAid2lkdGgiOiA0NCwKICAgICAgImhlaWdodCI6IDQ0CiAgICB9LAogICAgImJlbGwiOiB7CiAgICAgICJ4IjogMjg4LAogICAgICAieSI6IDcuNSwKICAgICAgIndpZHRoIjogNDQsCiAgICAgICJoZWlnaHQiOiA0NAogICAgfQogIH0sCiAgewogICAgIndpZHRoIjogMzkwLAogICAgImJhY2siOiB7CiAgICAgICJ4IjogMTgsCiAgICAgICJ5IjogNy41LAogICAgICAid2lkdGgiOiA0NCwKICAgICAgImhlaWdodCI6IDQ0CiAgICB9LAogICAgImJyYW5kIjogewogICAgICAieCI6IDE0MC42ODc1LAogICAgICAieSI6IDcuNSwKICAgICAgIndpZHRoIjogMTA4LjYyNSwKICAgICAgImhlaWdodCI6IDQ0CiAgICB9LAogICAgIm1lbnUiOiB7CiAgICAgICJ4IjogMjc2LAogICAgICAieSI6IDcuNSwKICAgICAgIndpZHRoIjogNDQsCiAgICAgICJoZWlnaHQiOiA0NAogICAgfSwKICAgICJiZWxsIjogewogICAgICAieCI6IDMyOCwKICAgICAgInkiOiA3LjUsCiAgICAgICJ3aWR0aCI6IDQ0LAogICAgICAiaGVpZ2h0IjogNDQKICAgIH0KICB9LAogIHsKICAgICJ3aWR0aCI6IDQzMCwKICAgICJiYWNrIjogewogICAgICAieCI6IDE4LAogICAgICAieSI6IDcuNSwKICAgICAgIndpZHRoIjogNDQsCiAgICAgICJoZWlnaHQiOiA0NAogICAgfSwKICAgICJicmFuZCI6IHsKICAgICAgIngiOiAxNjAuNjg3NSwKICAgICAgInkiOiA3LjUsCiAgICAgICJ3aWR0aCI6IDEwOC42MjUsCiAgICAgICJoZWlnaHQiOiA0NAogICAgfSwKICAgICJtZW51IjogewogICAgICAieCI6IDMxNiwKICAgICAgInkiOiA3LjUsCiAgICAgICJ3aWR0aCI6IDQ0LAogICAgICAiaGVpZ2h0IjogNDQKICAgIH0sCiAgICAiYmVsbCI6IHsKICAgICAgIngiOiAzNjgsCiAgICAgICJ5IjogNy41LAogICAgICAid2lkdGgiOiA0NCwKICAgICAgImhlaWdodCI6IDQ0CiAgICB9CiAgfQpd"
+                    },
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/tmp/customer40-followup/screens/mobile-app-behavior-dense--4e43e-x-controls-at-narrow-widths-desktop-chromium/test-finished-1.png"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "01201b7af93cf9bdfeb9-9888b5ad7563e6b9db12",
+          "file": "mobile-app-behavior.spec.ts",
+          "line": 298,
+          "column": 1
+        },
+        {
+          "title": "dense My Nights headers keep the full brand and separate 44px controls at narrow widths",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "mobile-chromium",
+              "projectName": "mobile-chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3872,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-02T15:15:14.869Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "member-header-geometry.json",
+                      "contentType": "application/json",
+                      "body": "WwogIHsKICAgICJ3aWR0aCI6IDMyMCwKICAgICJiYWNrIjogewogICAgICAieCI6IDE4LAogICAgICAieSI6IDcuNSwKICAgICAgIndpZHRoIjogNDQsCiAgICAgICJoZWlnaHQiOiA0NAogICAgfSwKICAgICJicmFuZCI6IHsKICAgICAgIngiOiA4OS4zNzUsCiAgICAgICJ5IjogNy41LAogICAgICAid2lkdGgiOiAxMDguNjI1LAogICAgICAiaGVpZ2h0IjogNDQKICAgIH0sCiAgICAibWVudSI6IHsKICAgICAgIngiOiAyMDYsCiAgICAgICJ5IjogNy41LAogICAgICAid2lkdGgiOiA0NCwKICAgICAgImhlaWdodCI6IDQ0CiAgICB9LAogICAgImJlbGwiOiB7CiAgICAgICJ4IjogMjU4LAogICAgICAieSI6IDcuNSwKICAgICAgIndpZHRoIjogNDQsCiAgICAgICJoZWlnaHQiOiA0NAogICAgfQogIH0sCiAgewogICAgIndpZHRoIjogMzUwLAogICAgImJhY2siOiB7CiAgICAgICJ4IjogMTgsCiAgICAgICJ5IjogNy41LAogICAgICAid2lkdGgiOiA0NCwKICAgICAgImhlaWdodCI6IDQ0CiAgICB9LAogICAgImJyYW5kIjogewogICAgICAieCI6IDExOS4zNzUsCiAgICAgICJ5IjogNy41LAogICAgICAid2lkdGgiOiAxMDguNjI1LAogICAgICAiaGVpZ2h0IjogNDQKICAgIH0sCiAgICAibWVudSI6IHsKICAgICAgIngiOiAyMzYsCiAgICAgICJ5IjogNy41LAogICAgICAid2lkdGgiOiA0NCwKICAgICAgImhlaWdodCI6IDQ0CiAgICB9LAogICAgImJlbGwiOiB7CiAgICAgICJ4IjogMjg4LAogICAgICAieSI6IDcuNSwKICAgICAgIndpZHRoIjogNDQsCiAgICAgICJoZWlnaHQiOiA0NAogICAgfQogIH0sCiAgewogICAgIndpZHRoIjogMzkwLAogICAgImJhY2siOiB7CiAgICAgICJ4IjogMTgsCiAgICAgICJ5IjogNy41LAogICAgICAid2lkdGgiOiA0NCwKICAgICAgImhlaWdodCI6IDQ0CiAgICB9LAogICAgImJyYW5kIjogewogICAgICAieCI6IDE0MC42ODc1LAogICAgICAieSI6IDcuNSwKICAgICAgIndpZHRoIjogMTA4LjYyNSwKICAgICAgImhlaWdodCI6IDQ0CiAgICB9LAogICAgIm1lbnUiOiB7CiAgICAgICJ4IjogMjc2LAogICAgICAieSI6IDcuNSwKICAgICAgIndpZHRoIjogNDQsCiAgICAgICJoZWlnaHQiOiA0NAogICAgfSwKICAgICJiZWxsIjogewogICAgICAieCI6IDMyOCwKICAgICAgInkiOiA3LjUsCiAgICAgICJ3aWR0aCI6IDQ0LAogICAgICAiaGVpZ2h0IjogNDQKICAgIH0KICB9LAogIHsKICAgICJ3aWR0aCI6IDQzMCwKICAgICJiYWNrIjogewogICAgICAieCI6IDE4LAogICAgICAieSI6IDcuNSwKICAgICAgIndpZHRoIjogNDQsCiAgICAgICJoZWlnaHQiOiA0NAogICAgfSwKICAgICJicmFuZCI6IHsKICAgICAgIngiOiAxNjAuNjg3NSwKICAgICAgInkiOiA3LjUsCiAgICAgICJ3aWR0aCI6IDEwOC42MjUsCiAgICAgICJoZWlnaHQiOiA0NAogICAgfSwKICAgICJtZW51IjogewogICAgICAieCI6IDMxNiwKICAgICAgInkiOiA3LjUsCiAgICAgICJ3aWR0aCI6IDQ0LAogICAgICAiaGVpZ2h0IjogNDQKICAgIH0sCiAgICAiYmVsbCI6IHsKICAgICAgIngiOiAzNjgsCiAgICAgICJ5IjogNy41LAogICAgICAid2lkdGgiOiA0NCwKICAgICAgImhlaWdodCI6IDQ0CiAgICB9CiAgfQpd"
+                    },
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/tmp/customer40-followup/screens/mobile-app-behavior-dense--4e43e-x-controls-at-narrow-widths-mobile-chromium/test-finished-1.png"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "01201b7af93cf9bdfeb9-60aca93ce131c368cd0d",
+          "file": "mobile-app-behavior.spec.ts",
+          "line": 298,
+          "column": 1
+        },
+        {
+          "title": "dense My Nights headers keep the full brand and separate 44px controls at narrow widths",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "narrow-chromium",
+              "projectName": "narrow-chromium",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3821,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-02T15:15:28.602Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "member-header-geometry.json",
+                      "contentType": "application/json",
+                      "body": "WwogIHsKICAgICJ3aWR0aCI6IDMyMCwKICAgICJiYWNrIjogewogICAgICAieCI6IDE4LAogICAgICAieSI6IDcuNSwKICAgICAgIndpZHRoIjogNDQsCiAgICAgICJoZWlnaHQiOiA0NAogICAgfSwKICAgICJicmFuZCI6IHsKICAgICAgIngiOiA4OS4zNzUsCiAgICAgICJ5IjogNy41LAogICAgICAid2lkdGgiOiAxMDguNjI1LAogICAgICAiaGVpZ2h0IjogNDQKICAgIH0sCiAgICAibWVudSI6IHsKICAgICAgIngiOiAyMDYsCiAgICAgICJ5IjogNy41LAogICAgICAid2lkdGgiOiA0NCwKICAgICAgImhlaWdodCI6IDQ0CiAgICB9LAogICAgImJlbGwiOiB7CiAgICAgICJ4IjogMjU4LAogICAgICAieSI6IDcuNSwKICAgICAgIndpZHRoIjogNDQsCiAgICAgICJoZWlnaHQiOiA0NAogICAgfQogIH0sCiAgewogICAgIndpZHRoIjogMzUwLAogICAgImJhY2siOiB7CiAgICAgICJ4IjogMTgsCiAgICAgICJ5IjogNy41LAogICAgICAid2lkdGgiOiA0NCwKICAgICAgImhlaWdodCI6IDQ0CiAgICB9LAogICAgImJyYW5kIjogewogICAgICAieCI6IDExOS4zNzUsCiAgICAgICJ5IjogNy41LAogICAgICAid2lkdGgiOiAxMDguNjI1LAogICAgICAiaGVpZ2h0IjogNDQKICAgIH0sCiAgICAibWVudSI6IHsKICAgICAgIngiOiAyMzYsCiAgICAgICJ5IjogNy41LAogICAgICAid2lkdGgiOiA0NCwKICAgICAgImhlaWdodCI6IDQ0CiAgICB9LAogICAgImJlbGwiOiB7CiAgICAgICJ4IjogMjg4LAogICAgICAieSI6IDcuNSwKICAgICAgIndpZHRoIjogNDQsCiAgICAgICJoZWlnaHQiOiA0NAogICAgfQogIH0sCiAgewogICAgIndpZHRoIjogMzkwLAogICAgImJhY2siOiB7CiAgICAgICJ4IjogMTgsCiAgICAgICJ5IjogNy41LAogICAgICAid2lkdGgiOiA0NCwKICAgICAgImhlaWdodCI6IDQ0CiAgICB9LAogICAgImJyYW5kIjogewogICAgICAieCI6IDE0MC42ODc1LAogICAgICAieSI6IDcuNSwKICAgICAgIndpZHRoIjogMTA4LjYyNSwKICAgICAgImhlaWdodCI6IDQ0CiAgICB9LAogICAgIm1lbnUiOiB7CiAgICAgICJ4IjogMjc2LAogICAgICAieSI6IDcuNSwKICAgICAgIndpZHRoIjogNDQsCiAgICAgICJoZWlnaHQiOiA0NAogICAgfSwKICAgICJiZWxsIjogewogICAgICAieCI6IDMyOCwKICAgICAgInkiOiA3LjUsCiAgICAgICJ3aWR0aCI6IDQ0LAogICAgICAiaGVpZ2h0IjogNDQKICAgIH0KICB9LAogIHsKICAgICJ3aWR0aCI6IDQzMCwKICAgICJiYWNrIjogewogICAgICAieCI6IDE4LAogICAgICAieSI6IDcuNSwKICAgICAgIndpZHRoIjogNDQsCiAgICAgICJoZWlnaHQiOiA0NAogICAgfSwKICAgICJicmFuZCI6IHsKICAgICAgIngiOiAxNjAuNjg3NSwKICAgICAgInkiOiA3LjUsCiAgICAgICJ3aWR0aCI6IDEwOC42MjUsCiAgICAgICJoZWlnaHQiOiA0NAogICAgfSwKICAgICJtZW51IjogewogICAgICAieCI6IDMxNiwKICAgICAgInkiOiA3LjUsCiAgICAgICJ3aWR0aCI6IDQ0LAogICAgICAiaGVpZ2h0IjogNDQKICAgIH0sCiAgICAiYmVsbCI6IHsKICAgICAgIngiOiAzNjgsCiAgICAgICJ5IjogNy41LAogICAgICAid2lkdGgiOiA0NCwKICAgICAgImhlaWdodCI6IDQ0CiAgICB9CiAgfQpd"
+                    },
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/tmp/customer40-followup/screens/mobile-app-behavior-dense--4e43e-x-controls-at-narrow-widths-narrow-chromium/test-finished-1.png"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "01201b7af93cf9bdfeb9-1466c6d158e0058bbfb6",
+          "file": "mobile-app-behavior.spec.ts",
+          "line": 298,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "my-nights-studio.spec.ts",
+      "file": "my-nights-studio.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "plans filter, search and restore without duplicated navigation",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "desktop-chromium",
+              "projectName": "desktop-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 6570,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-02T15:15:03.668Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/tmp/customer40-followup/screens/my-nights-studio-plans-fil-3f520-thout-duplicated-navigation-desktop-chromium/test-finished-1.png"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6ed6d048796e99de2c4d-27375d70b96e0bbd7809",
+          "file": "my-nights-studio.spec.ts",
+          "line": 43,
+          "column": 1
+        },
+        {
+          "title": "narrow My Nights selectors keep readable targets with reduced motion",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "desktop-chromium",
+              "projectName": "desktop-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1507,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-02T15:15:10.259Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/tmp/customer40-followup/screens/my-nights-studio-narrow-My-92ed9-targets-with-reduced-motion-desktop-chromium/test-finished-1.png"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6ed6d048796e99de2c4d-25d953d0ab36a928b9cc",
+          "file": "my-nights-studio.spec.ts",
+          "line": 145,
+          "column": 1
+        },
+        {
+          "title": "plans filter, search and restore without duplicated navigation",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "mobile-chromium",
+              "projectName": "mobile-chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4581,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-02T15:15:19.027Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/tmp/customer40-followup/screens/my-nights-studio-plans-fil-3f520-thout-duplicated-navigation-mobile-chromium/test-finished-1.png"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6ed6d048796e99de2c4d-0439292312df175749cc",
+          "file": "my-nights-studio.spec.ts",
+          "line": 43,
+          "column": 1
+        },
+        {
+          "title": "narrow My Nights selectors keep readable targets with reduced motion",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "mobile-chromium",
+              "projectName": "mobile-chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1804,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-02T15:15:23.625Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/tmp/customer40-followup/screens/my-nights-studio-narrow-My-92ed9-targets-with-reduced-motion-mobile-chromium/test-finished-1.png"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6ed6d048796e99de2c4d-99e64c714f481dfedda4",
+          "file": "my-nights-studio.spec.ts",
+          "line": 145,
+          "column": 1
+        },
+        {
+          "title": "plans filter, search and restore without duplicated navigation",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "narrow-chromium",
+              "projectName": "narrow-chromium",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 6996,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-02T15:15:32.668Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/tmp/customer40-followup/screens/my-nights-studio-plans-fil-3f520-thout-duplicated-navigation-narrow-chromium/test-finished-1.png"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6ed6d048796e99de2c4d-26a6dd36f78d6c337826",
+          "file": "my-nights-studio.spec.ts",
+          "line": 43,
+          "column": 1
+        },
+        {
+          "title": "narrow My Nights selectors keep readable targets with reduced motion",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "narrow-chromium",
+              "projectName": "narrow-chromium",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2004,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-02T15:15:39.679Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/tmp/customer40-followup/screens/my-nights-studio-narrow-My-92ed9-targets-with-reduced-motion-narrow-chromium/test-finished-1.png"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6ed6d048796e99de2c4d-9beafc13cc43cad2a386",
+          "file": "my-nights-studio.spec.ts",
+          "line": 145,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "public-journey.spec.ts",
+      "file": "public-journey.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "/event/$published follows the flat, readable public design contract",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "desktop-chromium",
+              "projectName": "desktop-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1318,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-02T15:15:11.797Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/tmp/customer40-followup/screens/public-journey--event-publ-9c33b-able-public-design-contract-desktop-chromium/test-finished-1.png"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "5e924e1157a823bab605-a2f2756ea8fc55ce5fe2",
+          "file": "public-journey.spec.ts",
+          "line": 242,
+          "column": 3
+        },
+        {
+          "title": "/checkout/$published follows the flat, readable public design contract",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "desktop-chromium",
+              "projectName": "desktop-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1035,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-02T15:15:13.139Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/tmp/customer40-followup/screens/public-journey--checkout-p-dc98b-able-public-design-contract-desktop-chromium/test-finished-1.png"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "5e924e1157a823bab605-c7120783ace4967d6c47",
+          "file": "public-journey.spec.ts",
+          "line": 242,
+          "column": 3
+        },
+        {
+          "title": "/event/$published follows the flat, readable public design contract",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "mobile-chromium",
+              "projectName": "mobile-chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1439,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-02T15:15:25.465Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/tmp/customer40-followup/screens/public-journey--event-publ-9c33b-able-public-design-contract-mobile-chromium/test-finished-1.png"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "5e924e1157a823bab605-03bdfa45c82a16faef97",
+          "file": "public-journey.spec.ts",
+          "line": 242,
+          "column": 3
+        },
+        {
+          "title": "/checkout/$published follows the flat, readable public design contract",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "mobile-chromium",
+              "projectName": "mobile-chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1098,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-02T15:15:26.918Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/tmp/customer40-followup/screens/public-journey--checkout-p-dc98b-able-public-design-contract-mobile-chromium/test-finished-1.png"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "5e924e1157a823bab605-a8f97aadb205caccf133",
+          "file": "public-journey.spec.ts",
+          "line": 242,
+          "column": 3
+        },
+        {
+          "title": "/event/$published follows the flat, readable public design contract",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "narrow-chromium",
+              "projectName": "narrow-chromium",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1549,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-02T15:15:41.714Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/tmp/customer40-followup/screens/public-journey--event-publ-9c33b-able-public-design-contract-narrow-chromium/test-finished-1.png"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "5e924e1157a823bab605-e74f9bbe6ff1c67e9dad",
+          "file": "public-journey.spec.ts",
+          "line": 242,
+          "column": 3
+        },
+        {
+          "title": "/checkout/$published follows the flat, readable public design contract",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "narrow-chromium",
+              "projectName": "narrow-chromium",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1172,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-02T15:15:43.280Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/tmp/customer40-followup/screens/public-journey--checkout-p-dc98b-able-public-design-contract-narrow-chromium/test-finished-1.png"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "5e924e1157a823bab605-5bab1fc7d078004d4f49",
+          "file": "public-journey.spec.ts",
+          "line": 242,
+          "column": 3
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-11-02T15:14:59.344Z",
+    "duration": 45223.891,
+    "expected": 15,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

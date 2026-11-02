@@ -1,3 +1,4 @@
+.poster-event-page .back-link { min-width: 44px; min-height: 44px; }
 /* Customer-only hierarchy. Existing fonts, palettes and artwork remain authoritative. */
 .customer-header-actions { display: flex; align-items: center; justify-content: end; gap: 12px; }
 .customer-header-link { display: inline-flex; align-items: center; min-height: 44px; font-size: 14px; white-space: nowrap; }
@@ -61,7 +62,7 @@
   .customer-header-actions .night-mobile-menu .night-mobile-menu__trigger > .night-mobile-menu__trigger-label { display: none; }
   .customer-header-link { font-size: 13px; }
   .discovery-directory .directory-header, .poster-event-page .sub-header { grid-template-columns: minmax(32px, 1fr) auto minmax(100px, 1fr); gap: 8px; }
-  .poster-event-page .back-link { font-size: 0; }
+  .poster-event-page .back-link__label { display: none; }
   .discovery-directory .directory-intro { padding-block: 22px 16px; }
   .discovery-selects { gap: 12px; }
   .discovery-directory .discovery-grid[data-count="1"] { display: block; }
@@ -84,6 +85,7 @@
 @media (max-width: 359px) {
   .discovery-selects { grid-template-columns: minmax(0, 1fr); }
   .discovery-directory .directory-header, .poster-event-page .sub-header { grid-template-columns: 32px minmax(0, 1fr) auto; }
+  .poster-event-page .sub-header { grid-template-columns: 44px minmax(0, 1fr) auto; }
   .discovery-directory .directory-header .brand-mark, .poster-event-page .sub-header .brand-mark { justify-self: start; }
   .discovery-directory .discovery-grid[data-count="1"] .drop-card { grid-template-columns: 92px minmax(0, 1fr); gap: 12px; }
   .my-nights-page--studio .my-nights-tabs.segmented-control.segmented-control button { padding-inline: 5px; gap: 3px; font-size: 12px; }

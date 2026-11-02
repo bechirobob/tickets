@@ -1,6 +1,37 @@
-import { expectSegmentedSelection } from "./segmented-control";
+import type { Locator } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "./analytics-fixture";
+
+// My Nights deliberately uses a short border on the selected tab, not the
+// moving filled marker used by discovery. Keep those shared assertions intact.
+async function expectMyNightsSelection(control: Locator) {
+  await expect(control).toBeVisible();
+  const selected = control.locator(':scope > button[aria-current="page"]');
+  await expect(selected).toHaveCount(1);
+  await expect(selected).toBeVisible();
+  await expect(selected).toHaveCSS("border-bottom-width", "2px");
+  await expect(selected).toHaveCSS("border-bottom-style", "solid");
+  await expect(selected).toHaveCSS("border-bottom-color", "rgb(228, 241, 139)");
+  await expect(control.locator(':scope > .segmented-control__selection')).toBeHidden();
+  const issues = await control.evaluate(root => {
+    const problems: string[] = [];
+    if (root.scrollWidth > root.clientWidth + 1) problems.push("Tabs overflow horizontally");
+    for (const button of root.querySelectorAll(':scope > button')) {
+      const box = button.getBoundingClientRect(), style = getComputedStyle(button);
+      if (box.width < 44 || box.height < 44) problems.push("Tab target below 44px");
+      if (button.getAttribute('aria-current') !== 'page' && style.borderBottomWidth !== '0px') problems.push("Unselected tab has an indicator");
+      if (style.boxShadow !== 'none' || style.textShadow !== 'none' || style.textDecorationLine !== 'none') problems.push("Decorative shadow or text underline remains");
+      const walker = document.createTreeWalker(button, NodeFilter.SHOW_TEXT);
+      while (walker.nextNode()) {
+        if (!walker.currentNode.textContent?.trim()) continue;
+        const range = document.createRange(); range.selectNodeContents(walker.currentNode);
+        for (const text of range.getClientRects()) if (text.width && (text.left < box.left - 1 || text.right > box.right + 1 || text.top < box.top - 1 || text.bottom > box.bottom + 1)) problems.push("Tab label is clipped");
+      }
+    }
+    return problems;
+  });
+  expect(issues).toEqual([]);
+}
 
 test.use({ serviceWorkers: "block" });
 test.beforeEach(async ({ page }) => {
@@ -35,7 +66,7 @@ test("plans filter, search and restore without duplicated navigation", async ({ 
   await expect(page.getByRole("heading", { name: "No matching nights." })).toBeVisible();
   await page.getByRole("button", { name: "Clear search", exact: true }).first().click();
   const nav = page.getByRole("navigation", { name: "My Nights views" });
-  await expectSegmentedSelection(nav);
+  await expectMyNightsSelection(nav);
   await nav.getByRole("button", { name: /^Past/ }).click();
   await expect(page.locator(".night-listing")).toContainText("Last Summer");
   await page.reload();
@@ -43,13 +74,13 @@ test("plans filter, search and restore without duplicated navigation", async ({ 
   await expect(page.getByTestId("brand-arrival")).toBeHidden();
   await nav.getByRole("button", { name: /^Following/ }).click();
   await expect(page.locator(".night-listing")).toContainText("Sunday Social");
-  await expectSegmentedSelection(nav);
+  await expectMyNightsSelection(nav);
   await expect(page.getByRole("link", { name: "The Room", exact: true })).toHaveCount(0);
   const rsvps = nav.getByRole("button", { name: /^RSVPs/ });
   await rsvps.focus();
   await rsvps.press("Enter");
   await expect(rsvps).toBeFocused();
-  await expectSegmentedSelection(nav);
+  await expectMyNightsSelection(nav);
   await expect(page.getByRole("heading", { name: "No RSVPs yet." })).toBeVisible();
 });
 
@@ -117,9 +148,12 @@ test("narrow My Nights selectors keep readable targets with reduced motion", asy
   await page.route("**/api/customer/my-nights", route => route.fulfill({ json: { attendee: { displayName: "Ama" }, nights: [] } }));
   await page.goto("/my-nights");
   const nav = page.getByRole("navigation", { name: "My Nights views", exact: true });
-  await expectSegmentedSelection(nav);
-  await nav.getByRole("button", { name: /^Following/ }).click();
-  await expectSegmentedSelection(nav);
+  await expectMyNightsSelection(nav);
+  const following = nav.getByRole("button", { name: /^Following/ });
+  await following.focus();
+  await following.press("Enter");
+  await expect(following).toBeFocused();
+  await expectMyNightsSelection(nav);
   await expect(page.getByRole("heading", { name: "Something catch your eye?", exact: true })).toBeVisible();
   expect(await nav.locator(".segmented-control__selection").evaluate(el => getComputedStyle(el).transitionDuration)).toBe("0s");
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)).toBe(false);

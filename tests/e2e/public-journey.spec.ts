@@ -297,6 +297,18 @@ for (const path of publicPages) {
     expect(findings.curvedPartialBorders).toEqual([]);
     expect(findings.tinyText).toEqual([]);
     expect(findings.oversizedHeadings).toEqual([]);
+    const back = page.locator('.poster-event-page .back-link');
+    if (await back.count()) {
+      await expect(back).toHaveAccessibleName('The Drop');
+      await expect(back).toHaveAttribute('href', '/events');
+      const target = await back.boundingBox();
+      expect(target!.width).toBeGreaterThanOrEqual(44);
+      expect(target!.height).toBeGreaterThanOrEqual(44);
+      const headerBoxes = await page.locator('.poster-event-page .sub-header > *').evaluateAll(elements => elements.map(el => {
+        const box = el.getBoundingClientRect(); return { left: box.left, right: box.right };
+      }));
+      for (let i = 1; i < headerBoxes.length; i++) expect(headerBoxes[i].left - headerBoxes[i - 1].right).toBeGreaterThanOrEqual(0);
+    }
   });
 }
 

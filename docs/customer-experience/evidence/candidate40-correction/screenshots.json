@@ -1,0 +1,26 @@
+[
+  {
+    "path": "event-desktop-chromium.png",
+    "sha256": "5f99bafff32d2a18ab36389fce495d5ccde85994a2e30a6f5ddfc1431ccdecee"
+  },
+  {
+    "path": "checkout-desktop-chromium.png",
+    "sha256": "4b90ca3c4d469eb2eb5d3353f32d69c26f51de2f0418cd8a4c1000e4c52f4bee"
+  },
+  {
+    "path": "event-mobile-chromium.png",
+    "sha256": "57a2eb9a45da46241e4658d0cf5443df5704856ee01e04454e4085caab32156d"
+  },
+  {
+    "path": "checkout-mobile-chromium.png",
+    "sha256": "dbb8f69a5979300db495b911650c57e0ff81975f20884475dece951e3456abb6"
+  },
+  {
+    "path": "event-narrow-chromium.png",
+    "sha256": "c22ef5f367974dcd85429510229b4a2c28b8fdeb33da2ee6ca6f6d686d87cd5c"
+  },
+  {
+    "path": "checkout-narrow-chromium.png",
+    "sha256": "0c9b8ac89f26813cefc71831d5f4872a337ed52ac01d882c7ce268d47837dbf6"
+  }
+]
