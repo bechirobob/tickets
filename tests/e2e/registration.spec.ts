@@ -8,11 +8,14 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     const events: unknown[] = [];
     Object.assign(window, { __consentEvents: events });
-    for (const type of ['pointerdown', 'pointerup', 'click', 'touchstart', 'touchend', 'toggle']) {
+    for (const type of ['pointerdown', 'pointerup', 'click', 'touchstart', 'touchend', 'toggle', 'focusin', 'scroll']) {
       document.addEventListener(type, event => {
         const target = event.target instanceof Element ? event.target : null;
         const arrival = document.querySelector<HTMLElement>('[data-testid="brand-arrival"]');
-        const record = { type, at: Math.round(performance.now()), target: target?.tagName, className: target?.getAttribute('class'), text: target?.closest('button, summary')?.textContent?.trim().slice(0, 100), arrivalHidden: arrival?.hidden, arrivalRunning: arrival?.hasAttribute('data-running'), prevented: false };
+        const rect = (selector: string) => { const box = document.querySelector(selector)?.getBoundingClientRect(); return box ? { x: box.x, y: box.y, width: box.width, height: box.height } : null; };
+        const point = event as MouseEvent;
+        const geometry = { scrollY, viewport: { width: innerWidth, height: innerHeight, offsetTop: visualViewport?.offsetTop, pageTop: visualViewport?.pageTop }, point: { x: point.clientX, y: point.clientY }, active: document.activeElement?.outerHTML.slice(0, 160), button: rect('.registration-form > button'), countdown: rect('.event-countdown'), loading: rect('.registration-loading'), panel: rect('.compact-ticket-panel'), poster: rect('.event-detail-poster') };
+        const record = { geometry, type, at: Math.round(performance.now()), target: target?.tagName, className: target?.getAttribute('class'), text: target?.closest('button, summary')?.textContent?.trim().slice(0, 100), arrivalHidden: arrival?.hidden, arrivalRunning: arrival?.hasAttribute('data-running'), prevented: false };
         events.push(record); if (events.length > 40) events.shift();
         queueMicrotask(() => { record.prevented = event.defaultPrevented; });
       }, true);
@@ -233,3 +236,11 @@ for (const surface of ['event', 'rsvp', 'my-nights']) {
     await expect(card.locator('[data-status="confirmed"]')).toBeVisible();
   });
 }
+
+
+test('diagnostic single touch opens RSVP without repeated activation', async ({ page }, info) => {
+  test.skip(info.project.name !== 'mobile-webkit', 'Compare authentic touch with the original recorded WebKit mouse gesture.');
+  await page.goto('/event/after-dark-osu');
+  await page.getByRole('button', { name: 'RSVP', exact: true }).tap();
+  await expect(page.getByLabel('Your name')).toBeVisible();
+});

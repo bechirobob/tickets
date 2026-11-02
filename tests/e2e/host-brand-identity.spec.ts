@@ -178,7 +178,19 @@ test('the portrait seal and brand hierarchy stay contained on a 320px phone', as
   await expect(page.locator('.host-profile__city')).toContainText('Verified host');
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
   await expect(page.getByTestId('brand-arrival'), 'Target screenshot must not capture the opening scene').toBeHidden();
-  await page.screenshot({ path: test.info().outputPath('yorke-profile-narrow.png'), fullPage: true, scale: 'css' });
+  const nextNight = page.getByRole('link', { name: 'See what else is on', exact: true });
+  await expect(nextNight).toHaveAttribute('href', '/events');
+  await nextNight.scrollIntoViewIfNeeded();
+  const viewportProof = await nextNight.evaluate(element => {
+    const box = element.getBoundingClientRect(), x = box.x + box.width / 2, y = box.y + box.height / 2;
+    const hit = document.elementFromPoint(x, y);
+    return { width: innerWidth, height: innerHeight, box: { x: box.x, y: box.y, width: box.width, height: box.height }, reachable: y >= 0 && y < innerHeight && !!hit && element.contains(hit), hit: hit?.tagName };
+  });
+  console.log('HOST_NARROW_VIEWPORT ' + JSON.stringify(viewportProof));
+  expect(viewportProof.reachable, 'The real bottom navigation must not cover the profile destination').toBe(true);
+  await page.screenshot({ path: test.info().outputPath('yorke-profile-narrow.png'), fullPage: false, scale: 'css' });
+  await nextNight.tap();
+  await expect(page).toHaveURL(/\/events$/);
   await page.goto('/event/sun-chasers-labadi');
   await expect(page.locator('.event-host .host-brand-eyebrow')).toHaveText('The Yorke Way');
   await readyPortrait(page, '.event-host .host-portrait');
