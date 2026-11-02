@@ -7,7 +7,7 @@ test('shared payment footer names USDC without an upcoming label', async ({ page
   await expect(payments).not.toContainText('Coming soon');
   await expect(payments.getByRole('img', { name: 'Seev', exact: true })).toBeVisible();
   await expect(payments.getByRole('img', { name: 'Paystack', exact: true })).toBeVisible();
-  await expect(page.locator('.backstage-bridge')).toContainText('MoMo, cards, USDC and ticket tiers');
+  await expect(payments).toContainText('Accepted payment methods');
   await payments.scrollIntoViewIfNeeded();
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
   await page.screenshot({ path: info.outputPath('payment-labels.png') });

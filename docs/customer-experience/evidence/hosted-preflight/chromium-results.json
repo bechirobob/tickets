@@ -1,0 +1,117 @@
+{
+  "sourceCommit": "cbcef1ec1945d285b5f0b6aeaf6ed531bf99a17e",
+  "helperSha256": "08ffeaa36543fad2adaef69ab021281ecb7d7aa88d5deb60ecb9a0dac4c76ebc",
+  "lockSha256": "806a3c7c6a8ac1a4b569882757b9a5c03a9d901df34c268dca2f039eab09f8d7",
+  "scope": "Compiled application and dedicated local D1; ephemeral seeded attendee session for existing bookings, no API response mocks. Nonfunctional test provider key; outbound network blocked; no queue bindings.",
+  "checks": [
+    {
+      "name": "header menu and close: labeled 44px hit areas, keyboard opening and focus return",
+      "viewport": "desktop",
+      "passed": true
+    },
+    {
+      "name": "checkout accessibility",
+      "viewport": "desktop",
+      "violations": []
+    },
+    {
+      "name": "notification icon: labeled 44px hit area, dialog and focus return",
+      "viewport": "desktop",
+      "passed": true
+    },
+    {
+      "name": "My Nights accessibility",
+      "viewport": "desktop",
+      "violations": []
+    },
+    {
+      "name": "Yorke existing early-access form, required consent and empty validation; no response sent",
+      "viewport": "desktop",
+      "passed": true
+    },
+    {
+      "name": "compiled browser-to-server journeys",
+      "viewport": "desktop",
+      "passed": true
+    },
+    {
+      "name": "header menu and close: labeled 44px hit areas, keyboard opening and focus return",
+      "viewport": "mobile",
+      "passed": true
+    },
+    {
+      "name": "checkout accessibility",
+      "viewport": "mobile",
+      "violations": []
+    },
+    {
+      "name": "notification icon: labeled 44px hit area, dialog and focus return",
+      "viewport": "mobile",
+      "passed": true
+    },
+    {
+      "name": "My Nights accessibility",
+      "viewport": "mobile",
+      "violations": []
+    },
+    {
+      "name": "Yorke existing early-access form, required consent and empty validation; no response sent",
+      "viewport": "mobile",
+      "passed": true
+    },
+    {
+      "name": "compiled browser-to-server journeys",
+      "viewport": "mobile",
+      "passed": true
+    },
+    {
+      "name": "header menu and close: labeled 44px hit areas, keyboard opening and focus return",
+      "viewport": "narrow",
+      "passed": true
+    },
+    {
+      "name": "checkout accessibility",
+      "viewport": "narrow",
+      "violations": []
+    },
+    {
+      "name": "notification icon: labeled 44px hit area, dialog and focus return",
+      "viewport": "narrow",
+      "passed": true
+    },
+    {
+      "name": "My Nights accessibility",
+      "viewport": "narrow",
+      "violations": []
+    },
+    {
+      "name": "Yorke existing early-access form, required consent and empty validation; no response sent",
+      "viewport": "narrow",
+      "passed": true
+    },
+    {
+      "name": "compiled browser-to-server journeys",
+      "viewport": "narrow",
+      "passed": true
+    }
+  ],
+  "pageErrors": [],
+  "blockedBrowserRequests": [],
+  "outboundAttempts": 6,
+  "cleanup": {
+    "temporaryDatabaseRemoved": true,
+    "persistentCredentialsCreated": false
+  },
+  "passed": true,
+  "webkit": {
+    "path": "/home/agent/.cache/ms-playwright/webkit-2336/pw_run.sh",
+    "available": false,
+    "status": "not run: installed executable unavailable; no download attempted"
+  },
+  "engine": "chromium",
+  "browser": "154.0.8037.57",
+  "localRegistrations": {
+    "n": 3
+  },
+  "provenanceNote": "Local worktree validation of the Chromium/touch adaptation before committing hosted diagnostic setup; not a hosted attestation. Later helper change only clarified unselected WebKit status metadata."
+}

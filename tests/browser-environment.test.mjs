@@ -30,7 +30,7 @@ const jobs = {
   'candidate-checks.yml': ['verify'],
   'candidate-parallel-checks.yml': ['desktop_chromium', 'mobile_chromium', 'mobile_webkit'],
   'tickets-code-release.yml': ['retired_preview'],
-  'booking-consent-previews.yml': ['preview'],
+  'booking-consent-previews.yml': ['preview', 'customer_compiled'],
   'customer-email-previews.yml': ['preview'],
   'yorkeway-previews.yml': ['preview'],
   'browser-followup.yml': ['verify'],
@@ -201,4 +201,22 @@ test('existing maintenance covers both npm locks and pinned actions without auto
   mismatch.packages['node_modules/@playwright/test'].version = '99.0.0';
   assert.throws(() => check({ lock: mismatch }));
   assert.match(config.image, /@sha256:[a-f0-9]{64}$/);
+});
+
+test('customer compiled preview is exact-source diagnostic only with prepared browsers', () => {
+  const workflow = load(readFileSync(new URL('../.github/workflows/booking-consent-previews.yml', import.meta.url), 'utf8'));
+  const job = workflow.jobs.customer_compiled;
+  assert.equal(workflow.permissions.contents, 'read');
+  assert.equal(job.if, "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/feat/customer-experience-20261102'");
+  assert.deepEqual(job.strategy.matrix.engine, ['chromium', 'webkit']);
+  const gate = job.steps.find(step => step.name?.startsWith('Bind diagnostic'));
+  assert.match(gate.run, /test "\$EXPECTED_CUSTOMER_SOURCE" = "\$GITHUB_SHA"/);
+  assert.match(gate.run, /test -z "\$\{E2E_BASE_URL:-\}"/);
+  assert.ok(job.steps.indexOf(gate) < job.steps.findIndex(step => step.run === 'npm ci --no-audit'));
+  assert.equal(job.steps.find(step => step.id === 'customer_ui').run, 'node scripts/customer-experience/compiled-check.mjs');
+  assert.doesNotMatch(JSON.stringify(job), /secrets\.|deploy:|wrangler deploy|continue-on-error/);
+  const upload = job.steps.find(step => step.uses?.startsWith('actions/upload-artifact@'));
+  assert.match(upload.with.path, /\/\*\.png/);
+  assert.match(upload.with.path, /\/\*\.json/);
+  assert.doesNotMatch(upload.with.path, /dist|state|trace|log/);
 });
