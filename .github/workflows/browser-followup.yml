@@ -9,6 +9,11 @@ on:
       - tests/e2e/room-identity.spec.ts
       - .github/workflows/browser-followup.yml
   workflow_dispatch:
+    inputs:
+      expected_test_source:
+        description: Exact reviewed source required for customer follow-up diagnostic
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -115,6 +120,7 @@ jobs:
     env:
       E2E_BASE_URL: https://tickets.becoreops.com
       TEST_SOURCE: ${{ github.sha }}
+      EXPECTED_TEST_SOURCE: ${{ inputs.expected_test_source }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -125,11 +131,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          [[ "$EXPECTED_TEST_SOURCE" =~ ^[a-f0-9]{40}$ ]]
+          test "$EXPECTED_TEST_SOURCE" = "$TEST_SOURCE"
           expected=3836f3fd96092d0291332b3986955139237a3b03
           test "$(git rev-parse HEAD)" = "$TEST_SOURCE"
           git merge-base --is-ancestor "$expected" HEAD
           git merge-base --is-ancestor "$expected" refs/remotes/origin/main
-          git diff --exit-code "$expected" HEAD -- . ':!tests/e2e/public-journey.spec.ts' ':!.github/workflows/browser-followup.yml'
+          git diff --exit-code "$expected" HEAD -- . ':!tests/e2e/public-journey.spec.ts' ':!tests/e2e/room-shortcut.spec.ts' ':!tests/e2e/guest-clarity.spec.ts' ':!.github/workflows/browser-followup.yml'
           mkdir -p "$RUNNER_TEMP/customer-focus"
           cat > "$RUNNER_TEMP/customer-focus/verify.mjs" <<'JS'
           import assert from 'node:assert/strict';
@@ -152,11 +160,13 @@ jobs:
           node-version: 22.23.4
           cache: npm
       - run: npm ci
-      - run: node scripts/verify-browser-environment.mjs chromium webkit
-      - name: Verify complete keyboard-focus journey without retries
-        run: npx playwright test public-journey.spec.ts --grep 'customer controls use neutral keyboard focus without halos' --project desktop-chromium --project mobile-chromium --project mobile-webkit --workers=1 --retries=0 --output=test-results-customer-focus
-      - name: Verify full affected public journey suite without retries
-        run: npx playwright test public-journey.spec.ts --project desktop-chromium --project mobile-chromium --project mobile-webkit --workers=1 --retries=0 --output=test-results-customer-public
+      - id: browsers
+        run: node scripts/verify-browser-environment.mjs chromium webkit
+      - name: Verify original failed journeys and open-chooser session loss without retries
+        run: npx playwright test public-journey.spec.ts room-shortcut.spec.ts owner-recovery.spec.ts guest-clarity.spec.ts --grep 'customer controls use neutral keyboard focus without halos|closing the Room chooser then signing out|session loss while the Room chooser is open|Room summaries do not poll|owner recovery preserves the form|recovery help opens the relevant guide' --project desktop-chromium --project mobile-chromium --project mobile-webkit --workers=1 --retries=0 --trace=on --output=test-results-customer-focus
+      - name: Verify all four affected suites without retries
+        if: ${{ !cancelled() && steps.baseline.outcome == 'success' && steps.browsers.outcome == 'success' }}
+        run: npx playwright test public-journey.spec.ts room-shortcut.spec.ts owner-recovery.spec.ts guest-clarity.spec.ts --project desktop-chromium --project mobile-chromium --project mobile-webkit --workers=1 --retries=0 --output=test-results-customer-public
       - name: Confirm unchanged active revision
         if: ${{ always() && steps.baseline.outcome == 'success' }}
         run: node "$RUNNER_TEMP/customer-focus/verify.mjs" after

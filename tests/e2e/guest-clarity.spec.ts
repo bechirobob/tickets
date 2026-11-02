@@ -1,13 +1,90 @@
+import type { Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { test, expect } from './catalogue';
 
 // Every simulated mutation is intercepted; these journeys never send guest data.
 test.use({ serviceWorkers: 'block' });
 
-test('recovery help opens the relevant guide directly, including from My Nights', async ({ page }) => {
+type RecoveryPointerRecord = {
+  type: string; time: number; tag: string; className: string;
+  href: string | null; label: string | null; introHidden: boolean; defaultPrevented: boolean;
+};
+
+async function recordRecoveryInteraction(page: Page) {
+  const events: RecoveryPointerRecord[] = [];
+  const requests: object[] = [], responses: object[] = [], navigations: object[] = [];
+  const publicHelp = (url: string) => new URL(url).pathname === '/help';
+  page.on('request', request => {
+    if (!publicHelp(request.url())) return;
+    const headers = request.headers();
+    requests.push({ at: Date.now(), path: '/help', resourceType: request.resourceType(), navigation: request.isNavigationRequest(),
+      rsc: headers.rsc ?? null, prefetch: headers['next-router-prefetch'] ?? null,
+      segmentPrefetch: headers['next-router-segment-prefetch'] ?? null, nextUrl: headers['next-url'] ?? null });
+  });
+  page.on('response', response => { if (publicHelp(response.url())) responses.push({ at: Date.now(), path: '/help', status: response.status(), contentType: response.headers()['content-type'] ?? null }); });
+  page.on('requestfailed', request => { if (publicHelp(request.url())) responses.push({ at: Date.now(), path: '/help', failure: request.failure()?.errorText ?? null }); });
+  page.on('framenavigated', frame => { if (frame === page.mainFrame()) { const url = new URL(frame.url()); navigations.push({ at: Date.now(), path: url.pathname + url.hash }); } });
+  await page.exposeFunction('__recordRecoveryPointer', (record: RecoveryPointerRecord) => { events.push(record); });
+  await page.addInitScript(() => {
+    for (const type of ['pointerdown', 'pointerup', 'click']) {
+      window.addEventListener(type, event => {
+        const target = event.target instanceof Element ? event.target : null;
+        const control = target?.closest('a, button');
+        const rawHref = control?.getAttribute('href');
+        const href = rawHref ? new URL(rawHref, location.href) : null;
+        const intro = document.querySelector('[data-testid="brand-arrival"]');
+        const introHidden = !intro || intro.hasAttribute('hidden') || getComputedStyle(intro).display === 'none' || getComputedStyle(intro).visibility === 'hidden';
+        const metadata = { introHidden, type: event.type, time: performance.now(), tag: target?.tagName ?? '',
+          className: target?.getAttribute('class') ?? '', href: href ? href.pathname + href.hash : null,
+          label: control?.getAttribute('aria-label') ?? control?.textContent?.trim() ?? null };
+        const recordAfterDispatch = () => {
+          // Native dispatch may run a microtask checkpoint between listeners.
+          // Defer recording, never the action, until preventDefault is final.
+          if (event.eventPhase !== Event.NONE) { setTimeout(() => queueMicrotask(recordAfterDispatch), 0); return; }
+          const emit = (window as unknown as { __recordRecoveryPointer: (record: RecoveryPointerRecord) => Promise<void> }).__recordRecoveryPointer;
+          void emit({ ...metadata, defaultPrevented: event.defaultPrevented }).catch(() => {});
+        };
+        queueMicrotask(recordAfterDispatch);
+      }, { capture: true });
+    }
+  });
+  return { events, requests, responses, navigations };
+}
+
+test('recovery help opens the relevant guide directly, including from My Nights', async ({ page }, info) => {
+  const receipt = await recordRecoveryInteraction(page);
+  try {
+    await page.route('**/api/customer/my-nights', route => route.fulfill({ status: 401, json: { error: 'Sign in' } }));
+    await page.route('**/api/customer/registrations', route => route.fulfill({ status: 401, json: { error: 'Sign in' } }));
+    await page.goto('/my-nights');
+    await page.getByRole('link', { name: 'No link, wrong email or locked out?' }).click();
+    await expect(page).toHaveURL(/\/help#recover-access$/);
+    const guide = page.locator('#recover-access');
+    await expect(guide).toHaveAttribute('open', '');
+    await expect(guide).toContainText('Never send passwords, access links or QR screenshots');
+    await expect(guide.getByRole('link', { name: 'Try My Nights again' })).toHaveAttribute('href', '/my-nights');
+    expect((await new AxeBuilder({ page }).include('#recover-access').analyze()).violations).toEqual([]);
+  } finally {
+    await info.attach('recovery-help-native-events.json', { body: JSON.stringify(receipt, null, 2), contentType: 'application/json' });
+  }
+});
+
+for (const interrupted of [false, true]) test(interrupted
+  ? 'recovery help opens the relevant guide after a normal pointer interrupts the intro'
+  : 'recovery help opens the relevant guide after an observed introduction naturally hides', async ({ page }, info) => {
+  const receipt = await recordRecoveryInteraction(page);
+  try {
   await page.route('**/api/customer/my-nights', route => route.fulfill({ status: 401, json: { error: 'Sign in' } }));
   await page.route('**/api/customer/registrations', route => route.fulfill({ status: 401, json: { error: 'Sign in' } }));
   await page.goto('/my-nights');
+  await expect(page.getByTestId('brand-arrival')).toBeVisible();
+  if (interrupted) {
+    // A normal pointer action interrupts the decoration; it must not activate
+    // a link underneath. Only the following explicit link click navigates.
+    await page.getByTestId('brand-arrival').click({ position: { x: 20, y: 20 } });
+    await expect(page).toHaveURL(/\/my-nights$/);
+  }
+  await expect(page.getByTestId('brand-arrival')).toBeHidden();
   await page.getByRole('link', { name: 'No link, wrong email or locked out?' }).click();
   await expect(page).toHaveURL(/\/help#recover-access$/);
   const guide = page.locator('#recover-access');
@@ -15,6 +92,9 @@ test('recovery help opens the relevant guide directly, including from My Nights'
   await expect(guide).toContainText('Never send passwords, access links or QR screenshots');
   await expect(guide.getByRole('link', { name: 'Try My Nights again' })).toHaveAttribute('href', '/my-nights');
   expect((await new AxeBuilder({ page }).include('#recover-access').analyze()).violations).toEqual([]);
+  } finally {
+    await info.attach('recovery-help-native-events.json', { body: JSON.stringify(receipt, null, 2), contentType: 'application/json' });
+  }
 });
 
 test('Room help distinguishes confirmed RSVP access from a request', async ({ page }) => {
