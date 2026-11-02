@@ -1,7 +1,11 @@
 import { test, expect } from './analytics-fixture';
+import type { Locator } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { captureConsentPreview } from './booking-consent';
 import { eventColourSchemes, eventPresentationVariables } from '../../lib/event-palette';
+// Mobile WebKit mouse focus can scroll between down/up; exercise a real single
+// touch on touch devices, retaining mouse activation on desktop and keyboard tests.
+const activate = (target: Locator) => test.info().project.use.hasTouch ? target.tap() : target.click();
 test.beforeEach(() => { test.skip(!test.info().config.configFile?.endsWith('playwright.registration.config.ts'), 'Requires isolated registration fixtures.'); });
 test('direct registration links respect the saved mode and do not imply free admission for paid events',async({page})=>{
   await page.goto('/rsvp/the-weekend-braai');await expect(page.locator('.rsvp-signup__event .eyebrow')).toContainText('Paid registration');await expect(page.getByRole('heading',{name:'The host is putting the date together. RSVPs open soon.',exact:true})).toBeVisible();await expect(page.getByLabel('Your name')).toHaveCount(0);
@@ -9,7 +13,7 @@ test('direct registration links respect the saved mode and do not imply free adm
 });
 test('free RSVP preserves form details on failure and submits the selected party without checkout', async ({ page }) => {
   await page.goto('/event/after-dark-osu');
-  await page.getByRole('button', { name: 'RSVP' }).click();
+  await activate(page.getByRole('button', { name: 'RSVP' }));
   await page.getByLabel('Your name').fill('Registration Guest');
   await page.getByLabel('Email address').fill('registration@example.com');
   await page.getByLabel('Guests, including you').selectOption('3');
@@ -32,14 +36,14 @@ test('free RSVP preserves form details on failure and submits the selected party
     await route.fulfill({ status: attempts === 1 ? 503 : 202, contentType: 'application/json', body: JSON.stringify(attempts === 1 ? { error: 'Please try again.' } : { message: 'RSVP received. Outfit planning starts now.' }) });
   });
   const send = page.getByRole('button', { name: 'Send RSVP' });
-  await send.click();
+  await activate(send);
   await expect(page.getByRole('alert')).toHaveText('Please try again.');
   await expect(page.getByLabel('Your name')).toHaveValue('Registration Guest');
   await expect(updates).toBeChecked();
   expect((await new AxeBuilder({ page }).include('.registration-form').analyze()).violations).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
   await page.screenshot({ path: `test-results/rsvp-${test.info().project.name}.png`, fullPage: true });
-  await send.click();
+  await activate(send);
   await expect(page.getByRole('status')).toContainText('RSVP received.');
   await expect(page.getByLabel('Email address')).toHaveCount(0);
   await page.goto('/checkout/after-dark-osu');
@@ -47,7 +51,7 @@ test('free RSVP preserves form details on failure and submits the selected party
 });
 test('an undated event keeps optional email consent event-scoped without implying reserved admission', async ({ page }) => {
   await page.goto('/event/sun-chasers-labadi');
-  await page.getByRole('button', { name: 'Keep me posted', exact: true }).click();
+  await activate(page.getByRole('button', { name: 'Keep me posted', exact: true }));
   await expect(page.getByText('Get the next date drop in your inbox. You’ll still need to book your spot.')).toBeVisible();
   await expect(page.getByLabel('Guests, including you')).toHaveCount(0);
   await expect(page.getByRole('link', { name: /Get tickets/ })).toHaveCount(0);
@@ -64,11 +68,11 @@ test('an undated event keeps optional email consent event-scoped without implyin
   await page.getByLabel('Your name').fill('Interest Guest');
   await page.getByLabel('Email address').fill('interest@example.com');
   await page.getByRole('checkbox', { name: /I accept the event terms/ }).check();
-  await page.getByRole('button', { name: 'Send my confirmation link' }).click();
+  await activate(page.getByRole('button', { name: 'Send my confirmation link' }));
   await expect(page.getByRole('alert')).toHaveText('Test registration stopped before sending email.');
   expect(attempts).toBe(1);
   await updates.check();
-  await page.getByRole('button', { name: 'Send my confirmation link' }).click();
+  await activate(page.getByRole('button', { name: 'Send my confirmation link' }));
   await expect.poll(() => attempts).toBe(2);
 });
 
@@ -83,7 +87,7 @@ test('RSVP can be submitted without opting into platform announcements', async (
   await page.getByLabel('Your name').fill('No Emails Guest');
   await page.getByLabel('Email address').fill('no-emails@example.com');
   await page.getByRole('checkbox', { name: /I accept the event terms/ }).check();
-  await page.getByRole('button', { name: 'Send RSVP' }).click();
+  await activate(page.getByRole('button', { name: 'Send RSVP' }));
   await expect(page.getByRole('status')).toContainText('RSVP received.');
   expect(submissions).toBe(1);
 });
@@ -95,7 +99,7 @@ test('email access needs an explicit confirmation and provides a recoverable err
   await expect(page.getByRole('button', { name: 'Confirm my email' })).toBeVisible();
   expect(claims).toBe(0);
   await expect(page).toHaveURL(/\/rsvp\/access$/);
-  await page.getByRole('button', { name: 'Confirm my email' }).click();
+  await activate(page.getByRole('button', { name: 'Confirm my email' }));
   await expect(page.getByRole('status')).toContainText('This link has expired.');
   expect(claims).toBe(1);
 });
@@ -115,8 +119,8 @@ test('My Nights distinguishes waitlisted guests from confirmed passes and suppor
   await expect(section.getByRole('link', { name: 'Show my QR passes' })).toHaveAttribute('href', '/my-nights/after-dark-osu?view=passes');
   const manage = section.locator('summary');
   if (test.info().project.use.hasTouch) await manage.tap(); else await manage.click();
-  await section.getByRole('button', { name: 'Cancel RSVP' }).click();
-  await section.getByRole('button', { name: 'Yes, cancel' }).click();
+  await activate(section.getByRole('button', { name: 'Cancel RSVP' }));
+  await activate(section.getByRole('button', { name: 'Yes, cancel' }));
   await expect(section).toContainText('Cancelled');
   await expect(section.getByRole('link', { name: 'Show my QR passes' })).toHaveCount(0);
   expect((await new AxeBuilder({ page }).include('.my-registrations').analyze()).violations).toEqual([]);
@@ -141,7 +145,7 @@ for (const routeName of ['event', 'rsvp']) {
     await form.getByLabel('Your name').fill('Approval Guest');
     await form.getByLabel('Email address').fill('approval-fixture@example.com');
     await form.getByRole('checkbox', { name: /I accept the event terms/ }).check();
-    await form.getByRole('button', { name: 'Send RSVP' }).click();
+    await activate(form.getByRole('button', { name: 'Send RSVP' }));
     await expect(form.locator('[data-status="requested"]')).toBeVisible();
     await expect(form.getByText('Unrelated private registration')).toHaveCount(0);
     await expect(form.getByRole('link', { name: 'Show my QR passes' })).toHaveCount(0);
@@ -179,7 +183,7 @@ for (const surface of ['event', 'rsvp', 'my-nights']) {
     await expect(card.getByRole('heading', { name: 'After Dark: Osu' })).toBeVisible();
     await expect(card.getByRole('link', { name: 'Show my QR passes' })).toHaveAttribute('href', '/my-nights/after-dark-osu?view=passes');
     await expect(card.getByRole('link', { name: 'The Room', exact: true })).toHaveAttribute('href', '/room/after-dark-osu');
-    await card.locator('.registration-manage summary').click();
+    await activate(card.locator('.registration-manage summary'));
     await expect(card.getByRole('button', { name: 'Cancel RSVP', exact: true })).toBeVisible();
     const palettes = surface === 'event' ? Object.keys(eventColourSchemes) : ['dark'];
     for (const colourScheme of palettes) {
@@ -195,11 +199,26 @@ for (const surface of ['event', 'rsvp', 'my-nights']) {
       }
     }
     await page.screenshot({ path: info.outputPath(`${surface}-rsvp-colours.png`), fullPage: true });
-    await card.getByRole('button', { name: 'Cancel RSVP', exact: true }).click();
+    await activate(card.getByRole('button', { name: 'Cancel RSVP', exact: true }));
     await expect(card.getByRole('button', { name: 'Keep it', exact: true })).toBeVisible();
     expect((await new AxeBuilder({ page }).include('.my-registrations--studio').withRules(['color-contrast']).analyze()).violations).toEqual([]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
-    await card.getByRole('button', { name: 'Keep it', exact: true }).click();
+    await activate(card.getByRole('button', { name: 'Keep it', exact: true }));
     await expect(card.locator('[data-status="confirmed"]')).toBeVisible();
   });
 }
+
+
+test('one native activation opens RSVP without repeating the gesture', async ({ page }) => {
+  await page.goto('/event/after-dark-osu');
+  const trigger = page.getByRole('button', { name: 'RSVP', exact: true });
+  await trigger.evaluate(button => {
+    const evidence = { pointerTypes: [] as string[], clicks: 0 };
+    Object.assign(window, { __rsvpActivation: evidence });
+    button.addEventListener('pointerdown', event => evidence.pointerTypes.push((event as PointerEvent).pointerType));
+    button.addEventListener('click', () => { evidence.clicks++; });
+  });
+  await activate(trigger);
+  await expect(page.getByLabel('Your name')).toBeVisible();
+  expect(await page.evaluate(() => (window as unknown as { __rsvpActivation: { pointerTypes: string[]; clicks: number } }).__rsvpActivation)).toEqual({ pointerTypes: [test.info().project.use.hasTouch ? 'touch' : 'mouse'], clicks: 1 });
+});

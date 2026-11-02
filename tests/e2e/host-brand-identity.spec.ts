@@ -141,6 +141,7 @@ test('The Yorke Way signature preserves Kofi’s personal profile and source art
   await expect(page.getByRole('link', { name: /Snapchat/ })).toHaveAttribute('href', 'https://www.snapchat.com/add/kofi_billz123');
   expect((await new AxeBuilder({ page }).include('.host-profile').analyze()).violations).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+  await expect(page.getByTestId('brand-arrival'), 'Target screenshot must not capture the opening scene').toBeHidden();
   await page.screenshot({ path: test.info().outputPath('yorke-profile.png'), fullPage: true, scale: 'css' });
 });
 
@@ -157,7 +158,9 @@ test('linked event gives the host a subordinate brand credit without replacing o
   await expect(page.locator('.event-detail-story')).toContainText('Club House Inc');
   expect((await new AxeBuilder({ page }).include('.event-host').analyze()).violations).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+  await expect(page.getByTestId('brand-arrival'), 'Target screenshot must not capture the opening scene').toBeHidden();
   await page.screenshot({ path: test.info().outputPath('yorke-event.png'), fullPage: true, scale: 'css' });
+  await expect(page.getByTestId('brand-arrival'), 'Target screenshot must not capture the opening scene').toBeHidden();
   await page.locator('.event-detail-story').screenshot({ path: test.info().outputPath('yorke-event-host.png'), scale: 'css' });
   await recordHostSpacing(page, host, 'yorke-host-spacing.json');
   await host.getByRole('link', { name: 'View Host', exact: true }).click();
@@ -174,13 +177,31 @@ test('the portrait seal and brand hierarchy stay contained on a 320px phone', as
   expect((await seal.boundingBox())!.width).toBe(36);
   await expect(page.locator('.host-profile__city')).toContainText('Verified host');
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
-  await page.screenshot({ path: test.info().outputPath('yorke-profile-narrow.png'), fullPage: true, scale: 'css' });
+  await expect(page.getByTestId('brand-arrival'), 'Target screenshot must not capture the opening scene').toBeHidden();
+  const nextNight = page.getByRole('link', { name: 'See what else is on', exact: true });
+  await expect(nextNight).toHaveAttribute('href', '/events');
+  // Scroll to the viewport edge deliberately: the document's dock clearance
+  // must keep the link reachable without centering it or hiding navigation.
+  await nextNight.evaluate(element => element.scrollIntoView({ block: 'end', behavior: 'instant' }));
+  await nextNight.focus();
+  await expect(nextNight).toBeFocused();
+  const viewportProof = await nextNight.evaluate(element => {
+    const box = element.getBoundingClientRect(), x = box.x + box.width / 2, y = box.y + box.height / 2;
+    const hit = document.elementFromPoint(x, y);
+    return { width: innerWidth, height: innerHeight, box: { x: box.x, y: box.y, width: box.width, height: box.height }, reachable: y >= 0 && y < innerHeight && !!hit && element.contains(hit), hit: hit?.tagName };
+  });
+  console.log('HOST_NARROW_VIEWPORT ' + JSON.stringify(viewportProof));
+  expect(viewportProof.reachable, 'The real bottom navigation must not cover the profile destination').toBe(true);
+  await page.screenshot({ path: test.info().outputPath('yorke-profile-narrow.png'), fullPage: false, scale: 'css' });
+  await nextNight.tap();
+  await expect(page).toHaveURL(/\/events$/);
   await page.goto('/event/sun-chasers-labadi');
   await expect(page.locator('.event-host .host-brand-eyebrow')).toHaveText('The Yorke Way');
   await readyPortrait(page, '.event-host .host-portrait');
   await expect(page.locator('.event-host .host-portrait__seal')).toBeVisible();
   await expectHostButton(page.locator('.event-host--branded'));
   expect((await new AxeBuilder({ page }).include('.event-host').analyze()).violations).toEqual([]);
+  await expect(page.getByTestId('brand-arrival'), 'Target screenshot must not capture the opening scene').toBeHidden();
   await page.locator('.event-detail-story').screenshot({ path: test.info().outputPath('yorke-event-host-narrow.png'), scale: 'css' });
   await recordHostSpacing(page, page.locator('.event-host--branded'), 'yorke-host-spacing-narrow.json');
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
@@ -194,5 +215,6 @@ test('host directory uses the same portrait seal and one display name', async ({
   await expect(host.locator('h2')).toHaveText('Kofi Bills');
   await expect(host).toContainText('Henry Yorke');
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+  await expect(page.getByTestId('brand-arrival'), 'Target screenshot must not capture the opening scene').toBeHidden();
   await page.screenshot({ path: test.info().outputPath('yorke-directory.png'), fullPage: true, scale: 'css' });
 });
