@@ -76,7 +76,7 @@ jobs:
           release.update(sourceCommit=os.environ['SOURCE_SHA'],sha256=hashlib.sha256(pathlib.Path('ios/output/export/App.ipa').read_bytes()).hexdigest(),distribution='app-store-connect')
           pathlib.Path('ios/output/export/release-manifest.json').write_text(json.dumps(release,indent=2)+'\n')
           PY
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: BeCore-Tickets-iPhone-signed-${{ github.run_id }}
           path: |
@@ -88,7 +88,7 @@ jobs:
       - name: Remove Apple signing material
         if: always()
         run: python3 scripts/ios-release.py cleanup
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: iPhone-browser-evidence-${{ github.run_id }}

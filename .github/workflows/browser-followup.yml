@@ -87,7 +87,7 @@ jobs:
       - name: Confirm the application stayed on the activated revision
         if: ${{ always() && steps.privacy_baseline.outcome == 'success' }}
         run: node "$RUNNER_TEMP/privacy-followup/verify.mjs" after
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ always() && env.PRIVACY_FOLLOWUP == 'true' }}
         with:
           name: privacy-production-followup-${{ github.run_id }}-${{ github.run_attempt }}
@@ -95,7 +95,7 @@ jobs:
             ${{ runner.temp }}/privacy-followup/*.json
             test-results-privacy
           retention-days: 14
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
           name: focused-production-browser-${{ github.run_id }}-${{ github.run_attempt }}
