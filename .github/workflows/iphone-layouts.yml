@@ -1,67 +1,70 @@
-name: iPhone layout screenshots
+name: iPhone evidence repackaging (one-off)
 
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows: [Deploy to Cloudflare]
-    types: [completed]
-    branches: [main]
-  pull_request:
-    paths:
-      - mobile/src/**
-      - styles/**
-      - app/**
-      - lib/**
-      - scripts/capture-iphone-layouts.mjs
-      - .github/workflows/iphone-layouts.yml
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
-  group: iphone-layouts-${{ github.ref }}
-  cancel-in-progress: true
+  group: iphone-evidence-repack-41384240306
+  cancel-in-progress: false
 
 jobs:
-  screenshots:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
-    runs-on: macos-26
-    timeout-minutes: 15
+  repack:
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'bechirobob/tickets' && github.ref == 'refs/heads/maintenance/iphone-evidence-parts-20261102'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.event.pull_request.head.sha || github.sha }}
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+          persist-credentials: false
+          sparse-checkout: scripts/maintenance
+      - name: Verify the fixed original run and artifact metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/maintenance/repack_iphone_evidence.py metadata "$RUNNER_TEMP/original-provenance.json"
+      - name: Download only the approved existing artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          node-version: 22.23.4
-          cache: npm
-          cache-dependency-path: mobile/package-lock.json
-      - name: Prepare the candidate website for app/browser parity
-        if: github.event_name == 'pull_request'
-        env:
-          BECORE_RELEASE_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          npm ci
-          npm run build
-          node scripts/prepare-deploy.mjs
-          npx wrangler d1 migrations apply DB --local --persist-to .wrangler/state
-      - run: npm ci
-        working-directory: mobile
-      - run: npx playwright install webkit
-        working-directory: mobile
-      - run: npm run build
-        working-directory: mobile
-      - name: Capture every app screen and public browser destination
-        env:
-          LAYOUT_CANDIDATE: ${{ github.event_name == 'pull_request' && '1' || '' }}
-          LAYOUT_SOURCE_SHA: ${{ github.event.workflow_run.head_sha || github.event.pull_request.head.sha || github.sha }}
-          LAYOUT_WEB_SHA: ${{ github.event.workflow_run.head_sha }}
-          LAYOUT_OUTPUT: ${{ runner.temp }}/becore-iphone-layouts
-        run: node scripts/capture-iphone-layouts.mjs
+          repository: bechirobob/tickets
+          run-id: '41384240306'
+          artifact-ids: '13114687891'
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/original-iphone-evidence
+          merge-multiple: true
+      - name: Verify manifests and preserve every original file in bounded parts
+        id: package
+        run: python3 scripts/maintenance/repack_iphone_evidence.py package "$RUNNER_TEMP/original-iphone-evidence" "$RUNNER_TEMP/iphone-evidence-parts" "$RUNNER_TEMP/original-provenance.json"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        if: always()
         with:
-          name: BeCore-Tickets-iPhone-layouts-${{ github.run_id }}
-          path: ${{ runner.temp }}/becore-iphone-layouts
+          name: iphone-41384240306-part-01
+          path: ${{ runner.temp }}/iphone-evidence-parts/part-01/
+          compression-level: 0
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 14
+      - if: steps.package.outputs.parts >= 2
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: iphone-41384240306-part-02
+          path: ${{ runner.temp }}/iphone-evidence-parts/part-02/
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 14
+      - if: steps.package.outputs.parts >= 3
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: iphone-41384240306-part-03
+          path: ${{ runner.temp }}/iphone-evidence-parts/part-03/
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 14
+      - if: steps.package.outputs.parts >= 4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: iphone-41384240306-part-04
+          path: ${{ runner.temp }}/iphone-evidence-parts/part-04/
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 14
