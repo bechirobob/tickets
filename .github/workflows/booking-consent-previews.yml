@@ -55,7 +55,7 @@ env:
 # deployable artifact, or a waiver of Candidate verification/security failures.
 jobs:
   preview:
-    if: ${{ !(github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/feat/customer-experience-20261102' && inputs.customer_empty_capture_only) }}
+    if: ${{ github.ref != 'refs/heads/diag/room-refresh-compiled-20261102' && !(github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/feat/customer-experience-20261102' && inputs.customer_empty_capture_only) }}
     runs-on: ubuntu-24.04
     container:
       image: mcr.microsoft.com/playwright:v1.62.1-noble@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e
@@ -272,5 +272,62 @@ jobs:
           path: |
             outputs/customer-compiled-${{ matrix.engine }}/*.png
             outputs/customer-compiled-${{ matrix.engine }}/*.json
+          if-no-files-found: error
+          retention-days: 3
+
+  room_refresh_compiled:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/diag/room-refresh-compiled-20261102'
+    runs-on: ubuntu-24.04
+    container:
+      image: mcr.microsoft.com/playwright:v1.62.1-noble@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e
+      options: --user 1001 --shm-size=1g
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [chromium, webkit]
+    defaults:
+      run:
+        shell: bash
+    env:
+      EXPECTED_CUSTOMER_SOURCE: ${{ inputs.expected_customer_source }}
+      CUSTOMER_BROWSER: ${{ matrix.engine }}
+      CUSTOMER_EVIDENCE_DIR: outputs/room-refresh-${{ matrix.engine }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Bind diagnostic to the exact reviewed source before execution
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_CUSTOMER_SOURCE" =~ ^[a-f0-9]{40}$ ]]
+          test "$EXPECTED_CUSTOMER_SOURCE" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_CUSTOMER_SOURCE"
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          test -z "${E2E_BASE_URL:-}"
+          git merge-base --is-ancestor 618c0669a36f28367ef2d7873e17a029cb53d705 HEAD
+          git diff --exit-code 618c0669a36f28367ef2d7873e17a029cb53d705 HEAD -- . ':!.github/workflows/booking-consent-previews.yml' ':!scripts/customer-experience/room-refresh-check.mjs' ':!playwright.room-refresh.config.ts'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22.23.4
+      - run: npm audit --audit-level=low
+      - run: npm ci --no-audit
+      - run: node --test tests/room-update-client.test.mjs tests/room-lifecycle.test.mjs
+      - run: node scripts/verify-browser-environment.mjs chromium webkit
+      - name: Compile the isolated application
+        run: npm run build
+      - name: Exercise real local customer handlers with external traffic blocked
+        id: customer_ui
+        run: node scripts/customer-experience/room-refresh-check.mjs
+      - name: Preserve fictional screenshots and diagnostic receipts only
+        if: ${{ !cancelled() && (steps.customer_ui.outcome == 'success' || steps.customer_ui.outcome == 'failure') }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: room-refresh-${{ github.sha }}-${{ matrix.engine }}
+          path: |
+            outputs/room-refresh-${{ matrix.engine }}/browser
+            outputs/room-refresh-${{ matrix.engine }}/*.json
           if-no-files-found: error
           retention-days: 3
