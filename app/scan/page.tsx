@@ -20,11 +20,11 @@ export default async function ScanPage({ searchParams, scannerOnly = false }: { 
     <AdminLoginForm fixedReturnTo={`${returnTo}${returnTo.includes("?") ? "&" : "?"}source=scanner-pwa`} />
     <Link href="/scan/install">Install scanner app</Link>
   </section></main>;
+  if (scannerOnly && currentSession?.mustChangePassword) redirect("/admin/account?source=scanner-pwa");
   if (scannerOnly && currentSession && !hasPermission(currentSession, "gate.scan")) return <main className="admin-login scanner-login"><section>
     <h1>Scanner access required</h1><p>This account does not have ticket scanning access. Ask your event organiser to assign gate access.</p>
     <ScannerAccount actor={currentSession.actor} />
   </section></main>;
-  if (scannerOnly && currentSession?.mustChangePassword) redirect("/admin/account?source=scanner-pwa");
   const session = await requireAdminSession(returnTo, "gate.scan");
   const allEvents = await getPublicEvents();
   let events = allEvents;
