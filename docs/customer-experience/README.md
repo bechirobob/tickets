@@ -1,5 +1,7 @@
 # Customer experience review — source preview, not deployed
 
+> Current status (2026-11-02): see [release readiness](RELEASE-READINESS.md). Hosted full Chromium/WebKit journeys and the focused390px WebKit empty capture are now accepted. Earlier pending/unavailable statements below describe their original checkpoint, not the current status. No deployment or release admission is claimed.
+
 Base: `32b5956549cb3eff04e2abbcfda177bccb07b0f8` (verified current main when this task began).
 Branch: `feat/customer-experience-20261102`.
 

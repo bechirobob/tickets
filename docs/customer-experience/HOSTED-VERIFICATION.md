@@ -1,5 +1,7 @@
 # Hosted customer diagnostic handoff
 
+> Current status (2026-11-02): see [release readiness](RELEASE-READINESS.md). Hosted full Chromium/WebKit journeys and the focused390px WebKit empty capture are now accepted. Earlier pending/unavailable statements below describe their original checkpoint, not the current status. No deployment or release admission is claimed.
+
 Customer application source remains the ten-file reviewed increment based on live32b595. The hosted diagnostic adds no application changes, credentials, deployment actions or release-admission exceptions. Original PR392 screenshot review is resolved (parent-confirmed12f028c8 and live32b595 verification including WebKit run41444056693); it is not a remaining customer blocker.
 
 Use the existing **Booking consent previews** workflow (`booking-consent-previews.yml`) on branch `feat/customer-experience-20261102`. Set `expected_customer_source` to the exact published branch SHA supplied with this handoff. The new `customer_compiled` matrix refuses a mismatched SHA before npm/source execution. It runs only on this branch and manual dispatch, with contents:read and the established pinned Playwright image. No browser download step is added.

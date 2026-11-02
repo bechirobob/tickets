@@ -1,5 +1,7 @@
 # Compiled customer verification
 
+> Current status (2026-11-02): see [release readiness](RELEASE-READINESS.md). Hosted full Chromium/WebKit journeys and the focused390px WebKit empty capture are now accepted. Earlier pending/unavailable statements below describe their original checkpoint, not the current status. No deployment or release admission is claimed.
+
 This extends the source-component preview with the compiled application served by a local Miniflare Worker and a dedicated temporary D1 database. It is not a hosted preview, deployment, or physical iPhone test. The original `evidence/before` and `evidence/after` comparison remains immutable; newer screenshots live in `evidence/compiled`.
 
 ## Additional customer corrections
