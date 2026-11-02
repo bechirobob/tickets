@@ -3759,7 +3759,7 @@ def combined_source_family(root):
 
 
 CUSTOMER_TEST_FILE = Path(__file__).resolve()
-CUSTOMER_OPERATOR_BLOB = 'ce700b19036c10ed41540ff3548919b1aa58cd1b'
+CUSTOMER_OPERATOR_BLOB = 'ae5ecfc7675c1bc6045ffa39afc2706e9e096ca5'
 CUSTOMER_STAGED_PINS = dict(COMBINED_STAGED_PINS)
 
 

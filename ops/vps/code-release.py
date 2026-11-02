@@ -4013,8 +4013,8 @@ def reviewed_combined_application_blobs(expected, source):
 CUSTOMER_LIVE = '32b5956549cb3eff04e2abbcfda177bccb07b0f8'
 CUSTOMER_BASE = '32b5956549cb3eff04e2abbcfda177bccb07b0f8'
 CUSTOMER_BASE_TREE = '27ab8d9c8df6916f45eb5b2da7807d52ff44d897'
-CUSTOMER_SNAPSHOT = '49a77855da8bb663e91f21752b1d540381eebf62'
-CUSTOMER_SNAPSHOT_TREE = '26b3deefd9ebdc3178a22c9300f7403dc1d2bedd'
+CUSTOMER_SNAPSHOT = '0a3de9f1d5144b20111987bb714afc1f8ab918c2'
+CUSTOMER_SNAPSHOT_TREE = 'a1e9a0f21b998270f159a0ffd2c298ceec5a547d'
 CUSTOMER_CANDIDATE_BRANCH = 'release/tickets-customer-20261102'
 CUSTOMER_CONTROLS = frozenset({'ops/vps/code-release.py', 'ops/vps/test_code_release.py'})
 
