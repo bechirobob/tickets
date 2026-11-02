@@ -1,0 +1,33 @@
+✔ prepared image matches the root and mobile locked Playwright versions (2.243574ms)
+✔ readiness rejects mutable image tag (1.044972ms)
+✔ readiness rejects wrong image version (0.368744ms)
+✔ readiness rejects installed package mismatch (0.577048ms)
+✔ readiness rejects unreviewed Node runtime (0.313492ms)
+✔ readiness rejects wrong Linux distribution (0.283446ms)
+✔ readiness rejects wrong Ubuntu release (0.170887ms)
+✔ readiness rejects changed dependency lock (0.213761ms)
+✔ candidate-checks.yml/verify uses prepared browsers without installation (0.507853ms)
+✔ candidate-parallel-checks.yml/desktop_chromium uses prepared browsers without installation (0.353822ms)
+✔ candidate-parallel-checks.yml/mobile_chromium uses prepared browsers without installation (0.16616ms)
+✔ candidate-parallel-checks.yml/mobile_webkit uses prepared browsers without installation (0.13925ms)
+✔ tickets-code-release.yml/retired_preview uses prepared browsers without installation (0.136275ms)
+✔ booking-consent-previews.yml/preview uses prepared browsers without installation (0.124637ms)
+✔ booking-consent-previews.yml/customer_compiled uses prepared browsers without installation (0.113431ms)
+✔ customer-email-previews.yml/preview uses prepared browsers without installation (0.125188ms)
+✔ yorkeway-previews.yml/preview uses prepared browsers without installation (0.111437ms)
+✔ browser-followup.yml/verify uses prepared browsers without installation (0.13325ms)
+✔ input-modality-checks.yml/browser uses prepared browsers without installation (0.077216ms)
+✔ native-apps.yml/web-client uses prepared browsers without installation (0.105238ms)
+✔ focused browser diagnostics retain first failures without uploading green-run traces (0.886753ms)
+✔ privacy follow-up rejects a changed production identity and records both source revisions (18.179849ms)
+✔ ordinary deployment excludes only the finite reviewed tooling paths without changing its guards (1.855931ms)
+✔ existing maintenance covers both npm locks and pinned actions without automatic adoption (9.391103ms)
+✔ customer compiled preview is exact-source diagnostic only with prepared browsers (3.944321ms)
+ℹ tests 25
+ℹ suites 0
+ℹ pass 25
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 157.028369

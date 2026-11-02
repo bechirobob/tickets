@@ -23,7 +23,7 @@ const clientReady = () => true;
 const serverReady = () => false;
 
 const vibes: Array<{ value: VibeFilter; label: string }> = [
-  { value: "All", label: "All music & moods" },
+  { value: "All", label: "All music" },
   { value: "Late night", label: "Late night" },
   { value: "Day party", label: "Day party" },
   { value: "Alté", label: "Alté" },
@@ -60,7 +60,8 @@ export default function EventExplorer({ events, full = false, featuredSlug }: { 
   }
 
   if (!events.length) {
-    return <section className="event-empty"><Ticket size={28} /><h3>The next plan is still cooking.</h3><p>New Accra nights will land here once they’ve been reviewed. Got one worth going out for?</p><Link href="/organizer/submit">Submit an event <ArrowUpRight size={16} /></Link></section>;
+    const EmptyHeading = full ? "h2" : "h3";
+    return <section className="event-empty"><Ticket size={24} aria-hidden="true" /><EmptyHeading>No upcoming nights announced.</EmptyHeading><p>New events will appear here. Already booked? Your tickets and RSVPs are in My Nights.</p><div className="event-empty__actions"><Link href="/my-nights">My Nights <ArrowUpRight size={16} aria-hidden="true" /></Link><Link href="/hosts">Explore hosts <ArrowUpRight size={16} aria-hidden="true" /></Link></div></section>;
   }
 
   return <div className={`drop-explorer discovery-explorer${full ? " drop-explorer--full" : ""}`}>
@@ -76,7 +77,10 @@ export default function EventExplorer({ events, full = false, featuredSlug }: { 
     <div className="discovery-refinements">
       <p className="discovery-result-count" role="status">{visible.length} {visible.length === 1 ? "night" : "nights"}{area !== "All areas" ? ` in ${area}` : " in Accra"}{events.every((event) => event.isTestEvent) ? " · Preview listings" : ""}</p>
       {full ? <label className="discovery-date"><CalendarDays size={16} aria-hidden="true" /><span>{selectedDate ? new Intl.DateTimeFormat("en-GH", { day: "numeric", month: "short", year: "numeric", timeZone: "Africa/Accra" }).format(new Date(`${selectedDate}T00:00:00Z`)) : "Pick a date"}</span><input aria-label="Pick a date" type="date" disabled={!ready} value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} /></label> : null}
-      <details className="discovery-filters">
+      {full ? <div className="discovery-selects">
+        <label>Area<select aria-label="Area" disabled={!ready} value={area} onChange={event => setArea(event.target.value)}>{areas.map(item => <option key={item}>{item}</option>)}</select></label>
+        <label>Music & mood<select aria-label="Music and mood" disabled={!ready} value={vibe} onChange={event => setVibe(event.target.value as VibeFilter)}>{vibes.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+      </div> : <details className="discovery-filters">
         <summary>Filters{area !== "All areas" || vibe !== "All" ? ` (${Number(area !== "All areas") + Number(vibe !== "All")})` : ""}<ChevronDown size={16} aria-hidden="true" /></summary>
         <div className="discovery-filters__body">
           <label><MapPin size={16} aria-hidden="true" /><span className="sr-only">Area</span><select aria-label="Area" disabled={!ready} value={area} onChange={(event) => setArea(event.target.value)}>{areas.map((item) => <option key={item}>{item}</option>)}</select></label>
@@ -84,7 +88,7 @@ export default function EventExplorer({ events, full = false, featuredSlug }: { 
             {vibes.map((item) => <button key={item.value} type="button" disabled={!ready} aria-pressed={vibe === item.value} onClick={() => setVibe(item.value)}><b>{item.label}</b></button>)}
           </div>
         </div>
-      </details>
+      </details>}
     </div>
 
     {hasFilters ? <div className="discovery-active-filters"><p>{[selectedDate || (windowFilter === "next" ? "" : windowFilter === "weekend" ? "This weekend" : windowFilter === "tonight" ? "Tonight" : "Tomorrow"), area === "All areas" ? "" : area, vibe === "All" ? "" : vibe, search.trim() ? `“${search.trim()}”` : ""].filter(Boolean).join(" · ")}</p><button type="button" disabled={!ready} onClick={clearFilters}>Clear filters</button></div> : null}

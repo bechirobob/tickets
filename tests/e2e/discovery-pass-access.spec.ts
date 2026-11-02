@@ -37,10 +37,9 @@ test("date selection survives an event visit and clearing restores the catalogue
   if (!upcoming.length) await expect(page.getByRole('heading', { name: 'Even Accra has a quiet corner.' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
   await page.screenshot({ path: info.outputPath("discovery-dates.png"), fullPage: true });
-  await page.locator(".discovery-filters summary").click();
   await expect(page.getByLabel("Area", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Amapiano", exact: true }).click();
-  await expect(page.locator(".discovery-filters summary")).toContainText("Filters (1)");
+  await page.getByRole("combobox", { name: "Music and mood", exact: true }).selectOption("Amapiano");
+  await expect(page.locator(".discovery-active-filters")).toContainText("Amapiano");
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
   await page.screenshot({ path: info.outputPath("discovery-filters-expanded.png"), fullPage: true });
   await page.setViewportSize({ width: 320, height: 850 });
@@ -48,7 +47,7 @@ test("date selection survives an event visit and clearing restores the catalogue
   await expect(date).toHaveValue(selectedDate);
   await expect(page.getByLabel("Area", { exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
-  await expect(page.locator(".discovery-filters summary")).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Music and mood", exact: true })).toBeVisible();
   await page.screenshot({ path: info.outputPath("discovery-narrow-date-expanded.png"), fullPage: true });
   // An explicit date legitimately clears the relative date-window selection.
   await page.getByRole("button", { name: "Next up", exact: true }).click();
@@ -133,7 +132,7 @@ test('explicit recovery can switch email-owner proof without signing out another
   await expect(page.getByLabel('Booking or registration email')).toBeVisible();
   expect(recoveries).toBe(0);
   await page.getByLabel('Booking or registration email').fill('approved-guest@example.com');
-  await page.getByRole('button', { name: 'Bring back my Nights' }).click();
+  await page.getByRole('button', { name: 'Email my access link' }).click();
   await expect(page.getByRole('button', { name: 'Check your email' })).toBeDisabled();
   expect(recoveries).toBe(1);
 });
@@ -162,7 +161,7 @@ test('recovery is unavailable before hydration and preserves early entry through
   try {
     await page.goto('/my-nights?recover=1', { waitUntil: 'commit' });
     const email = page.getByLabel('Booking or registration email');
-    const submit = page.getByRole('button', { name: 'Bring back my Nights' });
+    const submit = page.getByRole('button', { name: 'Email my access link' });
     await expect(email).toBeDisabled();
     await expect(submit).toBeDisabled();
     await expect(page.getByRole('status').filter({ hasText: 'Getting secure recovery ready' })).toBeVisible();

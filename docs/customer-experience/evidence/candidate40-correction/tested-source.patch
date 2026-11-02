@@ -1,0 +1,181 @@
+diff --git a/app/customer-experience.css b/app/customer-experience.css
+index 23d96b3..fdb8309 100644
+--- a/app/customer-experience.css
++++ b/app/customer-experience.css
+@@ -1,3 +1,4 @@
++.poster-event-page .back-link { min-width: 44px; min-height: 44px; }
+ /* Customer-only hierarchy. Existing fonts, palettes and artwork remain authoritative. */
+ .customer-header-actions { display: flex; align-items: center; justify-content: end; gap: 12px; }
+ .customer-header-link { display: inline-flex; align-items: center; min-height: 44px; font-size: 14px; white-space: nowrap; }
+@@ -61,7 +62,7 @@
+   .customer-header-actions .night-mobile-menu .night-mobile-menu__trigger > .night-mobile-menu__trigger-label { display: none; }
+   .customer-header-link { font-size: 13px; }
+   .discovery-directory .directory-header, .poster-event-page .sub-header { grid-template-columns: minmax(32px, 1fr) auto minmax(100px, 1fr); gap: 8px; }
+-  .poster-event-page .back-link { font-size: 0; }
++  .poster-event-page .back-link__label { display: none; }
+   .discovery-directory .directory-intro { padding-block: 22px 16px; }
+   .discovery-selects { gap: 12px; }
+   .discovery-directory .discovery-grid[data-count="1"] { display: block; }
+@@ -84,6 +85,7 @@
+ @media (max-width: 359px) {
+   .discovery-selects { grid-template-columns: minmax(0, 1fr); }
+   .discovery-directory .directory-header, .poster-event-page .sub-header { grid-template-columns: 32px minmax(0, 1fr) auto; }
++  .poster-event-page .sub-header { grid-template-columns: 44px minmax(0, 1fr) auto; }
+   .discovery-directory .directory-header .brand-mark, .poster-event-page .sub-header .brand-mark { justify-self: start; }
+   .discovery-directory .discovery-grid[data-count="1"] .drop-card { grid-template-columns: 92px minmax(0, 1fr); gap: 12px; }
+   .my-nights-page--studio .my-nights-tabs.segmented-control.segmented-control button { padding-inline: 5px; gap: 3px; font-size: 12px; }
+diff --git a/app/discovery-back-link.tsx b/app/discovery-back-link.tsx
+index 1b4ca8d..9a93286 100644
+--- a/app/discovery-back-link.tsx
++++ b/app/discovery-back-link.tsx
+@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react";
+ import { restorePublicDestination } from "./public-browsing-memory";
+ 
+ export default function DiscoveryBackLink() {
+-  return <Link href="/events" scroll={false} className="back-link" onClick={event => {
++  return <Link href="/events" scroll={false} className="back-link" aria-label="The Drop" onClick={event => {
+     if (!event.button && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) restorePublicDestination("/events");
+-  }}><ArrowLeft size={17} /> The Drop</Link>;
++  }}><ArrowLeft size={17} aria-hidden="true" /><span className="back-link__label">The Drop</span></Link>;
+ }
+diff --git a/tests/e2e/mobile-app-behavior.spec.ts b/tests/e2e/mobile-app-behavior.spec.ts
+index 3e048ad..f44545e 100644
+--- a/tests/e2e/mobile-app-behavior.spec.ts
++++ b/tests/e2e/mobile-app-behavior.spec.ts
+@@ -323,10 +323,26 @@ test('dense My Nights headers keep the full brand and separate 44px controls at
+     expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+   }
+   await info.attach('member-header-geometry.json', { body: JSON.stringify(geometries, null, 2), contentType: 'application/json' });
+-  // Dense member headers do not remove the discoverable label elsewhere.
++  // Events now shares the compact named menu control alongside direct My Nights.
+   await page.setViewportSize({ width: 390, height: 664 });
+   await page.goto('/events');
+-  await expect(page.locator('.night-mobile-menu__trigger-label')).toBeVisible();
++  const eventsHeader = page.locator('.directory-header');
++  const eventsMenu = eventsHeader.getByRole('button', { name: 'Open navigation', exact: true });
++  await expect(eventsMenu).toBeEnabled();
++  await expect(eventsMenu).toBeInViewport({ ratio: 1 });
++  await expect(eventsMenu.locator('.night-mobile-menu__trigger-label')).toBeHidden();
++  const eventsControls = [eventsHeader.locator('.brand-mark'), eventsHeader.getByRole('link', { name: 'My Nights', exact: true }), eventsMenu];
++  const eventsBoxes = await Promise.all(eventsControls.map(element => element.boundingBox()));
++  for (const box of eventsBoxes) {
++    expect(box!.width).toBeGreaterThanOrEqual(44);
++    expect(box!.height).toBeGreaterThanOrEqual(44);
++  }
++  for (let index = 1; index < eventsBoxes.length; index++) expect(eventsBoxes[index]!.x - eventsBoxes[index - 1]!.x - eventsBoxes[index - 1]!.width).toBeGreaterThanOrEqual(4);
++  await eventsMenu.focus();
++  await eventsMenu.press('Enter');
++  await expect(page.getByRole('navigation', { name: 'Main navigation', exact: true })).toBeVisible();
++  await page.keyboard.press('Escape');
++  await expect(eventsMenu).toBeFocused();
+ });
+ 
+ test('an open anchored menu keeps one-click notification switching and its short-screen close control reachable', async ({ page }) => {
+diff --git a/tests/e2e/my-nights-studio.spec.ts b/tests/e2e/my-nights-studio.spec.ts
+index 148b698..99d1b08 100644
+--- a/tests/e2e/my-nights-studio.spec.ts
++++ b/tests/e2e/my-nights-studio.spec.ts
+@@ -1,7 +1,38 @@
+-import { expectSegmentedSelection } from "./segmented-control";
++import type { Locator } from "@playwright/test";
+ import AxeBuilder from "@axe-core/playwright";
+ import { expect, test } from "./analytics-fixture";
+ 
++// My Nights deliberately uses a short border on the selected tab, not the
++// moving filled marker used by discovery. Keep those shared assertions intact.
++async function expectMyNightsSelection(control: Locator) {
++  await expect(control).toBeVisible();
++  const selected = control.locator(':scope > button[aria-current="page"]');
++  await expect(selected).toHaveCount(1);
++  await expect(selected).toBeVisible();
++  await expect(selected).toHaveCSS("border-bottom-width", "2px");
++  await expect(selected).toHaveCSS("border-bottom-style", "solid");
++  await expect(selected).toHaveCSS("border-bottom-color", "rgb(228, 241, 139)");
++  await expect(control.locator(':scope > .segmented-control__selection')).toBeHidden();
++  const issues = await control.evaluate(root => {
++    const problems: string[] = [];
++    if (root.scrollWidth > root.clientWidth + 1) problems.push("Tabs overflow horizontally");
++    for (const button of root.querySelectorAll(':scope > button')) {
++      const box = button.getBoundingClientRect(), style = getComputedStyle(button);
++      if (box.width < 44 || box.height < 44) problems.push("Tab target below 44px");
++      if (button.getAttribute('aria-current') !== 'page' && style.borderBottomWidth !== '0px') problems.push("Unselected tab has an indicator");
++      if (style.boxShadow !== 'none' || style.textShadow !== 'none' || style.textDecorationLine !== 'none') problems.push("Decorative shadow or text underline remains");
++      const walker = document.createTreeWalker(button, NodeFilter.SHOW_TEXT);
++      while (walker.nextNode()) {
++        if (!walker.currentNode.textContent?.trim()) continue;
++        const range = document.createRange(); range.selectNodeContents(walker.currentNode);
++        for (const text of range.getClientRects()) if (text.width && (text.left < box.left - 1 || text.right > box.right + 1 || text.top < box.top - 1 || text.bottom > box.bottom + 1)) problems.push("Tab label is clipped");
++      }
++    }
++    return problems;
++  });
++  expect(issues).toEqual([]);
++}
++
+ test.use({ serviceWorkers: "block" });
+ test.beforeEach(async ({ page }) => {
+   await page.route("**/api/**", route => route.fulfill({ status: 401, json: { error: "Isolated member fixture" } }));
+@@ -35,7 +66,7 @@ test("plans filter, search and restore without duplicated navigation", async ({
+   await expect(page.getByRole("heading", { name: "No matching nights." })).toBeVisible();
+   await page.getByRole("button", { name: "Clear search", exact: true }).first().click();
+   const nav = page.getByRole("navigation", { name: "My Nights views" });
+-  await expectSegmentedSelection(nav);
++  await expectMyNightsSelection(nav);
+   await nav.getByRole("button", { name: /^Past/ }).click();
+   await expect(page.locator(".night-listing")).toContainText("Last Summer");
+   await page.reload();
+@@ -43,13 +74,13 @@ test("plans filter, search and restore without duplicated navigation", async ({
+   await expect(page.getByTestId("brand-arrival")).toBeHidden();
+   await nav.getByRole("button", { name: /^Following/ }).click();
+   await expect(page.locator(".night-listing")).toContainText("Sunday Social");
+-  await expectSegmentedSelection(nav);
++  await expectMyNightsSelection(nav);
+   await expect(page.getByRole("link", { name: "The Room", exact: true })).toHaveCount(0);
+   const rsvps = nav.getByRole("button", { name: /^RSVPs/ });
+   await rsvps.focus();
+   await rsvps.press("Enter");
+   await expect(rsvps).toBeFocused();
+-  await expectSegmentedSelection(nav);
++  await expectMyNightsSelection(nav);
+   await expect(page.getByRole("heading", { name: "No RSVPs yet." })).toBeVisible();
+ });
+ 
+@@ -117,9 +148,12 @@ test("narrow My Nights selectors keep readable targets with reduced motion", asy
+   await page.route("**/api/customer/my-nights", route => route.fulfill({ json: { attendee: { displayName: "Ama" }, nights: [] } }));
+   await page.goto("/my-nights");
+   const nav = page.getByRole("navigation", { name: "My Nights views", exact: true });
+-  await expectSegmentedSelection(nav);
+-  await nav.getByRole("button", { name: /^Following/ }).click();
+-  await expectSegmentedSelection(nav);
++  await expectMyNightsSelection(nav);
++  const following = nav.getByRole("button", { name: /^Following/ });
++  await following.focus();
++  await following.press("Enter");
++  await expect(following).toBeFocused();
++  await expectMyNightsSelection(nav);
+   await expect(page.getByRole("heading", { name: "Something catch your eye?", exact: true })).toBeVisible();
+   expect(await nav.locator(".segmented-control__selection").evaluate(el => getComputedStyle(el).transitionDuration)).toBe("0s");
+   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)).toBe(false);
+diff --git a/tests/e2e/public-journey.spec.ts b/tests/e2e/public-journey.spec.ts
+index 5ce3be6..f1d76de 100644
+--- a/tests/e2e/public-journey.spec.ts
++++ b/tests/e2e/public-journey.spec.ts
+@@ -297,6 +297,18 @@ for (const path of publicPages) {
+     expect(findings.curvedPartialBorders).toEqual([]);
+     expect(findings.tinyText).toEqual([]);
+     expect(findings.oversizedHeadings).toEqual([]);
++    const back = page.locator('.poster-event-page .back-link');
++    if (await back.count()) {
++      await expect(back).toHaveAccessibleName('The Drop');
++      await expect(back).toHaveAttribute('href', '/events');
++      const target = await back.boundingBox();
++      expect(target!.width).toBeGreaterThanOrEqual(44);
++      expect(target!.height).toBeGreaterThanOrEqual(44);
++      const headerBoxes = await page.locator('.poster-event-page .sub-header > *').evaluateAll(elements => elements.map(el => {
++        const box = el.getBoundingClientRect(); return { left: box.left, right: box.right };
++      }));
++      for (let i = 1; i < headerBoxes.length; i++) expect(headerBoxes[i].left - headerBoxes[i - 1].right).toBeGreaterThanOrEqual(0);
++    }
+   });
+ }
+ 

@@ -98,7 +98,7 @@ test("Hosts connect to the guest journey", async ({ page }, testInfo) => {
   const bridge = page.locator(".backstage-bridge");
   await bridge.scrollIntoViewIfNeeded();
   await expect(bridge.getByRole("link", { name: "Meet the Hosts" })).toHaveAttribute("href", "/hosts");
-  await expect(bridge.getByRole("link", { name: "List your event" })).toHaveAttribute("href", "/organizer/submit");
+  await expect(bridge.getByRole("link", { name: "Explore nights" })).toHaveAttribute("href", "/events");
   const photo = bridge.locator(".backstage-bridge__image img");
   await expect.poll(() => photo.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
   const bounds = await photo.boundingBox();

@@ -15,8 +15,8 @@ export async function expectWebsiteDiscovery(page: Page, catalogue: PublicCatalo
     return true;
   }
   await expect(page.locator('.event-empty')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'The next plan is still cooking.', exact: true })).toBeVisible();
-  await expect(page.locator('.event-empty').getByRole('link', { name: 'Submit an event' })).toHaveAttribute('href', '/organizer/submit');
+  await expect(page.getByRole('heading', { name: 'No upcoming nights announced.', exact: true })).toBeVisible();
+  await expect(page.locator('.event-empty').getByRole('link', { name: 'My Nights' })).toHaveAttribute('href', '/my-nights');
   await expect(page.locator('.drop-card, .discovery-explorer')).toHaveCount(0);
   await expect(page.getByLabel('Pick a date')).toHaveCount(0);
   await expect(page.getByRole('searchbox', { name: 'Search events, artists or venues' })).toHaveCount(0);

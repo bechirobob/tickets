@@ -1,0 +1,16 @@
+{
+  "testedSource": "09e389b63ac879a0931840fabbcbbc2c534cdda3",
+  "originalHostedRun": "41451355779",
+  "originalSource": "896e58a08758821b17565b149ddb2a9884bddc3f",
+  "originalArtifactsPreserved": true,
+  "engine": "chromium",
+  "hostedWebKit": "pending new run; original failure not overwritten",
+  "files": {
+    "results.json": "03f9f59e469210ab841a51aa91c70839756334f44f8fa73ba1433d88b2fb66d3",
+    "desktop-hosts.png": "5f16ffe5a2b7b0e1f067effdb3b7c4158b72bcd3bfc553d30941af3089cee400",
+    "narrow-menu.png": "8efe2022d8f7d4baa8a0071f0ae79f89f65d3144a66043b475ae1fb6e063a4e8",
+    "narrow-recovery-help-reachable.png": "0ad3cceaa8d3c1a5b4d60554e07433dd70ce0e5f1dbe99ab9e0d3feec5f9f8e0",
+    "narrow-recovery-events-reachable.png": "079a280caee8ed79315d631bc1f4359282b33b780a8301ec8ebbbf45909fa5cb",
+    "narrow-rsvp-my-nights.png": "fb91a0e7b5ddb74d684820a6378f09229585cadcdbd727ded6884bd9dec85043"
+  }
+}

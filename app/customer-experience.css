@@ -1,0 +1,102 @@
+.poster-event-page .back-link { min-width: 44px; min-height: 44px; }
+/* Customer-only hierarchy. Existing fonts, palettes and artwork remain authoritative. */
+.customer-header-actions { display: flex; align-items: center; justify-content: end; gap: 12px; }
+.customer-header-link { display: inline-flex; align-items: center; min-height: 44px; font-size: 14px; white-space: nowrap; }
+.discovery-directory .directory-intro { padding-block: 28px 20px; }
+.discovery-directory .directory-intro h1 { font-size: clamp(28px, 3vw, 38px); letter-spacing: -.035em; }
+:is(.discovery-home, .discovery-directory) .event-empty { min-height: 0; padding: 28px 0; align-content: start; }
+:is(.discovery-home, .discovery-directory) .event-empty :is(h2, h3) { font-size: 24px; line-height: 1.25; letter-spacing: -.025em; }
+.event-empty__actions { display: flex; flex-wrap: wrap; gap: 8px 24px; }
+:is(.discovery-home, .discovery-directory) .event-empty__actions a { min-height: 44px; margin-top: 12px; font-weight: 600; }
+.discovery-selects { flex-basis: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-block: 8px; max-width: 580px; }
+.discovery-selects label { min-width: 0; display: grid; gap: 4px; color: #d2c7d4; font-size: 13px; }
+.discovery-selects select { width: 100%; min-width: 0; min-height: 44px; padding: 8px 24px 8px 0; border: 0; border-bottom: 1px solid #87758c; border-radius: 0; background: transparent; color: #f4f1ea; font: inherit; font-size: 16px; }
+.discovery-selects option { background: #281b2b; color: #f4f1ea; }
+.discovery-selects select:focus-visible { outline: 2px solid #eee; outline-offset: 3px; }
+.discovery-directory .discovery-grid[data-count="1"] { grid-template-columns: minmax(0, 360px); justify-content: start; }
+.event-section-links { width: min(1040px, calc(100% - 80px)); margin: 0 auto 20px; display: flex; flex-wrap: wrap; gap: 4px 24px; border-block: 1px solid var(--line); }
+.event-section-links a { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; color: var(--ink); font-size: 14px; text-decoration: underline; text-underline-offset: 4px; }
+.poster-event-page #register, .poster-event-page #event-story { scroll-margin-top: 20px; }
+.poster-event-page #register:focus-visible { outline: 2px solid var(--ink); outline-offset: 6px; }
+.poster-event-page .event-detail-overview h1 { font-size: clamp(28px, 3vw, 38px); }
+.checkout-page .checkout-main { padding-block: 32px 48px; }
+.checkout-page .checkout-step--second { margin-top: 30px; }
+.checkout-page .checkout-step h1 { font-size: 30px; }
+.checkout-page .checkout-step h2 { font-size: 22px; line-height: 1.3; }
+.checkout-page .quantity-control { display: flex; align-items: center; gap: 10px; }
+.checkout-page .quantity-label { font-size: 14px; color: var(--muted); }
+.checkout-page .order-summary { padding-block: 32px; }
+.checkout-discount { margin-top: 16px; border-block: 1px solid #68645e; }
+.checkout-discount summary { min-height: 44px; padding-block: 12px; font-size: 14px; cursor: pointer; }
+.checkout-discount .checkout-coupon { margin-block: 8px 16px; }
+.checkout-discount .checkout-coupon label { color: inherit; }
+.checkout-page .summary-lines { margin-top: 20px; }
+.checkout-page .summary-lines :is(span, strong) { padding-block: 12px; }
+.checkout-page .payment-message:empty { display: none; }
+.my-nights-page--studio .my-nights-shell { padding-top: 28px; }
+.my-nights-page--studio .nights-heading h1 { font-size: 32px; }
+.my-nights-page--studio .nights-heading { padding-bottom: 18px; }
+.my-nights-page--studio .my-nights-shell:has(.my-nights-locked)::before { content: none; }
+.my-nights-page--studio .my-nights-locked { min-height: 0; padding-block: 20px 32px; max-width: 560px; }
+.my-nights-page--studio .my-nights-locked h2 { font-size: 24px; line-height: 1.25; }
+.my-nights-page--studio .my-nights-recovery { margin-top: 20px; }
+.my-nights-page--studio .my-nights-recovery label { font-size: 14px; }
+.my-nights-page--studio .night-listing--next { background: transparent; border-radius: 0; padding: 22px 0; margin-inline: 0; border-bottom: 1px solid #705568; }
+.my-nights-page--studio .my-nights-tabs.segmented-control.segmented-control { border: 0; border-bottom: 1px solid #705568; background: transparent; border-radius: 0; padding: 0; gap: 4px; }
+.my-nights-page--studio .my-nights-tabs.segmented-control.segmented-control button { background: transparent; border-radius: 0; box-shadow: none; padding-inline: 12px; }
+.my-nights-page--studio .my-nights-tabs.segmented-control.segmented-control button[aria-current="page"] { color: #f4f1ea; background: transparent; box-shadow: none; border-bottom: 2px solid #e4f18b; }
+.my-nights-page--studio .my-nights-tabs.segmented-control.segmented-control button[aria-current="page"]:focus-visible { outline-color: #eee; }
+@media (max-width: 760px) {
+  .event-section-links { width: calc(100% - 36px); margin-bottom: 16px; gap: 4px 18px; }
+  .poster-event-page .event-detail-poster { aspect-ratio: auto; height: 300px; border-radius: 0; }
+  .poster-event-page .event-detail-poster img { max-height: 300px; object-fit: contain; }
+  .poster-event-page .event-detail-layout { gap: 20px; }
+  .poster-event-page .event-detail-facts { margin-top: 18px; }
+  .poster-event-page .event-date-display > b { font-size: 44px; }
+  .poster-event-page .event-date-display strong { font-size: 20px; }
+  .poster-event-page .event-countdown { margin-top: 18px; padding-top: 16px; }
+  .poster-event-page .event-countdown b { font-size: 24px; }
+}
+@media (max-width: 700px) {
+  .customer-header-actions { gap: 4px; }
+  .customer-header-actions .night-mobile-menu .night-mobile-menu__trigger > .night-mobile-menu__trigger-label { display: none; }
+  .customer-header-link { font-size: 13px; }
+  .discovery-directory .directory-header, .poster-event-page .sub-header { grid-template-columns: minmax(32px, 1fr) auto minmax(100px, 1fr); gap: 8px; }
+  .poster-event-page .back-link__label { display: none; }
+  .discovery-directory .directory-intro { padding-block: 22px 16px; }
+  .discovery-selects { gap: 12px; }
+  .discovery-directory .discovery-grid[data-count="1"] { display: block; }
+  .discovery-directory .discovery-grid[data-count="1"] .drop-card { display: grid; grid-template-columns: minmax(0, 116px) minmax(0, 1fr); gap: 16px; align-items: start; }
+  .discovery-directory .discovery-grid[data-count="1"] .drop-card__image { aspect-ratio: 4 / 5; }
+  .discovery-directory .discovery-grid[data-count="1"] .drop-card__body { padding-top: 0; }
+  .checkout-page .checkout-main { padding: 28px 18px 32px; }
+  .checkout-page .order-summary { padding: 28px 18px; }
+  .checkout-page .checkout-step h1 { font-size: 27px; }
+  .checkout-page .checkout-step h2 { font-size: 21px; }
+  .my-nights-page--studio .my-nights-shell { padding: 24px 18px 80px; }
+  .my-nights-page--studio .night-listing { gap: 8px 14px; padding-block: 20px; }
+  .my-nights-page--studio .night-listing--next { grid-template-columns: 76px minmax(0, 1fr); }
+  .my-nights-page--studio .night-listing__art { height: 106px; }
+  .my-nights-page--studio .night-listing h2 { font-size: 21px; }
+  .my-nights-page--studio .night-listing__when span { display: inline; margin: 0; }
+  .my-nights-page--studio .night-listing__actions { margin-top: 8px; }
+  .my-nights-page--studio .my-nights-tabs.segmented-control.segmented-control button { padding-inline: 8px; gap: 5px; font-size: 13px; }
+}
+@media (max-width: 359px) {
+  .discovery-selects { grid-template-columns: minmax(0, 1fr); }
+  .discovery-directory .directory-header, .poster-event-page .sub-header { grid-template-columns: 32px minmax(0, 1fr) auto; }
+  .poster-event-page .sub-header { grid-template-columns: 44px minmax(0, 1fr) auto; }
+  .discovery-directory .directory-header .brand-mark, .poster-event-page .sub-header .brand-mark { justify-self: start; }
+  .discovery-directory .discovery-grid[data-count="1"] .drop-card { grid-template-columns: 92px minmax(0, 1fr); gap: 12px; }
+  .my-nights-page--studio .my-nights-tabs.segmented-control.segmented-control button { padding-inline: 5px; gap: 3px; font-size: 12px; }
+}
+
+.my-nights-page--studio .my-nights-tabs > .segmented-control__selection { display: none; }
+
+/* Keep action glyphs aligned without a separate decorative tile. */
+body :is(.discovery-home, .discovery-directory, .poster-event-page, .checkout-page, .my-nights-page--studio, .hosts-page, .about-page) :is(a, button).ticket-action[data-variant] .ticket-action__icon { background: transparent; border-radius: 0; }
+.host-directory-verification { display: flex; align-items: center; gap: 6px; }
+.host-directory-verification svg { flex: none; }
+@media (max-width: 760px) {
+  .event-detail-loading .event-detail-poster { aspect-ratio: auto; height: 300px; }
+}

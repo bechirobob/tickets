@@ -1,0 +1,394 @@
+{
+  "branch": "feat/customer-experience-20261102",
+  "base": "32b5956549cb3eff04e2abbcfda177bccb07b0f8",
+  "remoteMain": "32b5956549cb3eff04e2abbcfda177bccb07b0f8",
+  "review": "Only branch publication; no push selector matches this branch. Deploy/workflow_run chains not triggered. No PR or dispatch.",
+  "workflows": [
+    {
+      "ref": "HEAD",
+      "path": ".github/workflows/backup-transport-checks.yml",
+      "triggers": "on:\n  pull_request:\n    branches: [main]\n    paths:\n      - .github/workflows/deploy.yml\n      - .github/backup/**\n      - .github/workflows/backup-transport-checks.yml\n      - .github/workflows/tickets-backup.yml\n  push:\n    branches: [main]\n    paths:\n      - .github/workflows/deploy.yml\n      - .github/backup/**\n      - .github/workflows/backup-transport-checks.yml\n      - .github/workflows/tickets-backup.yml\n  workflow_dispatch:"
+    },
+    {
+      "ref": "HEAD",
+      "path": ".github/workflows/browser-audit.yml",
+      "triggers": "on:\n  workflow_run:\n    workflows: [\"Deploy to Cloudflare\"]\n    types: [completed]\n  workflow_dispatch:\n  workflow_call:\n    inputs:\n      expected_source:\n        description: Exact source just activated by the guarded VPS release\n        required: true\n        type: string\n      activation_required:\n        description: Require the successful VPS activation revision\n        type: boolean\n        default: true"
+    },
+    {
+      "ref": "HEAD",
+      "path": ".github/workflows/candidate-parallel-checks.yml",
+      "triggers": "on:\n  push:\n    branches: [improve/release-evidence-parallel-20261013]\n  workflow_dispatch:\n    inputs:\n      expected_source:\n        description: Exact reviewed candidate SHA; branch movement must fail before candidate code executes\n        required: true\n        type: string\n      trusted_base:\n        description: Independently selected reviewed controls ancestor on main\n        required: true\n        type: string"
+    },
+    {
+      "ref": "HEAD",
+      "path": ".github/workflows/cinco-confirmation-release-20261019.yml",
+      "triggers": "on:\n  push:\n    branches: [main]\n    paths: [.github/workflows/cinco-confirmation-release-20261019.yml]"
+    },
+    {
+      "ref": "HEAD",
+      "path": ".github/workflows/d1-recovery-rehearsal.yml",
+      "triggers": "on:\n  push:\n    branches:\n      - main\n    paths:\n      - \"scripts/check-d1-recovery-runtime.mjs\"\n      - \"scripts/rehearse-d1-recovery.sh\"\n      - \"tests/d1-recovery-privacy.test.mjs\"\n      - \".github/workflows/d1-recovery-rehearsal.yml\"\n  schedule:\n    - cron: \"15 4 * * 0\"\n  workflow_dispatch:"
+    },
+    {
+      "ref": "HEAD",
+      "path": ".github/workflows/dependency-security.yml",
+      "triggers": "on:\n  push:\n    branches: [main]\n    paths: [package.json, package-lock.json, mobile/package.json, mobile/package-lock.json, .github/dependabot.yml, .github/workflows/dependency-security.yml]\n  schedule:\n    - cron: \"30 5 * * 1\"\n  workflow_dispatch:"
+    },
+    {
+      "ref": "HEAD",
+      "path": ".github/workflows/deploy.yml",
+      "triggers": "on:\n  push:\n    branches:\n      - main\n    # Operator diagnostics do not change the application. Workflow-only release\n    # configuration edits remain deployable through explicit workflow_dispatch.\n    paths-ignore:\n      # Recovery maintenance is not an application release.\n      - '.github/workflows/d1-recovery-rehearsal.yml'\n      - 'scripts/check-d1-recovery-runtime.mjs'\n      - 'tests/d1-recovery-privacy.test.mjs'\n      - 'docs/runbooks/d1-recovery.md'\n      - '.gitignore'\n      - 'tests/staff-app-launch.test.mjs'\n      - 'ops/vps/operator_evidence.py'\n      - 'ops/vps/test_operator_evidence.py'\n      - '.github/workflows/tickets-backup.yml'\n      - '.github/workflows/backup-transport-checks.yml'\n      - '.github/backup/**'\n      - '.github/workflows/tickets-vps-diagnostics.yml'\n      - '.github/workflows/deploy.yml'\n      - '.github/workflows/tickets-handover.yml'\n      - 'ops/handover/**'\n      - 'tests/handover-loopback-health.test.mjs'\n      - 'docs/operations/dual-hosting.md'\n      - '.github/workflows/tickets-release-operator-checks.yml'\n      - '.github/workflows/browser-followup.yml'\n      - 'tests/browser-environment.test.mjs'\n      - 'tests/test_operator_retry_workflow.py'\n      - 'ops/vps/test_code_release.py'\n      - '.github/workflows/candidate-parallel-checks.yml'\n      - '.github/workflows/tickets-code-release.yml'\n      - 'ops/vps/candidate_build.py'\n      - 'ops/vps/code-release.py'\n      - 'ops/vps/parallel_candidate_retry.py'\n      - 'ops/vps/parallel_candidate_retry_control.py'\n      - 'ops/vps/test_candidate_build.py'\n      - 'ops/vps/test_parallel_candidate_retry.py'\n      - 'ops/vps/test_parallel_candidate_retry_control.py'\n      - 'ops/vps/test_parallel_retry_admission.py'\n      - 'tests/test_candidate_parallel_workflow.py'\n      - 'ops/vps/test_yorkeway_release.py'\n  workflow_dispatch:\n    inputs:\n      trusted_base:\n        description: Independently selected reviewed control-plane commit on main\n        required: true\n        type: string"
+    },
+    {
+      "ref": "HEAD",
+      "path": ".github/workflows/event-capacity.yml",
+      "triggers": "on:\n  push:\n    branches: ['perf/event-capacity-400']\n  workflow_dispatch:"
+    },
+    {
+      "ref": "HEAD",
+      "path": ".github/workflows/fallback-infrastructure.yml",
+      "triggers": "on:\n  push:\n    branches: [feat/vps-maintenance-fallback]\n    paths:\n      - .github/workflows/fallback-infrastructure.yml\n      - scripts/inspect-fallback-infrastructure.mjs"
+    },
+    {
+      "ref": "HEAD",
+      "path": ".github/workflows/handover-preflight.yml",
+      "triggers": "on:\n  push:\n    branches: [feat/vps-live-handover-20260929]\n    paths: ['.github/workflows/handover-preflight.yml', 'ops/handover/live-preflight.mjs']"
+    },
+    {
+      "ref": "HEAD",
+      "path": ".github/workflows/handover-return-diagnose.yml",
+      "triggers": "on:\n  push:\n    branches: [ops/vps-standby-completion-20260929]\n    paths: [.github/workflows/handover-return-diagnose.yml]"
+    },
+    {
+      "ref": "HEAD",
+      "path": ".github/workflows/handover-return-prepare.yml",
+      "triggers": "on:\n  push:\n    branches: [ops/vps-standby-completion-20260929]\n    paths: [.github/workflows/handover-return-prepare.yml]"
+    },
+    {
+      "ref": "HEAD",
+      "path": ".github/workflows/handover-return-verify.yml",
+      "triggers": "on:\n  push:\n    branches: [ops/vps-standby-completion-20260929]\n    paths: [.github/workflows/handover-return-verify.yml]"
+    },
+    {
+      "ref": "HEAD",
+      "path": ".github/workflows/handover-tools.yml",
+      "triggers": "on:\n  push:\n    branches: [ops/vps-standby-completion-20260929]\n    paths: ['ops/handover/**', 'tests/handover-*.test.mjs', '.github/workflows/handover-tools.yml']"
+    },
+    {
+      "ref": "HEAD",
+      "path": ".github/workflows/hosted-capacity.yml",
+      "triggers": "on:\n  push:\n    branches: [ops/hosted-capacity-readiness, ops/hosted-capacity-diagnostics, fix/room-render-and-browser-reliability]\n    paths: ['scripts/capacity/**', '.github/workflows/hosted-capacity.yml']\n  workflow_dispatch:"
+    },
+    {
+      "ref": "HEAD",
+      "path": ".github/workflows/input-modality-checks.yml",
+      "triggers": "on:\n  push:\n    branches: [fix/shared-input-focus-20261024]\n  workflow_dispatch:"
+    },
+    {
+      "ref": "HEAD",
+      "path": ".github/workflows/iphone-layouts.yml",
+      "triggers": "on:\n  workflow_dispatch:\n  workflow_run:\n    workflows: [Deploy to Cloudflare]\n    types: [completed]\n    branches: [main]\n  pull_request:\n    paths:\n      - mobile/src/**\n      - styles/**\n      - app/**\n      - lib/**\n      - scripts/capture-iphone-layouts.mjs\n      - .github/workflows/iphone-layouts.yml"
+    },
+    {
+      "ref": "HEAD",
+      "path": ".github/workflows/marketing-connection.yml",
+      "triggers": "on:\n  workflow_dispatch:\n  workflow_run:\n    workflows: [Deploy to Cloudflare]\n    types: [completed]"
+    },
+    {
+      "ref": "HEAD",
+      "path": ".github/workflows/prepare-vps-fallback.yml",
+      "triggers": "on:\n  push:\n    branches: [feat/vps-maintenance-fallback]\n    paths: ['ops/fallback/**', '.github/workflows/prepare-vps-fallback.yml']"
+    },
+    {
+      "ref": "HEAD",
+      "path": ".github/workflows/preview-data-inventory.yml",
+      "triggers": "on:\n  push:\n    branches: [feat/full-visual-audit]\n    paths: ['scripts/inspect-preview-data.mjs', '.github/workflows/preview-data-inventory.yml']\n  workflow_dispatch:"
+    },
+    {
+      "ref": "HEAD",
+      "path": ".github/workflows/puro-access-readonly-20261020.yml",
+      "triggers": "on:\n  push:\n    branches: [main]\n    paths: [.github/workflows/puro-access-readonly-20261020.yml]"
+    },
+    {
+      "ref": "HEAD",
+      "path": ".github/workflows/puro-access-release-20261019.yml",
+      "triggers": "on:\n  push:\n    branches: [main]\n    paths: [.github/workflows/puro-access-release-20261019.yml]"
+    },
+    {
+      "ref": "HEAD",
+      "path": ".github/workflows/puro-approval-readonly-20261019.yml",
+      "triggers": "on:\n  push:\n    branches: [main]\n    paths: [.github/workflows/puro-approval-readonly-20261019.yml]"
+    },
+    {
+      "ref": "HEAD",
+      "path": ".github/workflows/puro-delivery-readonly-20261020.yml",
+      "triggers": "on:\n  push:\n    branches: [main]\n    paths: [.github/workflows/puro-delivery-readonly-20261020.yml]"
+    },
+    {
+      "ref": "HEAD",
+      "path": ".github/workflows/puro-exceso-publish.yml",
+      "triggers": "on:\n  push:\n    branches: [main]\n    paths: [ops/handover/puro_exceso/activate.sha256]"
+    },
+    {
+      "ref": "HEAD",
+      "path": ".github/workflows/puro-first-host-delivery-readonly-20261024.yml",
+      "triggers": "on:\n  push:\n    branches: [main]\n    paths: [.github/workflows/puro-first-host-delivery-readonly-20261024.yml]"
+    },
+    {
+      "ref": "HEAD",
+      "path": ".github/workflows/puro-first-host-recovery-20261024.yml",
+      "triggers": "on:\n  push:\n    branches: [main]\n    paths: [.github/workflows/puro-first-host-recovery-20261024.yml]"
+    },
+    {
+      "ref": "HEAD",
+      "path": ".github/workflows/seev-production-secrets.yml",
+      "triggers": "on:\n  push:\n    branches: [release/seev-live-checkout]\n    paths: [.github/workflows/seev-production-secrets.yml]\n  workflow_dispatch:"
+    },
+    {
+      "ref": "HEAD",
+      "path": ".github/workflows/staff-entry-previews.yml",
+      "triggers": "on:\n  push:\n    branches: [feat/staff-entry]\n  workflow_dispatch:\n    inputs:\n      expected_source:\n        description: Exact reviewed commit at the tip of feat/staff-entry\n        required: true\n        type: string"
+    },
+    {
+      "ref": "HEAD",
+      "path": ".github/workflows/tickets-bounce-codes-readonly-20261024.yml",
+      "triggers": "on:\n  push:\n    branches: [main]\n    paths: [.github/workflows/tickets-bounce-codes-readonly-20261024.yml]"
+    },
+    {
+      "ref": "HEAD",
+      "path": ".github/workflows/tickets-mail-room-upgrade.yml",
+      "triggers": "on:\n  push:\n    branches: [main]\n    paths: [.github/workflows/tickets-mail-room-upgrade.yml]\n  pull_request:\n    paths:\n      - .github/workflows/tickets-mail-room-upgrade.yml\n      - ops/email/**\n      - ops/vps/upgrade-room-mail.py\n      - ops/vps/test_mail_upgrade.py\n      - ops/vps/inspect-mail-service-readonly.py\n  workflow_dispatch:\n    inputs:\n      operation:\n        description: Read-only preflight, or separately approved mail-only upgrade\n        type: choice\n        options: [preflight, apply]\n        default: preflight\n        required: true\n      confirmation:\n        description: Apply requires UPGRADE ROOM MAIL ONLY after explicit approval\n        type: string\n        default: ''"
+    },
+    {
+      "ref": "HEAD",
+      "path": ".github/workflows/tickets-mail-service-readonly-20261024.yml",
+      "triggers": "on:\n  push:\n    branches: [main]\n    paths: [.github/workflows/tickets-mail-service-readonly-20261024.yml]"
+    },
+    {
+      "ref": "HEAD",
+      "path": ".github/workflows/tickets-readiness-audit.yml",
+      "triggers": "on:\n  push:\n    branches: [main]\n    paths: [.github/workflows/tickets-readiness-audit.yml]\n  workflow_dispatch:"
+    },
+    {
+      "ref": "HEAD",
+      "path": ".github/workflows/tickets-vps-access.yml",
+      "triggers": "on:\n  push:\n    branches: [main]\n    paths: [.github/workflows/tickets-vps-access.yml]\n  workflow_dispatch:"
+    },
+    {
+      "ref": "HEAD",
+      "path": ".github/workflows/tickets-vps-diagnostics.yml",
+      "triggers": "on:\n  push:\n    branches: [main]\n    paths: [.github/workflows/tickets-vps-diagnostics.yml]"
+    },
+    {
+      "ref": "HEAD",
+      "path": ".github/workflows/tickets-yorkeway-mail-inspect.yml",
+      "triggers": "on:\n  push:\n    branches: [main]\n    paths: [.github/workflows/tickets-yorkeway-mail-inspect.yml]\n  workflow_dispatch:"
+    },
+    {
+      "ref": "HEAD",
+      "path": ".github/workflows/tickets-yorkeway-mail-upgrade.yml",
+      "triggers": "on:\n  push:\n    branches: [main]\n    paths: [.github/workflows/tickets-yorkeway-mail-upgrade.yml]\n  pull_request:\n    paths:\n      - .github/workflows/tickets-yorkeway-mail-upgrade.yml\n      - ops/email/**\n      - ops/vps/upgrade-room-mail.py\n      - ops/vps/upgrade-yorkeway-mail.py\n      - ops/vps/test_yorkeway_mail_upgrade.py\n      - ops/vps/test_mail_upgrade.py\n      - ops/vps/inspect-mail-service-readonly.py\n  workflow_dispatch:\n    inputs:\n      operation:\n        description: Read-only preflight, or separately approved mail-only upgrade\n        type: choice\n        options: [preflight, apply]\n        default: preflight\n        required: true\n      confirmation:\n        description: Apply requires UPGRADE YORKEWAY WELCOME MAIL ONLY after explicit approval\n        type: string\n        default: ''"
+    },
+    {
+      "ref": "HEAD",
+      "path": ".github/workflows/vps-runtime.yml",
+      "triggers": "on:\n  push:\n    branches: [main]\n    paths:\n      - '.github/workflows/vps-runtime.yml'\n      - 'runtime/**'\n      - 'ops/vps/**'\n      - 'ops/handover/**'\n      - 'scripts/**'\n      - 'worker/**'\n      - 'lib/**'\n      - 'app/**'\n      - 'db/**'\n      - 'drizzle/**'\n      - 'public/**'\n      - 'styles/**'\n      - 'tests/**'\n      - 'package*.json'\n      - '*config*'\n      # Keep exclusions after positive patterns; mixed app changes still run.\n      - '!.github/workflows/d1-recovery-rehearsal.yml'\n      - '!scripts/check-d1-recovery-runtime.mjs'\n      - '!tests/d1-recovery-privacy.test.mjs'\n      - '!docs/runbooks/d1-recovery.md'"
+    },
+    {
+      "ref": "origin/main",
+      "path": ".github/workflows/backup-transport-checks.yml",
+      "triggers": "on:\n  pull_request:\n    branches: [main]\n    paths:\n      - .github/workflows/deploy.yml\n      - .github/backup/**\n      - .github/workflows/backup-transport-checks.yml\n      - .github/workflows/tickets-backup.yml\n  push:\n    branches: [main]\n    paths:\n      - .github/workflows/deploy.yml\n      - .github/backup/**\n      - .github/workflows/backup-transport-checks.yml\n      - .github/workflows/tickets-backup.yml\n  workflow_dispatch:"
+    },
+    {
+      "ref": "origin/main",
+      "path": ".github/workflows/browser-audit.yml",
+      "triggers": "on:\n  workflow_run:\n    workflows: [\"Deploy to Cloudflare\"]\n    types: [completed]\n  workflow_dispatch:\n  workflow_call:\n    inputs:\n      expected_source:\n        description: Exact source just activated by the guarded VPS release\n        required: true\n        type: string\n      activation_required:\n        description: Require the successful VPS activation revision\n        type: boolean\n        default: true"
+    },
+    {
+      "ref": "origin/main",
+      "path": ".github/workflows/candidate-parallel-checks.yml",
+      "triggers": "on:\n  push:\n    branches: [improve/release-evidence-parallel-20261013]\n  workflow_dispatch:\n    inputs:\n      expected_source:\n        description: Exact reviewed candidate SHA; branch movement must fail before candidate code executes\n        required: true\n        type: string\n      trusted_base:\n        description: Independently selected reviewed controls ancestor on main\n        required: true\n        type: string"
+    },
+    {
+      "ref": "origin/main",
+      "path": ".github/workflows/cinco-confirmation-release-20261019.yml",
+      "triggers": "on:\n  push:\n    branches: [main]\n    paths: [.github/workflows/cinco-confirmation-release-20261019.yml]"
+    },
+    {
+      "ref": "origin/main",
+      "path": ".github/workflows/d1-recovery-rehearsal.yml",
+      "triggers": "on:\n  push:\n    branches:\n      - main\n    paths:\n      - \"scripts/check-d1-recovery-runtime.mjs\"\n      - \"scripts/rehearse-d1-recovery.sh\"\n      - \"tests/d1-recovery-privacy.test.mjs\"\n      - \".github/workflows/d1-recovery-rehearsal.yml\"\n  schedule:\n    - cron: \"15 4 * * 0\"\n  workflow_dispatch:"
+    },
+    {
+      "ref": "origin/main",
+      "path": ".github/workflows/dependency-security.yml",
+      "triggers": "on:\n  push:\n    branches: [main]\n    paths: [package.json, package-lock.json, mobile/package.json, mobile/package-lock.json, .github/dependabot.yml, .github/workflows/dependency-security.yml]\n  schedule:\n    - cron: \"30 5 * * 1\"\n  workflow_dispatch:"
+    },
+    {
+      "ref": "origin/main",
+      "path": ".github/workflows/deploy.yml",
+      "triggers": "on:\n  push:\n    branches:\n      - main\n    # Operator diagnostics do not change the application. Workflow-only release\n    # configuration edits remain deployable through explicit workflow_dispatch.\n    paths-ignore:\n      # Recovery maintenance is not an application release.\n      - '.github/workflows/d1-recovery-rehearsal.yml'\n      - 'scripts/check-d1-recovery-runtime.mjs'\n      - 'tests/d1-recovery-privacy.test.mjs'\n      - 'docs/runbooks/d1-recovery.md'\n      - '.gitignore'\n      - 'tests/staff-app-launch.test.mjs'\n      - 'ops/vps/operator_evidence.py'\n      - 'ops/vps/test_operator_evidence.py'\n      - '.github/workflows/tickets-backup.yml'\n      - '.github/workflows/backup-transport-checks.yml'\n      - '.github/backup/**'\n      - '.github/workflows/tickets-vps-diagnostics.yml'\n      - '.github/workflows/deploy.yml'\n      - '.github/workflows/tickets-handover.yml'\n      - 'ops/handover/**'\n      - 'tests/handover-loopback-health.test.mjs'\n      - 'docs/operations/dual-hosting.md'\n      - '.github/workflows/tickets-release-operator-checks.yml'\n      - '.github/workflows/browser-followup.yml'\n      - 'tests/browser-environment.test.mjs'\n      - 'tests/test_operator_retry_workflow.py'\n      - 'ops/vps/test_code_release.py'\n      - '.github/workflows/candidate-parallel-checks.yml'\n      - '.github/workflows/tickets-code-release.yml'\n      - 'ops/vps/candidate_build.py'\n      - 'ops/vps/code-release.py'\n      - 'ops/vps/parallel_candidate_retry.py'\n      - 'ops/vps/parallel_candidate_retry_control.py'\n      - 'ops/vps/test_candidate_build.py'\n      - 'ops/vps/test_parallel_candidate_retry.py'\n      - 'ops/vps/test_parallel_candidate_retry_control.py'\n      - 'ops/vps/test_parallel_retry_admission.py'\n      - 'tests/test_candidate_parallel_workflow.py'\n      - 'ops/vps/test_yorkeway_release.py'\n  workflow_dispatch:\n    inputs:\n      trusted_base:\n        description: Independently selected reviewed control-plane commit on main\n        required: true\n        type: string"
+    },
+    {
+      "ref": "origin/main",
+      "path": ".github/workflows/event-capacity.yml",
+      "triggers": "on:\n  push:\n    branches: ['perf/event-capacity-400']\n  workflow_dispatch:"
+    },
+    {
+      "ref": "origin/main",
+      "path": ".github/workflows/fallback-infrastructure.yml",
+      "triggers": "on:\n  push:\n    branches: [feat/vps-maintenance-fallback]\n    paths:\n      - .github/workflows/fallback-infrastructure.yml\n      - scripts/inspect-fallback-infrastructure.mjs"
+    },
+    {
+      "ref": "origin/main",
+      "path": ".github/workflows/handover-preflight.yml",
+      "triggers": "on:\n  push:\n    branches: [feat/vps-live-handover-20260929]\n    paths: ['.github/workflows/handover-preflight.yml', 'ops/handover/live-preflight.mjs']"
+    },
+    {
+      "ref": "origin/main",
+      "path": ".github/workflows/handover-return-diagnose.yml",
+      "triggers": "on:\n  push:\n    branches: [ops/vps-standby-completion-20260929]\n    paths: [.github/workflows/handover-return-diagnose.yml]"
+    },
+    {
+      "ref": "origin/main",
+      "path": ".github/workflows/handover-return-prepare.yml",
+      "triggers": "on:\n  push:\n    branches: [ops/vps-standby-completion-20260929]\n    paths: [.github/workflows/handover-return-prepare.yml]"
+    },
+    {
+      "ref": "origin/main",
+      "path": ".github/workflows/handover-return-verify.yml",
+      "triggers": "on:\n  push:\n    branches: [ops/vps-standby-completion-20260929]\n    paths: [.github/workflows/handover-return-verify.yml]"
+    },
+    {
+      "ref": "origin/main",
+      "path": ".github/workflows/handover-tools.yml",
+      "triggers": "on:\n  push:\n    branches: [ops/vps-standby-completion-20260929]\n    paths: ['ops/handover/**', 'tests/handover-*.test.mjs', '.github/workflows/handover-tools.yml']"
+    },
+    {
+      "ref": "origin/main",
+      "path": ".github/workflows/hosted-capacity.yml",
+      "triggers": "on:\n  push:\n    branches: [ops/hosted-capacity-readiness, ops/hosted-capacity-diagnostics, fix/room-render-and-browser-reliability]\n    paths: ['scripts/capacity/**', '.github/workflows/hosted-capacity.yml']\n  workflow_dispatch:"
+    },
+    {
+      "ref": "origin/main",
+      "path": ".github/workflows/input-modality-checks.yml",
+      "triggers": "on:\n  push:\n    branches: [fix/shared-input-focus-20261024]\n  workflow_dispatch:"
+    },
+    {
+      "ref": "origin/main",
+      "path": ".github/workflows/iphone-layouts.yml",
+      "triggers": "on:\n  workflow_dispatch:\n  workflow_run:\n    workflows: [Deploy to Cloudflare]\n    types: [completed]\n    branches: [main]\n  pull_request:\n    paths:\n      - mobile/src/**\n      - styles/**\n      - app/**\n      - lib/**\n      - scripts/capture-iphone-layouts.mjs\n      - .github/workflows/iphone-layouts.yml"
+    },
+    {
+      "ref": "origin/main",
+      "path": ".github/workflows/marketing-connection.yml",
+      "triggers": "on:\n  workflow_dispatch:\n  workflow_run:\n    workflows: [Deploy to Cloudflare]\n    types: [completed]"
+    },
+    {
+      "ref": "origin/main",
+      "path": ".github/workflows/prepare-vps-fallback.yml",
+      "triggers": "on:\n  push:\n    branches: [feat/vps-maintenance-fallback]\n    paths: ['ops/fallback/**', '.github/workflows/prepare-vps-fallback.yml']"
+    },
+    {
+      "ref": "origin/main",
+      "path": ".github/workflows/preview-data-inventory.yml",
+      "triggers": "on:\n  push:\n    branches: [feat/full-visual-audit]\n    paths: ['scripts/inspect-preview-data.mjs', '.github/workflows/preview-data-inventory.yml']\n  workflow_dispatch:"
+    },
+    {
+      "ref": "origin/main",
+      "path": ".github/workflows/puro-access-readonly-20261020.yml",
+      "triggers": "on:\n  push:\n    branches: [main]\n    paths: [.github/workflows/puro-access-readonly-20261020.yml]"
+    },
+    {
+      "ref": "origin/main",
+      "path": ".github/workflows/puro-access-release-20261019.yml",
+      "triggers": "on:\n  push:\n    branches: [main]\n    paths: [.github/workflows/puro-access-release-20261019.yml]"
+    },
+    {
+      "ref": "origin/main",
+      "path": ".github/workflows/puro-approval-readonly-20261019.yml",
+      "triggers": "on:\n  push:\n    branches: [main]\n    paths: [.github/workflows/puro-approval-readonly-20261019.yml]"
+    },
+    {
+      "ref": "origin/main",
+      "path": ".github/workflows/puro-delivery-readonly-20261020.yml",
+      "triggers": "on:\n  push:\n    branches: [main]\n    paths: [.github/workflows/puro-delivery-readonly-20261020.yml]"
+    },
+    {
+      "ref": "origin/main",
+      "path": ".github/workflows/puro-exceso-publish.yml",
+      "triggers": "on:\n  push:\n    branches: [main]\n    paths: [ops/handover/puro_exceso/activate.sha256]"
+    },
+    {
+      "ref": "origin/main",
+      "path": ".github/workflows/puro-first-host-delivery-readonly-20261024.yml",
+      "triggers": "on:\n  push:\n    branches: [main]\n    paths: [.github/workflows/puro-first-host-delivery-readonly-20261024.yml]"
+    },
+    {
+      "ref": "origin/main",
+      "path": ".github/workflows/puro-first-host-recovery-20261024.yml",
+      "triggers": "on:\n  push:\n    branches: [main]\n    paths: [.github/workflows/puro-first-host-recovery-20261024.yml]"
+    },
+    {
+      "ref": "origin/main",
+      "path": ".github/workflows/seev-production-secrets.yml",
+      "triggers": "on:\n  push:\n    branches: [release/seev-live-checkout]\n    paths: [.github/workflows/seev-production-secrets.yml]\n  workflow_dispatch:"
+    },
+    {
+      "ref": "origin/main",
+      "path": ".github/workflows/staff-entry-previews.yml",
+      "triggers": "on:\n  push:\n    branches: [feat/staff-entry]\n  workflow_dispatch:\n    inputs:\n      expected_source:\n        description: Exact reviewed commit at the tip of feat/staff-entry\n        required: true\n        type: string"
+    },
+    {
+      "ref": "origin/main",
+      "path": ".github/workflows/tickets-bounce-codes-readonly-20261024.yml",
+      "triggers": "on:\n  push:\n    branches: [main]\n    paths: [.github/workflows/tickets-bounce-codes-readonly-20261024.yml]"
+    },
+    {
+      "ref": "origin/main",
+      "path": ".github/workflows/tickets-mail-room-upgrade.yml",
+      "triggers": "on:\n  push:\n    branches: [main]\n    paths: [.github/workflows/tickets-mail-room-upgrade.yml]\n  pull_request:\n    paths:\n      - .github/workflows/tickets-mail-room-upgrade.yml\n      - ops/email/**\n      - ops/vps/upgrade-room-mail.py\n      - ops/vps/test_mail_upgrade.py\n      - ops/vps/inspect-mail-service-readonly.py\n  workflow_dispatch:\n    inputs:\n      operation:\n        description: Read-only preflight, or separately approved mail-only upgrade\n        type: choice\n        options: [preflight, apply]\n        default: preflight\n        required: true\n      confirmation:\n        description: Apply requires UPGRADE ROOM MAIL ONLY after explicit approval\n        type: string\n        default: ''"
+    },
+    {
+      "ref": "origin/main",
+      "path": ".github/workflows/tickets-mail-service-readonly-20261024.yml",
+      "triggers": "on:\n  push:\n    branches: [main]\n    paths: [.github/workflows/tickets-mail-service-readonly-20261024.yml]"
+    },
+    {
+      "ref": "origin/main",
+      "path": ".github/workflows/tickets-readiness-audit.yml",
+      "triggers": "on:\n  push:\n    branches: [main]\n    paths: [.github/workflows/tickets-readiness-audit.yml]\n  workflow_dispatch:"
+    },
+    {
+      "ref": "origin/main",
+      "path": ".github/workflows/tickets-vps-access.yml",
+      "triggers": "on:\n  push:\n    branches: [main]\n    paths: [.github/workflows/tickets-vps-access.yml]\n  workflow_dispatch:"
+    },
+    {
+      "ref": "origin/main",
+      "path": ".github/workflows/tickets-vps-diagnostics.yml",
+      "triggers": "on:\n  push:\n    branches: [main]\n    paths: [.github/workflows/tickets-vps-diagnostics.yml]"
+    },
+    {
+      "ref": "origin/main",
+      "path": ".github/workflows/tickets-yorkeway-mail-inspect.yml",
+      "triggers": "on:\n  push:\n    branches: [main]\n    paths: [.github/workflows/tickets-yorkeway-mail-inspect.yml]\n  workflow_dispatch:"
+    },
+    {
+      "ref": "origin/main",
+      "path": ".github/workflows/tickets-yorkeway-mail-upgrade.yml",
+      "triggers": "on:\n  push:\n    branches: [main]\n    paths: [.github/workflows/tickets-yorkeway-mail-upgrade.yml]\n  pull_request:\n    paths:\n      - .github/workflows/tickets-yorkeway-mail-upgrade.yml\n      - ops/email/**\n      - ops/vps/upgrade-room-mail.py\n      - ops/vps/upgrade-yorkeway-mail.py\n      - ops/vps/test_yorkeway_mail_upgrade.py\n      - ops/vps/test_mail_upgrade.py\n      - ops/vps/inspect-mail-service-readonly.py\n  workflow_dispatch:\n    inputs:\n      operation:\n        description: Read-only preflight, or separately approved mail-only upgrade\n        type: choice\n        options: [preflight, apply]\n        default: preflight\n        required: true\n      confirmation:\n        description: Apply requires UPGRADE YORKEWAY WELCOME MAIL ONLY after explicit approval\n        type: string\n        default: ''"
+    },
+    {
+      "ref": "origin/main",
+      "path": ".github/workflows/vps-runtime.yml",
+      "triggers": "on:\n  push:\n    branches: [main]\n    paths:\n      - '.github/workflows/vps-runtime.yml'\n      - 'runtime/**'\n      - 'ops/vps/**'\n      - 'ops/handover/**'\n      - 'scripts/**'\n      - 'worker/**'\n      - 'lib/**'\n      - 'app/**'\n      - 'db/**'\n      - 'drizzle/**'\n      - 'public/**'\n      - 'styles/**'\n      - 'tests/**'\n      - 'package*.json'\n      - '*config*'\n      # Keep exclusions after positive patterns; mixed app changes still run.\n      - '!.github/workflows/d1-recovery-rehearsal.yml'\n      - '!scripts/check-d1-recovery-runtime.mjs'\n      - '!tests/d1-recovery-privacy.test.mjs'\n      - '!docs/runbooks/d1-recovery.md'"
+    }
+  ],
+  "followup": {
+    "reviewedAt": "2026-11-02",
+    "remoteMain": "32b5956549cb3eff04e2abbcfda177bccb07b0f8",
+    "workflowChangesSinceBase": [],
+    "action": "Push existing feat/customer-experience-20261102 branch only; no matching push trigger; no PR, dispatch or deployment"
+  }
+}

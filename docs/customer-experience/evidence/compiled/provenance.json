@@ -1,0 +1,22 @@
+{
+  "base": "32b5956549cb3eff04e2abbcfda177bccb07b0f8",
+  "priorPreview": "0a3dcf133e5b55a2ed89609e337602f8de1c5fc6",
+  "testedSource": "ef2e534f71a129b8d9251f8c0e120ea5fe606a4e",
+  "sourceTree": "837b326a2421403414a5a8068114bcb9bbe534ef",
+  "productionFiles": [
+    "app/about/page.tsx",
+    "app/checkout/[slug]/checkout-form.tsx",
+    "app/customer-experience.css",
+    "app/event-explorer.tsx",
+    "app/event/[slug]/event-screen.tsx",
+    "app/events/events-screen.tsx",
+    "app/home-screen.tsx",
+    "app/hosts/page.tsx",
+    "app/my-nights/my-nights-client.tsx",
+    "styles/customer.css"
+  ],
+  "productionFileCount": 10,
+  "immutableComparisonChangedPaths": [],
+  "compiledEntrySha256": "635c0d9b8a75e5065abb34fead6f2f82072a9b742adceb42ba5879717f2d2220",
+  "scope": "Source and evidence only; no merge, deployment, release admission or production configuration change"
+}

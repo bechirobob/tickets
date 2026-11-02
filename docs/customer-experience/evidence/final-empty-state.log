@@ -1,0 +1,17 @@
+✔ an empty website catalogue renders the real empty state without nonfunctional discovery controls (219.12965ms)
+✔ discovery audit derives empty expectations from the website policy, never missing DOM (21.010228ms)
+✔ synthetic camera selection skips external audits before fixture setup and retains every local case (17.557198ms)
+✔ audit analytics routing matches only the exact configured first-party endpoint (0.927485ms)
+✔ disclosure expansion revisits live locators and opens every sibling exactly once (0.980224ms)
+✔ disclosure expansion reaches newly visible nested content without reopening open or hidden rows (0.266771ms)
+✔ disclosure expansion retains the caller scope and fails if clicks cannot make progress (2.229384ms)
+✔ maintained browser harnesses never restore the global header or shifting disclosure loop (17.236881ms)
+✔ bounded synthetic Candidate screenshots capture one pixel per CSS pixel without changing their extent (2.502615ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 374.198343

@@ -323,10 +323,26 @@ test('dense My Nights headers keep the full brand and separate 44px controls at 
     expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
   }
   await info.attach('member-header-geometry.json', { body: JSON.stringify(geometries, null, 2), contentType: 'application/json' });
-  // Dense member headers do not remove the discoverable label elsewhere.
+  // Events now shares the compact named menu control alongside direct My Nights.
   await page.setViewportSize({ width: 390, height: 664 });
   await page.goto('/events');
-  await expect(page.locator('.night-mobile-menu__trigger-label')).toBeVisible();
+  const eventsHeader = page.locator('.directory-header');
+  const eventsMenu = eventsHeader.getByRole('button', { name: 'Open navigation', exact: true });
+  await expect(eventsMenu).toBeEnabled();
+  await expect(eventsMenu).toBeInViewport({ ratio: 1 });
+  await expect(eventsMenu.locator('.night-mobile-menu__trigger-label')).toBeHidden();
+  const eventsControls = [eventsHeader.locator('.brand-mark'), eventsHeader.getByRole('link', { name: 'My Nights', exact: true }), eventsMenu];
+  const eventsBoxes = await Promise.all(eventsControls.map(element => element.boundingBox()));
+  for (const box of eventsBoxes) {
+    expect(box!.width).toBeGreaterThanOrEqual(44);
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+  }
+  for (let index = 1; index < eventsBoxes.length; index++) expect(eventsBoxes[index]!.x - eventsBoxes[index - 1]!.x - eventsBoxes[index - 1]!.width).toBeGreaterThanOrEqual(4);
+  await eventsMenu.focus();
+  await eventsMenu.press('Enter');
+  await expect(page.getByRole('navigation', { name: 'Main navigation', exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(eventsMenu).toBeFocused();
 });
 
 test('an open anchored menu keeps one-click notification switching and its short-screen close control reachable', async ({ page }) => {

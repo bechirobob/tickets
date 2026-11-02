@@ -1,0 +1,2 @@
+import config from './playwright.config';
+export default {...config,webServer:undefined,outputDir:'/tmp/customer40-followup/screens',reporter:[['list'],['json',{outputFile:'/tmp/customer40-followup/playwright.json'}]],use:{...config.use,ignoreHTTPSErrors:true,screenshot:{mode:'on',fullPage:true},launchOptions:{executablePath:'/usr/bin/chromium',args:['--no-sandbox']}},projects:[...config.projects!.filter(p=>p.name!=='mobile-webkit'),{...config.projects![1],name:'narrow-chromium',use:{...config.projects![1].use,viewport:{width:320,height:800}}}]};

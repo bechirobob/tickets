@@ -1,0 +1,170 @@
+[
+  {
+    "device": "desktop",
+    "label": "empty",
+    "height": 1035,
+    "width": 1440,
+    "viewport": 1440,
+    "h1": "38px"
+  },
+  {
+    "device": "desktop",
+    "label": "browse",
+    "height": 1187,
+    "width": 1440,
+    "viewport": 1440,
+    "h1": "38px"
+  },
+  {
+    "device": "desktop",
+    "label": "event",
+    "height": 1187,
+    "width": 1440,
+    "viewport": 1440,
+    "h1": "38px"
+  },
+  {
+    "device": "desktop",
+    "label": "checkout",
+    "height": 1035,
+    "width": 1440,
+    "viewport": 1440,
+    "h1": "30px"
+  },
+  {
+    "device": "desktop",
+    "label": "rsvp",
+    "height": 1000,
+    "width": 1440,
+    "viewport": 1440,
+    "h1": "16px"
+  },
+  {
+    "device": "desktop",
+    "label": "nights",
+    "height": 1588,
+    "width": 1440,
+    "viewport": 1440,
+    "h1": "32px"
+  },
+  {
+    "device": "desktop",
+    "label": "recovery",
+    "height": 1035,
+    "width": 1440,
+    "viewport": 1440,
+    "h1": "32px"
+  },
+  {
+    "device": "mobile",
+    "label": "empty",
+    "height": 898,
+    "width": 390,
+    "viewport": 390,
+    "h1": "28px"
+  },
+  {
+    "device": "mobile",
+    "label": "browse",
+    "height": 898,
+    "width": 390,
+    "viewport": 390,
+    "h1": "28px"
+  },
+  {
+    "device": "mobile",
+    "label": "event",
+    "height": 1763,
+    "width": 390,
+    "viewport": 390,
+    "h1": "28px"
+  },
+  {
+    "device": "mobile",
+    "label": "checkout",
+    "height": 1736,
+    "width": 390,
+    "viewport": 390,
+    "h1": "27px"
+  },
+  {
+    "device": "mobile",
+    "label": "rsvp",
+    "height": 844,
+    "width": 390,
+    "viewport": 390,
+    "h1": "16px"
+  },
+  {
+    "device": "mobile",
+    "label": "nights",
+    "height": 1332,
+    "width": 390,
+    "viewport": 390,
+    "h1": "32px"
+  },
+  {
+    "device": "mobile",
+    "label": "recovery",
+    "height": 898,
+    "width": 390,
+    "viewport": 390,
+    "h1": "32px"
+  },
+  {
+    "device": "narrow",
+    "label": "empty",
+    "height": 794,
+    "width": 320,
+    "viewport": 320,
+    "h1": "28px"
+  },
+  {
+    "device": "narrow",
+    "label": "browse",
+    "height": 794,
+    "width": 320,
+    "viewport": 320,
+    "h1": "28px"
+  },
+  {
+    "device": "narrow",
+    "label": "event",
+    "height": 1857,
+    "width": 320,
+    "viewport": 320,
+    "h1": "28px"
+  },
+  {
+    "device": "narrow",
+    "label": "checkout",
+    "height": 1796,
+    "width": 320,
+    "viewport": 320,
+    "h1": "27px"
+  },
+  {
+    "device": "narrow",
+    "label": "rsvp",
+    "height": 823,
+    "width": 320,
+    "viewport": 320,
+    "h1": "16px"
+  },
+  {
+    "device": "narrow",
+    "label": "nights",
+    "height": 1540,
+    "width": 320,
+    "viewport": 320,
+    "h1": "32px"
+  },
+  {
+    "device": "narrow",
+    "label": "recovery",
+    "height": 794,
+    "width": 320,
+    "viewport": 320,
+    "h1": "32px"
+  }
+]

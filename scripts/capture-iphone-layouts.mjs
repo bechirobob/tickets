@@ -148,7 +148,7 @@ try {
   await page.reload();await page.getByRole('alert').waitFor();
   await capture('Connection unavailable','App state');
   await page.route(`${origin}/api/public/events`,route=>route.fulfill({json:{...catalogue,events:[],screens:[]},headers:{'access-control-allow-origin':'*'}}));
-  await page.reload();await page.getByRole('heading',{name:'The next plan is still cooking.'}).waitFor();
+  await page.reload();await page.getByRole('heading',{name:'No upcoming nights announced.'}).waitFor();
   await capture('No events yet','App state');
   // Separate native reference, not an app capture: project only the approved
   // website discovery exclusion. Compare every measured field without skipping

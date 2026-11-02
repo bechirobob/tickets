@@ -1,0 +1,261 @@
+{
+  "provenance": {
+    "runId": 41453460812,
+    "jobId": 125304167220,
+    "artifactId": 13146022288,
+    "source": "Decoded JSON receipt from original GitHub job logs; original artifact unchanged."
+  },
+  "receipt": {
+    "sourceCommit": "4d159122330b64afa4562aca2049c5d16c10c429",
+    "helperSha256": "23ec369bbd6abb55a912b29b6ea2765e4214e53b0e4fa115c72fb21dc6fbee25",
+    "lockSha256": "806a3c7c6a8ac1a4b569882757b9a5c03a9d901df34c268dca2f039eab09f8d7",
+    "scope": "Compiled application and dedicated local D1; ephemeral seeded attendee session for existing bookings, no API response mocks. Nonfunctional test provider key; outbound network blocked; no queue bindings.",
+    "checks": [
+      {
+        "name": "header menu and close: labeled 44px hit areas, keyboard opening and focus return",
+        "viewport": "desktop",
+        "passed": true
+      },
+      {
+        "name": "checkout accessibility",
+        "viewport": "desktop",
+        "violations": []
+      },
+      {
+        "name": "RSVP persisted ownership and authenticated receipt",
+        "viewport": "desktop",
+        "responseStatus": 202,
+        "canManage": true,
+        "saved": {
+          "status": "confirmed",
+          "partySize": 1,
+          "hasOrder": 1,
+          "hasOwner": 1
+        },
+        "cookieRetained": true,
+        "cookieSecure": true,
+        "registrationApi": {
+          "status": 200,
+          "states": [
+            "confirmed"
+          ]
+        }
+      },
+      {
+        "name": "recovery secondary links scroll clear of dock and navigate with real activation",
+        "viewport": "desktop",
+        "targets": [
+          {
+            "label": "No link, wrong email or locked out?",
+            "width": 239.484375,
+            "height": 44,
+            "centerUnobscured": true
+          },
+          {
+            "label": "Explore The Drop",
+            "width": 141.953125,
+            "height": 44,
+            "centerUnobscured": true
+          }
+        ],
+        "passed": true
+      },
+      {
+        "name": "notification icon: labeled 44px hit area, dialog and focus return",
+        "viewport": "desktop",
+        "passed": true
+      },
+      {
+        "name": "My Nights accessibility",
+        "viewport": "desktop",
+        "violations": []
+      },
+      {
+        "name": "Yorke existing early-access form, required consent and empty validation; no response sent",
+        "viewport": "desktop",
+        "passed": true
+      },
+      {
+        "name": "compiled browser-to-server journeys",
+        "viewport": "desktop",
+        "passed": true
+      },
+      {
+        "name": "header menu and close: labeled 44px hit areas, keyboard opening and focus return",
+        "viewport": "mobile",
+        "passed": true
+      },
+      {
+        "name": "checkout accessibility",
+        "viewport": "mobile",
+        "violations": []
+      },
+      {
+        "name": "RSVP persisted ownership and authenticated receipt",
+        "viewport": "mobile",
+        "responseStatus": 202,
+        "canManage": true,
+        "saved": {
+          "status": "confirmed",
+          "partySize": 1,
+          "hasOrder": 1,
+          "hasOwner": 1
+        },
+        "cookieRetained": true,
+        "cookieSecure": true,
+        "registrationApi": {
+          "status": 200,
+          "states": [
+            "confirmed"
+          ]
+        }
+      },
+      {
+        "name": "recovery secondary links scroll clear of dock and navigate with real activation",
+        "viewport": "mobile",
+        "targets": [
+          {
+            "label": "No link, wrong email or locked out?",
+            "width": 239.484375,
+            "height": 44,
+            "centerUnobscured": true
+          },
+          {
+            "label": "Explore The Drop",
+            "width": 141.953125,
+            "height": 44,
+            "centerUnobscured": true
+          }
+        ],
+        "passed": true
+      },
+      {
+        "name": "notification icon: labeled 44px hit area, dialog and focus return",
+        "viewport": "mobile",
+        "passed": true
+      },
+      {
+        "name": "My Nights accessibility",
+        "viewport": "mobile",
+        "violations": []
+      },
+      {
+        "name": "Yorke existing early-access form, required consent and empty validation; no response sent",
+        "viewport": "mobile",
+        "passed": true
+      },
+      {
+        "name": "compiled browser-to-server journeys",
+        "viewport": "mobile",
+        "passed": true
+      },
+      {
+        "name": "header menu and close: labeled 44px hit areas, keyboard opening and focus return",
+        "viewport": "narrow",
+        "passed": true
+      },
+      {
+        "name": "checkout accessibility",
+        "viewport": "narrow",
+        "violations": []
+      },
+      {
+        "name": "RSVP persisted ownership and authenticated receipt",
+        "viewport": "narrow",
+        "responseStatus": 202,
+        "canManage": true,
+        "saved": {
+          "status": "confirmed",
+          "partySize": 1,
+          "hasOrder": 1,
+          "hasOwner": 1
+        },
+        "cookieRetained": true,
+        "cookieSecure": true,
+        "registrationApi": {
+          "status": 200,
+          "states": [
+            "confirmed"
+          ]
+        }
+      },
+      {
+        "name": "recovery secondary links scroll clear of dock and navigate with real activation",
+        "viewport": "narrow",
+        "targets": [
+          {
+            "label": "No link, wrong email or locked out?",
+            "width": 239.484375,
+            "height": 44,
+            "centerUnobscured": true
+          },
+          {
+            "label": "Explore The Drop",
+            "width": 141.953125,
+            "height": 44,
+            "centerUnobscured": true
+          }
+        ],
+        "passed": true
+      },
+      {
+        "name": "notification icon: labeled 44px hit area, dialog and focus return",
+        "viewport": "narrow",
+        "passed": true
+      },
+      {
+        "name": "My Nights accessibility",
+        "viewport": "narrow",
+        "violations": []
+      },
+      {
+        "name": "Yorke existing early-access form, required consent and empty validation; no response sent",
+        "viewport": "narrow",
+        "passed": true
+      },
+      {
+        "name": "compiled browser-to-server journeys",
+        "viewport": "narrow",
+        "passed": true
+      }
+    ],
+    "pageErrors": [
+      {
+        "stage": "desktop recovery",
+        "message": "/127.0.0.1:8798/help?_rsc=iriduO7Rz6qSuh1E due to access control checks."
+      },
+      {
+        "stage": "desktop recovery",
+        "message": "/127.0.0.1:8798/staff?_rsc=iriduO7Rz6qSuh1E due to access control checks."
+      },
+      {
+        "stage": "desktop recovery",
+        "message": "/127.0.0.1:8798/organizer/submit?_rsc=iriduO7Rz6qSuh1E due to access control checks."
+      },
+      {
+        "stage": "desktop recovery",
+        "message": "/127.0.0.1:8798/hosts?_rsc=iriduO7Rz6qSuh1E due to access control checks."
+      }
+    ],
+    "blockedBrowserRequests": [],
+    "outboundAttempts": 6,
+    "cleanup": {
+      "temporaryDatabaseRemoved": true,
+      "persistentCredentialsCreated": false
+    },
+    "passed": false,
+    "transport": "https",
+    "webkit": {
+      "path": "/ms-playwright/webkit-2336/pw_run.sh",
+      "available": true,
+      "status": "running"
+    },
+    "engine": "webkit",
+    "browser": "26.5",
+    "visibleFailureText": "",
+    "failure": {
+      "stage": "narrow recovery",
+      "message": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n+ [\n+   {\n+     message: '/127.0.0.1:8798/help?_rsc=iriduO7Rz6qSuh1E due to access control checks.',\n+     stage: 'desktop recovery'\n+   },\n+   {\n+     message: '/127.0.0.1:8798/staff?_rsc=iriduO7Rz6qSuh1E due to access control checks.',\n+     stage: 'desktop recovery'\n+   },\n+   {\n+     message: '/127.0.0.1:8798/organizer/submit?_rsc=iriduO7Rz6qSuh1E due to access control checks.',\n+     stage: 'desktop recovery'\n+   },\n+   {\n+     message: '/127.0.0.1:8798/hosts?_rsc=iriduO7Rz6qSuh1E due to access control checks.',\n+     stage: 'desktop recovery'\n+   }\n+ ]\n- []\n\n    at file:///__w/tickets/tickets/scripts/customer-experience/compiled-check.mjs:95:9"
+    }
+  }
+}

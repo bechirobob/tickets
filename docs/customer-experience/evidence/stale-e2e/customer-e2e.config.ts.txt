@@ -1,0 +1,2 @@
+import config from './playwright.config';
+export default {...config,webServer:undefined,outputDir:'/tmp/customer-stale-e2e/screens',reporter:[['list'],['json',{outputFile:'/tmp/customer-stale-e2e/playwright.json'}]],use:{...config.use,ignoreHTTPSErrors:true,launchOptions:{executablePath:'/usr/bin/chromium',args:['--no-sandbox']}},projects:config.projects!.filter(p=>p.name!=='mobile-webkit')};
