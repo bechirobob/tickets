@@ -3961,8 +3961,57 @@ def reviewed_scanner_dependency_blobs(expected, source):
     return pins
 
 
+# Owner-approved combined source; independent controls may change only these two files.
+COMBINED_LIVE = '72fa3f6a77d922dadd65fa3a788807e1ec57549f'
+COMBINED_BASE = 'c3711fed843d2dd9ef7c722e15be48852de5a34b'
+COMBINED_BASE_TREE = '86788f925b346c291a03f1a18c33d17fa42275e9'
+COMBINED_SNAPSHOT = 'b1b22c201e318d4ce86efcde6b437b77fa66d613'
+COMBINED_SNAPSHOT_TREE = '5f290197cac799e3c0aa8019f0df83a077c850ea'
+COMBINED_CONTROLS = frozenset({'ops/vps/code-release.py', 'ops/vps/test_code_release.py'})
+
+
+def combined_tree_entries(revision):
+    entries = {}
+    for record in git('ls-tree', '-r', '--full-tree', revision).splitlines():
+        metadata, name = record.split('\t', 1)
+        mode, kind, blob = metadata.split()
+        require(kind == 'blob' and mode in ('100644', '100755'), 'Combined source has unsupported entry.')
+        entries[name] = (mode, blob)
+    return entries
+
+
+def reviewed_combined_application_blobs(expected, source):
+    require(expected == COMBINED_LIVE, 'Combined live baseline differs.')
+    for revision, tree in ((COMBINED_BASE, COMBINED_BASE_TREE), (COMBINED_SNAPSHOT, COMBINED_SNAPSHOT_TREE)):
+        require(git('rev-parse', revision + '^{tree}') == tree, 'Combined reviewed tree differs.')
+    for before, after in ((expected, COMBINED_BASE), (COMBINED_BASE, COMBINED_SNAPSHOT), (COMBINED_SNAPSHOT, source)):
+        subprocess.run(['git', '--no-replace-objects', 'merge-base', '--is-ancestor', before, after],
+                       check=True, env=git_environment(), timeout=60)
+    verify_trusted_operator(source)
+    trusted = os.environ['BECORE_TRUSTED_BASE']
+    require(trusted not in (expected, COMBINED_BASE, COMBINED_SNAPSHOT, source),
+            'Combined source requires independent merged controls.')
+    subprocess.run(['git', '--no-replace-objects', 'merge-base', '--is-ancestor', COMBINED_BASE, trusted],
+                   check=True, env=git_environment(), timeout=60)
+    require(set(git('diff', '--name-only', COMBINED_BASE, trusted).splitlines()) == COMBINED_CONTROLS,
+            'Combined controls changed outside their approved scope.')
+    base, snapshot = combined_tree_entries(COMBINED_BASE), combined_tree_entries(COMBINED_SNAPSHOT)
+    control, candidate = combined_tree_entries(trusted), combined_tree_entries(source)
+    without_controls = lambda entries: {name: entry for name, entry in entries.items() if name not in COMBINED_CONTROLS}
+    require(without_controls(control) == without_controls(base), 'Combined trusted inventory differs.')
+    require(without_controls(candidate) == without_controls(snapshot), 'Combined complete source inventory differs.')
+    for name in COMBINED_CONTROLS:
+        require(control.get(name) == candidate.get(name) and control.get(name, (None,))[0] == '100644',
+                'Combined source control bytes or mode differ: ' + name)
+    require(not migration_plan(git('diff', '--name-only', expected, source).splitlines()),
+            'Combined source cannot introduce migrations.')
+    return {name: blob for name, (_, blob) in candidate.items()}
+
+
 def reviewed_application_blobs(expected, source):
     """Select each exact application tree only from its approved live baseline."""
+    if expected == COMBINED_LIVE and git('merge-base', COMBINED_SNAPSHOT, source) == COMBINED_SNAPSHOT:
+        return reviewed_combined_application_blobs(expected, source)
     if expected == SCANNER_DEPS_LIVE:
         return reviewed_scanner_dependency_blobs(expected, source)
     if expected == SCANNER_LIVE:
