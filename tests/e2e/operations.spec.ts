@@ -1,5 +1,5 @@
 import { expandEveryVisibleDisclosure } from './disclosures.mjs';
-import { expectSegmentedSelection } from "./segmented-control";
+import { expectSegmentedSelection, expectViewSelection } from "./segmented-control";
 import { readFileSync, existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { Buffer as NodeBuffer } from 'node:buffer';
@@ -120,11 +120,11 @@ for (const [path, heading] of [
     expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
     const expandedAxe=await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(expandedAxe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
     // Inspect the final cascade: generic Operations controls previously restored
-    // rounded bottom borders even when the shared tab stylesheet removed them.
+    // bottom borders even when the shared tab stylesheet removed them. Rounded
+    // borderless buttons in the reviewed workspace are not curved underlines.
     const decoratedTabs = await page.locator('.ops-tabs > button, .suite-event-nav > button, .host-applications nav > button').evaluateAll(buttons => buttons.flatMap(button => {
       const style = getComputedStyle(button);
-      const segmented = button.parentElement?.classList.contains('segmented-control');
-      return style.borderBottomWidth !== '0px' || (!segmented && style.borderBottomLeftRadius !== '0px') || style.boxShadow !== 'none'
+      return style.borderBottomWidth !== '0px' || style.boxShadow !== 'none'
         ? [{ text: button.textContent, border: style.borderBottomWidth, radius: style.borderBottomLeftRadius, shadow: style.boxShadow }] : [];
     }));
     expect(decoratedTabs, `${path} tabs must not have curved underlines or shadows`).toEqual([]);
@@ -282,8 +282,10 @@ test('Operations keeps checks, incidents and approvals in focused views', async 
 test('RSVP orders do not offer payment verification', async ({ page }) => {
   await page.goto('/admin/orders');
   const row = page.getByRole('row').filter({ hasText: 'BCT-AUDIT-RSVP' });
-  await expect(row).toContainText('Free RSVP'); await expect(row.getByTitle('Verify payment')).toHaveCount(0);
-  await expect(row.getByRole('link', { name: 'Manage RSVP' })).toBeVisible();
+  await row.getByRole('button', { name: 'Open order BCT-AUDIT-RSVP', exact: true }).click();
+  const record = page.getByRole('dialog', { name: 'Order record', exact: true });
+  await expect(record).toContainText('Free RSVP'); await expect(record.getByTitle('Verify payment')).toHaveCount(0);
+  await expect(record.getByRole('link', { name: 'Manage RSVP' })).toBeVisible();
 });
 test('support reply and room memory retain content after failed writes', async ({ page }) => {
   await page.goto('/admin/support');
@@ -669,7 +671,7 @@ test('organizer can manage coupons, questions, guests and promoter records in is
  await page.getByRole('button',{name:'Links & promoters',exact:true}).click();await page.getByText('Add a promoter',{exact:true}).click();await page.getByLabel('Promoter name',{exact:true}).fill(`Crew ${code}`);await page.getByLabel('Link code',{exact:true}).fill(code);await page.locator('details').filter({has:page.locator('summary').filter({hasText:/^Add a promoter$/})}).getByLabel('Commission %',{exact:true}).fill('5');await page.getByRole('button',{name:'Create promoter link',exact:true}).click();
  await page.locator('summary').filter({hasText:`Crew ${code}`}).click();await expect(page.getByLabel(`Crew ${code} buyer link`)).toHaveValue(new RegExp(`ref=${code}`));
  await page.getByRole('button',{name:'Create private report link',exact:true}).click();await expect(page.getByLabel('Share only with this promoter')).toHaveValue(/promoter#token=/);
- await page.goto('/organizer/workspace?area=events&event=after-dark-osu&view=overview');await page.locator('summary').filter({hasText:/^Guest questions$/}).click();await page.getByRole('button',{name:'Add question',exact:true}).click();await page.getByLabel('Question',{exact:true}).fill(`Arrival group ${code}?`);await page.getByRole('button',{name:'Save question',exact:true}).click();await expect(page.getByText(`Arrival group ${code}?`,{exact:true})).toBeVisible();
+ await page.goto('/organizer/workspace?area=events&event=after-dark-osu&view=overview');await page.locator('summary').filter({hasText:/^Guest questions$/}).click();await page.getByRole('button',{name:'Add question',exact:true}).click();await page.getByLabel('Question',{exact:true}).fill(`Arrival group ${code}?`);await page.getByRole('button',{name:'Save question',exact:true}).click();const savedQuestion=page.locator('b').filter({hasText:`Arrival group ${code}?`});await expect(savedQuestion).toHaveText(`Arrival group ${code}?`);await expect(savedQuestion).toBeVisible();await expect(page.getByRole('button',{name:`Edit Arrival group ${code}?`,exact:true})).toBeVisible();
  await page.getByRole('navigation',{name:'Event tools'}).getByRole('button',{name:'Tickets',exact:true}).click();await page.getByText('Issue complimentary passes',{exact:true}).click();
  await page.getByRole('combobox',{name:'Ticket type',exact:true}).selectOption({index:1});await page.getByLabel('Guest CSV',{exact:true}).fill(`name,email,quantity\nGuest ${code},${code.toLowerCase()}@example.com,1`);await page.getByRole('button',{name:'Review guest list',exact:true}).click();await page.getByRole('button',{name:'Issue reviewed passes',exact:true}).click();await expect(page.getByRole('status').filter({hasText:'All complimentary passes are issued'})).toBeVisible();
  await page.getByRole('navigation',{name:'Event tools'}).getByRole('button',{name:'Guests',exact:true}).click();await page.getByLabel('Find a guest',{exact:true}).fill(code.toLowerCase());await expect(page.locator('.suite-section:visible').getByText(`Guest ${code}`,{exact:true})).toBeVisible();
@@ -984,7 +986,7 @@ test('team invitations show delivery recovery and return acceptance to the assig
   }
   return route.continue();
  });
- await page.goto('/organizer/workspace?area=team&event=rsvp-browser');await expect(page.getByText('Email needs attention',{exact:true})).toBeVisible();
+ await page.goto('/organizer/workspace?area=team&event=rsvp-browser');await page.getByRole('button',{name:/^Invitations \(1\)$/}).click();await expect(page.getByText('Email needs attention',{exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Resend invitation',exact:true}).click();await expect(page.locator('.suite-section').filter({has:page.getByRole('button',{name:'Refresh team status',exact:true})}).getByRole('status')).toContainText('Fresh invitation queued');await expect(page.getByText('Email queued',{exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Refresh team status',exact:true}).click();await expect(page.getByText('Email queued',{exact:true})).toBeVisible();expect(resends).toBe(1);
  await page.route('**/api/organizer/team/accept',route=>route.fulfill({json:route.request().postDataJSON().action==='inspect'?{email:'door@example.com',role:'gate',eventTitle:'RSVP browser gathering',eventSlug:'rsvp-browser',needsPassword:false}:{accepted:true,role:'gate',eventSlug:'rsvp-browser'}}));
@@ -1013,10 +1015,12 @@ test('provider records keep event scope and survive an uncertain save without cl
     return route.fulfill({ json: { result: 'provider_case_recorded' } });
   });
   await page.goto('/admin/orders?event=after-dark-osu&status=paid&provider=paystack');
-  await expect(page.getByText('Payment verified · Settlement: not confirmed', { exact: true })).toBeVisible();
-  await expect(page.getByText('Confirmation email: sent', { exact: true })).toBeVisible();
+  const openOrder = () => page.getByRole('button', { name: 'Open order BCT-PROVIDER-UI', exact: true }).click();
   await expect(page.getByLabel('Order status', { exact: true })).toHaveValue('paid');
   await expect(page.getByLabel('Payment method', { exact: true })).toHaveValue('paystack');
+  await openOrder();
+  await expect(page.getByText('Payment verified · Settlement: not confirmed', { exact: true })).toBeVisible();
+  await expect(page.getByText('Confirmation email: sent', { exact: true })).toBeVisible();
   const providerRecord = page.getByRole('button', { name: 'Provider record', exact: true });
   await expect(providerRecord).toBeVisible();
   const labelFits = await providerRecord.evaluate(button => {
@@ -1047,6 +1051,7 @@ test('provider records keep event scope and survive an uncertain save without cl
   expect(submissions[0].amountMinor).toBe(5000);
   expect(scopes.length).toBeGreaterThan(1);
   expect(scopes.every(scope => scope.event === 'after-dark-osu' && scope.status === 'paid' && scope.provider === 'paystack')).toBe(true);
+  await openOrder();
   await expect(page.getByText(/External refund case: pending/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Start Paystack refund', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Provider record', exact: true }).click();
@@ -1059,6 +1064,7 @@ test('provider records keep event scope and survive an uncertain save without cl
   await form.getByRole('button', { name: 'Save provider record', exact: true }).click();
   await expect(form).toHaveCount(0);
   expect(submissions[2]).toMatchObject({ status: 'closed_unpaid', confirmedNoRefund: true });
+  await openOrder();
   await expect(page.getByText(/External refund case: closed without refund/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Start Paystack refund', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Provider record', exact: true }).click();
@@ -1106,7 +1112,7 @@ test('Orders preserves validated payment exception filters and rejects unknown q
 test('organizer segmented views preserve drafts, guest loading guards and history', async ({ page }, info) => {
   await page.goto('/organizer/workspace?area=events&event=rsvp-browser&view=details');
   const tools = page.getByRole('navigation', { name: 'Event tools', exact: true });
-  await expectSegmentedSelection(tools);
+  await expectViewSelection(tools);
   const venue = page.getByLabel('Venue', { exact: true });
   await expect(venue).toBeVisible();
   await venue.fill('Preserved selector draft');
@@ -1129,7 +1135,7 @@ test('organizer segmented views preserve drafts, guest loading guards and histor
   await expectSegmentedSelection(registrations);
   await tools.getByRole('button', { name: 'Details', exact: true }).click();
   await expect(venue).toHaveValue('Preserved selector draft');
-  await expectSegmentedSelection(tools);
+  await expectViewSelection(tools);
   await page.screenshot({ path: info.outputPath('organizer-segmented-views.png'), fullPage: true });
   await tools.getByRole('button', { name: 'Insights', exact: true }).click();
   const analytics = page.getByRole('navigation', { name: 'Analytics views', exact: true });

@@ -14,6 +14,13 @@ export async function expectSegmentedSelection(control: Locator) {
     if (!target || !marker) return false;
     return ["x", "y", "width", "height"].every(key => Math.abs(target[key as keyof typeof target] - marker[key as keyof typeof marker]) <= 1);
   }).toBe(true);
+  await expectViewSelection(control);
+}
+
+/** Static navigation keeps selection and accessible geometry without a moving marker. */
+export async function expectViewSelection(control: Locator) {
+  await expect(control).toBeVisible();
+  await expect(control.locator(':scope > button[aria-current="page"], :scope > button[aria-pressed="true"]')).toHaveCount(1);
   const issues = await control.evaluate(root => {
     const problems: string[] = [];
     if (root.scrollWidth > root.clientWidth + 1) problems.push("The selector overflows horizontally");
