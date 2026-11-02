@@ -675,7 +675,23 @@ test('organizer can manage coupons, questions, guests and promoter records in is
  await page.getByRole('navigation',{name:'Event tools'}).getByRole('button',{name:'Tickets',exact:true}).click();await page.getByText('Issue complimentary passes',{exact:true}).click();
  await page.getByRole('combobox',{name:'Ticket type',exact:true}).selectOption({index:1});await page.getByLabel('Guest CSV',{exact:true}).fill(`name,email,quantity\nGuest ${code},${code.toLowerCase()}@example.com,1`);await page.getByRole('button',{name:'Review guest list',exact:true}).click();await page.getByRole('button',{name:'Issue reviewed passes',exact:true}).click();await expect(page.getByRole('status').filter({hasText:'All complimentary passes are issued'})).toBeVisible();
  await page.getByRole('navigation',{name:'Event tools'}).getByRole('button',{name:'Guests',exact:true}).click();await page.getByLabel('Find a guest',{exact:true}).fill(code.toLowerCase());await expect(page.locator('.suite-section:visible').getByText(`Guest ${code}`,{exact:true})).toBeVisible();
- await hostArea(page,'Money');await expect(page.getByRole('heading',{name:'Know where you stand.'})).toBeVisible();await expect(page.getByRole('heading',{name:'Payout history'})).toBeVisible();
+ await hostArea(page,'Money');await expect(page.getByRole('heading',{name:'Know where you stand.'})).toBeVisible();
+ const moneyRecords=page.getByRole('navigation',{name:'Money records',exact:true});
+ const statements=moneyRecords.getByRole('button',{name:'Statements',exact:true});
+ const payouts=moneyRecords.getByRole('button',{name:'Payout history',exact:true});
+ await expect(statements).toHaveAttribute('aria-pressed','true');
+ await expect(page.getByRole('heading',{name:'Settlement statements',exact:true})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Payout history',exact:true})).toBeHidden();
+ await payouts.click();
+ await expect(payouts).toHaveAttribute('aria-pressed','true');
+ await expect(statements).toHaveAttribute('aria-pressed','false');
+ await expect(page.getByRole('heading',{name:'Payout history',exact:true})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Settlement statements',exact:true})).toBeHidden();
+ await statements.click();
+ await expect(statements).toHaveAttribute('aria-pressed','true');
+ await expect(payouts).toHaveAttribute('aria-pressed','false');
+ await expect(page.getByRole('heading',{name:'Settlement statements',exact:true})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Payout history',exact:true})).toBeHidden();
 });
 
 for(const fails of [false,true])test(`organizer overview keeps task controls stable while its summary ${fails?'fails':'loads'}`,async({page})=>{
@@ -1118,8 +1134,12 @@ test('organizer segmented views preserve drafts, guest loading guards and histor
   await venue.fill('Preserved selector draft');
   await tools.getByRole('button', { name: 'Guests', exact: true }).click();
   const guests = page.locator('.suite-segments[aria-label="Guest tools"]');
-  await expectSegmentedSelection(guests);
+  await expectViewSelection(guests);
+  await expect(guests.getByRole('button', { name: 'All records', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await guests.getByRole('button', { name: 'RSVP review & setup', exact: true }).click();
+  await expect(guests.getByRole('button', { name: 'RSVP review & setup', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(guests.getByRole('button', { name: 'All records', exact: true })).toHaveAttribute('aria-pressed', 'false');
+  await expectViewSelection(guests);
   const registrations = page.getByRole('navigation', { name: 'Registration tools', exact: true });
   const roster = registrations.getByRole('button', { name: /^Guest list/ });
   await expect(roster).toBeEnabled();
