@@ -1,7 +1,24 @@
+import type { Locator } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from './analytics-fixture';
 
 test.use({ serviceWorkers: 'block' });
+// Match the configured device's native input, and require one real activation.
+async function openNotificationDetails(summary: Locator) {
+  await expect(summary).toBeVisible();
+  await expect(summary.locator('..')).toHaveJSProperty('open', false);
+  await summary.evaluate(element => {
+    const evidence = { pointerTypes: [] as string[], clicks: 0 };
+    Object.assign(element, { notificationActivation: evidence });
+    element.addEventListener('pointerdown', event => evidence.pointerTypes.push((event as PointerEvent).pointerType));
+    element.addEventListener('click', () => { evidence.clicks++; });
+  });
+  if (test.info().project.use.hasTouch) await summary.tap(); else await summary.click();
+  await expect(summary.locator('..')).toHaveJSProperty('open', true);
+  expect(await summary.evaluate(element => (element as HTMLElement & { notificationActivation: { pointerTypes: string[]; clicks: number } }).notificationActivation))
+    .toEqual({ pointerTypes: [test.info().project.use.hasTouch ? 'touch' : 'mouse'], clicks: 1 });
+}
+
 async function member(page: Page) {
   await page.route('**/api/**', route => route.fulfill({status:401,json:{error:'Isolated fixture'}}));
   await page.route('**/api/customer/my-nights', route => route.fulfill({json:{attendee:{displayName:'Ama'},nights:[]}}));
@@ -13,6 +30,7 @@ async function phone(page:Page, permission:'default'|'denied'='default') {
     Object.defineProperty(navigator,'userAgent',{configurable:true,value:'Mozilla/5.0 Android Chrome'});
     Object.defineProperty(navigator,'platform',{configurable:true,value:'Linux'});
     Object.defineProperty(window,'Notification',{configurable:true,value:{permission:permission === 'denied' ? permission : sessionStorage.getItem('fixture-push-permission') ?? permission,requestPermission:async()=>{
+      if (permission === 'denied') throw new Error('Denied permission must not request access again');
       sessionStorage.setItem('fixture-push-permission','granted');
       Object.defineProperty(window.Notification,'permission',{configurable:true,value:'granted'});return 'granted';
     }}});
@@ -47,7 +65,7 @@ test('compact My Nights prompt disappears only after saving and stays hidden on 
   await page.reload();await expect(page.getByRole('heading',{name:'My Nights',exact:true})).toBeVisible();
   await expect(card).toHaveCount(0);
   await page.goto('/notifications');
-  await page.getByText('Notification settings',{exact:true}).click();
+  await openNotificationDetails(page.locator('.notification-device-settings > summary'));
   await expect(card.getByRole('button',{name:'Turn off on this device'})).toBeVisible();
   await card.getByRole('button',{name:'Turn off on this device'}).click();
   await expect(card.getByRole('button',{name:'Enable event alerts'})).toBeVisible();expect(enabled).toBe(false);
@@ -64,7 +82,7 @@ test('iPhone installation stays optional and never blocks access to My Nights',a
   await page.goto('/my-nights');const card=page.getByRole('complementary',{name:'Event notifications'});
   await expect(page.getByRole('heading',{name:'My Nights',exact:true})).toBeVisible();
   await expect(card.locator('summary')).toBeVisible();expect((await card.boundingBox())!.height).toBeLessThanOrEqual(60);
-  await card.locator('summary').click();await expect(card.getByText(/Share → Add to Home Screen/)).toBeVisible();await expect(card).toContainText('This is optional.');
+  await openNotificationDetails(card.locator('summary'));await expect(card.getByText(/Share → Add to Home Screen/)).toBeVisible();await expect(card).toContainText('This is optional.');
   await expect(card.getByRole('button',{name:'Enable event alerts'})).toHaveCount(0);
   await page.screenshot({path:test.info().outputPath('confirmation-iphone-optional.png'),fullPage:true});
   expect((await new AxeBuilder({page}).include('.event-alert-nudge').analyze()).violations).toEqual([]);
@@ -72,7 +90,8 @@ test('iPhone installation stays optional and never blocks access to My Nights',a
 test('declined notification permission leaves booking access available',async({page})=>{
   await member(page);await phone(page,'denied');await page.goto('/my-nights');
   const card=page.getByRole('complementary',{name:'Event notifications'});
-  await card.locator('summary').click();await expect(card.getByText(/Alerts are blocked/)).toBeVisible();await expect(card.getByRole('button')).toHaveCount(0);
+  await openNotificationDetails(card.locator('summary'));await expect(card.getByText(/Alerts are blocked/)).toBeVisible();await expect(card.getByRole('button')).toHaveCount(0);
+  expect(await page.evaluate(() => Notification.permission)).toBe('denied');
   await expect(page.getByRole('heading',{name:'My Nights',exact:true})).toBeVisible();
 });
 
