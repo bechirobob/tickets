@@ -120,7 +120,7 @@ test('small screens, larger text and empty states keep visible lettering intact'
   expect(await page.locator('h1,h2,dd,.event-story-intro p').evaluateAll(nodes => nodes.filter(node => node.scrollWidth > node.clientWidth + 1).map(node => node.textContent))).toEqual([]);
   await page.route(`${origin}/api/public/events`, route => route.fulfill({ json: { ...catalogue, events: [], screens: [] }, headers: { 'access-control-allow-origin': '*' } }));
   await page.goto('/events');
-  await expect(page.getByRole('heading', { name: 'The next plan is still cooking.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'No upcoming nights announced.' })).toBeVisible();
 });
 
 
