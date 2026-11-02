@@ -3967,6 +3967,7 @@ COMBINED_BASE = 'c3711fed843d2dd9ef7c722e15be48852de5a34b'
 COMBINED_BASE_TREE = '86788f925b346c291a03f1a18c33d17fa42275e9'
 COMBINED_SNAPSHOT = '5431dc2b264f5da24889434b1a78d1378b33dd4c'
 COMBINED_SNAPSHOT_TREE = '3c078eead147e3fb6519534edac56fac85f90440'
+COMBINED_CANDIDATE_BRANCH = 'release/tickets-reconciled-20261102'
 COMBINED_CONTROLS = frozenset({'ops/vps/code-release.py', 'ops/vps/test_code_release.py'})
 
 
@@ -4403,11 +4404,23 @@ def verify_runtime_transport(archive, source, source_tree, runtime):
         raise ReleaseError("Runtime release transport evidence mismatch.") from exc
 
 
+def admitted_parallel_ref(event, branch):
+    # Preserve historical admission; only this reviewed release gains a manual ref.
+    return (branch == "improve/release-evidence-parallel-20261013"
+            and event in ("push", "workflow_dispatch")) or (
+                branch == COMBINED_CANDIDATE_BRANCH and event == "workflow_dispatch")
+
+
+def verify_combined_parallel_scope(candidate, expected, source):
+    if candidate.get("head_branch") == COMBINED_CANDIDATE_BRANCH:
+        require(candidate.get("event") == "workflow_dispatch", "Combined candidate must be manually dispatched.")
+        reviewed_combined_application_blobs(expected, source)
+
+
 def verify_parallel_run(run, jobs, *, repository):
     require(type(run) is dict and run.get("status") == "completed" and run.get("conclusion") == "success"
             and run.get("path") == ".github/workflows/candidate-parallel-checks.yml"
-            and run.get("head_branch") == "improve/release-evidence-parallel-20261013"
-            and run.get("event") in ("push", "workflow_dispatch")
+            and admitted_parallel_ref(run.get("event"), run.get("head_branch"))
             and type(run.get("id")) is int and run["id"] > 0
             and type(run.get("run_attempt")) is int and run["run_attempt"] > 0
             and isinstance(run.get("head_sha"), str) and SHA.fullmatch(run["head_sha"])
@@ -4607,8 +4620,7 @@ def validate_parallel_proof(proof, *, repository, candidate, tree, run_id, attem
                 "run_id": int(run_id), "run_attempt": attempt}
     require(all(proof[key] == value for key, value in expected.items())
             and number(proof["run_id"]) and number(proof["run_attempt"]) and sha(proof["workflow_blob"])
-            and proof["event"] in ("push", "workflow_dispatch")
-            and proof["head_branch"] == "improve/release-evidence-parallel-20261013",
+            and admitted_parallel_ref(proof["event"], proof["head_branch"]),
             "Parallel proof does not bind the exact candidate workflow.")
     artifact = proof["artifact"]
     require(type(artifact) is dict and set(artifact) == {"id", "name", "size_in_bytes", "digest",
@@ -4734,6 +4746,8 @@ def verify_ci(args):
     source_tree = git("rev-parse", args.source + "^{tree}")
     require(source_tree == git("rev-parse", candidate["head_sha"] + "^{tree}"),
             "Candidate browser source tree differs from runtime source tree.")
+    if candidate_mode == "parallel-v1":
+        verify_combined_parallel_scope(candidate, args.expected, args.source)
     changes = vetted_changes(args.expected, args.source)
     candidate_verification = (verify_parallel_candidate(args, candidate, candidate_jobs, source_tree)
                               if candidate_mode in ("parallel-v1", "parallel-retry-v3") else None)
