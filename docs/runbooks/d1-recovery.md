@@ -1,16 +1,43 @@
-# D1 recovery runbook
+# Legacy D1 recovery runbook
 
-This runbook protects BeCore Tickets transaction, ticket, consent, entry and operational records. A recovery is successful only when the restored database passes integrity checks and the application journey is verified—not merely when a command exits successfully.
+Active Tickets runs on the VPS. Production recovery coverage is provided by
+`Tickets encrypted production backup` (`.github/workflows/tickets-backup.yml`),
+including its active-writer guard, isolated restore, encryption and download
+verification. Those controls are unchanged by the legacy D1 applicability check.
+Review that workflow's receipt separately; a successful applicability check does
+not establish that a VPS backup or restore succeeded.
 
-## Recovery layers
+## Runtime and schema expectations
 
-1. Cloudflare D1 Time Travel is the immediate point-in-time recovery layer. It is always enabled on production D1 databases.
-2. The weekly `D1 recovery rehearsal` workflow exports production, restores that export into an isolated temporary SQLite database, validates the required schema and runs `quick_check` plus `integrity_check`.
-3. Every deployment captures a pre-migration bookmark before applying migrations.
+The weekly `Legacy D1 recovery applicability` workflow reads the fixed public
+Tickets `/healthz` and `/api/version` endpoints. Both must identify
+`becore-tickets`, with matching full commit revisions, and health must identify
+`runtime: vps` and `active: true`. Redirects, unavailable endpoints, unknown
+runtimes, inactive services and mismatched identities fail the check.
 
-The weekly workflow never restores over production and never uploads the SQL export. It preserves only a bookmark and a non-sensitive validation report, then deletes the temporary export.
+Only that verified active VPS state classifies `becore-tickets-db` as legacy and
+records `result: not-applicable` and `restoreTested: false`. No Cloudflare secret,
+D1 lookup, bookmark capture, SQL export or restore is used by this workflow.
+Its artifact is an applicability report, **not recovery proof**. Unknown states
+must be investigated, not treated as a reason to skip a failed restore.
 
-## Incident response
+Inactive D1 is not expected to track the current application's migrations. In
+particular, an old export missing the announcement tables from migration 0061
+must not prompt a production migration merely to satisfy this check. The offline
+`scripts/rehearse-d1-recovery.sh` still strictly requires its current table set,
+including all four announcement tables; import, integrity or schema failures
+remain failures. It does not certify arbitrary historical schemas.
+
+If D1 becomes active again, this workflow intentionally fails until the runtime
+identity, exact database target and expected schema are explicitly reviewed and
+implemented. Do not infer a D1 target from an unavailable VPS. Do not silently
+relax required-table assertions for a legacy export.
+
+## D1-only incident response (requires confirmed active D1)
+
+The following procedure applies only after separately confirming that D1 is the
+intended recovery target and establishing its schema expectations. It is not the
+active VPS recovery procedure.
 
 1. Pause public mutations or sales if continued writes could worsen the incident.
 2. Record the UTC incident time, first known bad write, affected tables and current deployment SHA.
@@ -48,4 +75,4 @@ The weekly workflow never restores over production and never uploads the SQL exp
 - Aggregate row counts are written to the report without exporting customer data.
 - Production is not modified.
 
-Run the rehearsal manually after any material schema change and review the scheduled report at least monthly.
+For an explicitly authorised D1 rehearsal, review schema expectations before exporting. Review active VPS backup receipts separately from the weekly legacy applicability report.

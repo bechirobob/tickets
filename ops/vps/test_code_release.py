@@ -1202,6 +1202,8 @@ NODE_SECURITY_TEST_OVERLAY = {'scripts/prepare-registration-browser-fixture.mjs'
  'ops/vps/test_runtime_workflow_contract.py': ('100644', 'c9620eeb200133ee94c76accc5328ecce28b4b75')}
 
 def production_audit_historical_workflow(name, raw):
+    from recovery_maintenance_test_support import restore_workflow
+    raw = restore_workflow(name, raw)
     # Reconstruct only this exact reviewed postactivation caller, never arbitrary YAML.
     if name == '.github/workflows/tickets-code-release.yml' and release.hashlib.sha1(
             b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest() == release.AUDIT_APPLICATION_BLOBS[name]:
@@ -1213,6 +1215,8 @@ def production_audit_historical_workflow(name, raw):
 
 
 def historical_node_workflow(name, raw):
+    from recovery_maintenance_test_support import restore_workflow
+    raw = restore_workflow(name, raw)
     raw = parallel_gate_historical_workflow(name, raw)
     expected = NODE_SECURITY_TEST_OVERLAY.get(name)
     digest = lambda value: release.hashlib.sha1(b'blob ' + str(len(value)).encode() + b'\0' + value).hexdigest()
@@ -3571,6 +3575,8 @@ def scanner_dependency_source_family(root):
             manifest.update(SCANNER_DEPS_CONTROL_PINS)
             if application:
                 manifest.update({name: ('100644', blob) for name, blob in SCANNER_DEPS_SOURCE_CHANGES.items()})
+            from recovery_maintenance_test_support import overlay_manifest
+            overlay_manifest(root, manifest, staged=False)
             tracked = set(filter(None, checkout_git(root, 'ls-files', '-z').decode().split('\0')))
             untracked = set(filter(None, checkout_git(root, 'ls-files', '--others', '--exclude-standard', '-z').decode().split('\0')))
             if tracked != set(manifest) or untracked:
@@ -3599,6 +3605,8 @@ def scanner_dependency_source_family(root):
         manifest.update({name: ('100644', blob) for name, blob in release.STAFF_APP_APPLICATION_BLOBS.items() if name in manifest})
         hygiene_test_manifest(root, manifest)
         manifest.update({name: ('100644', blob) for name, blob in release.SCANNER_DEPS_APP_BLOBS.items() if name in manifest})
+        from recovery_maintenance_test_support import overlay_manifest
+        overlay_manifest(root, manifest, staged=True)
         validate_staged_inventory(root, manifest)
     for name, (mode, expected) in manifest.items():
         path = root / name

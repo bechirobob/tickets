@@ -240,7 +240,7 @@ class YorkewayStagedInventoryTests(unittest.TestCase):
             with tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
                 # Mirror the exact current staged archive, including new retry controls.
-                for name in set(controls.DOWNLOAD_RETRY_STAGED_BASE) | controls.DOWNLOAD_RETRY_STAGED_ADDITIONS | controls.EVIDENCE_TEST_ADDITIONS:
+                for name in set(controls.DOWNLOAD_RETRY_STAGED_BASE) | controls.DOWNLOAD_RETRY_STAGED_ADDITIONS | controls.EVIDENCE_TEST_ADDITIONS | __import__('recovery_maintenance_test_support').ADDITIONS:
                     path = root / name; path.parent.mkdir(parents=True, exist_ok=True)
                     path.write_bytes((ROOT / name).read_bytes()); path.chmod(0o644)
                 target = root / 'ops/vps/inspect-mail-service-readonly.py'
@@ -482,7 +482,7 @@ class OwnerPushStagedInventoryTests(unittest.TestCase):
             with tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
                 # Mirror the exact current staged archive, including new retry controls.
-                for name in set(controls.DOWNLOAD_RETRY_STAGED_BASE) | controls.DOWNLOAD_RETRY_STAGED_ADDITIONS | controls.EVIDENCE_TEST_ADDITIONS:
+                for name in set(controls.DOWNLOAD_RETRY_STAGED_BASE) | controls.DOWNLOAD_RETRY_STAGED_ADDITIONS | controls.EVIDENCE_TEST_ADDITIONS | __import__('recovery_maintenance_test_support').ADDITIONS:
                     path = root / name; path.parent.mkdir(parents=True, exist_ok=True)
                     path.write_bytes((ROOT / name).read_bytes()); path.chmod(0o644)
                 target = root / 'ops/vps/inspect-mail-service-readonly.py'
