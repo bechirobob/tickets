@@ -121,7 +121,7 @@ jobs:
             --runtime-run "$RUNTIME_RUN" --candidate-run "$CANDIDATE_RUN" --candidate-mode "$CANDIDATE_MODE" --metadata "$metadata" \
             --archive "$metadata/artifact/tickets-vps-runtime.tar.gz" --output "$metadata/provenance.json"
       - name: Set up the shipping runtime version for final audit
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: 24.22.1
       - name: Capture final dependency audit privately
@@ -217,7 +217,7 @@ jobs:
         with:
           ref: 36c30bd61415460b7383e857b9407bef753185ea
           persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: 22.23.4
           cache: npm
