@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { runInNewContext } from 'node:vm';
 import { copyRuntimeClosure, externalPackage, runtimeClosure, runtimeInputs, runtimeRoots, runRuntimeCheck, verifyPlatform } from '../scripts/vps-runtime-dependencies.mjs';
 
 async function fixture(t) {
@@ -138,4 +139,21 @@ test('a timed-out verifier cannot leave its child server running', { skip: proce
     await new Promise(resolve => setTimeout(resolve, 20));
   }
   assert.ok(stopped, 'verifier child survived timeout cleanup');
+});
+
+
+test('VPS staging includes shared TSX and CSS while excluding local secrets', async t => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'tickets-stage-test-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  for (const name of ['app', 'components/workspace', 'lib', 'db', 'public', 'styles', 'worker', 'runtime']) await fs.mkdir(path.join(root, name), { recursive: true });
+  for (const name of ['package.json', 'tsconfig.json', 'next.config.ts', 'postcss.config.mjs', 'cloudflare-env.d.ts']) await fs.writeFile(path.join(root, name), '{}');
+  const files = { 'components/workspace/Workspace.tsx': 'export default function Workspace() { return null; }', 'components/workspace/workspace.css': '.workspace { display: grid; }' };
+  for (const [name, bytes] of Object.entries(files)) await fs.writeFile(path.join(root, name), bytes);
+  await fs.writeFile(path.join(root, '.env.local'), 'PRIVATE_FIXTURE');
+  const source = await fs.readFile(new URL('../scripts/build-vps.mjs', import.meta.url), 'utf8');
+  const staging = source.slice(source.indexOf('const stage ='), source.indexOf("await cp(path.join(root, 'vite.vps.config.ts')"));
+  assert.ok(staging.includes('// Explicit source allowlist:'));
+  await runInNewContext(`(async () => {${staging}})()`, { root, path, rm: fs.rm, mkdir: fs.mkdir, cp: fs.cp });
+  for (const [name, bytes] of Object.entries(files)) assert.equal(await fs.readFile(path.join(root, '.vps-build', name), 'utf8'), bytes);
+  await assert.rejects(fs.access(path.join(root, '.vps-build/.env.local')), { code: 'ENOENT' });
 });

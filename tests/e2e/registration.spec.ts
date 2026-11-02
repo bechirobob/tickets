@@ -33,7 +33,7 @@ test('free RSVP preserves form details on failure and submits the selected party
   });
   const send = page.getByRole('button', { name: 'Send RSVP' });
   await send.click();
-  await expect(page.getByRole('status')).toHaveText('Please try again.');
+  await expect(page.getByRole('alert')).toHaveText('Please try again.');
   await expect(page.getByLabel('Your name')).toHaveValue('Registration Guest');
   await expect(updates).toBeChecked();
   expect((await new AxeBuilder({ page }).include('.registration-form').analyze()).violations).toEqual([]);
@@ -65,7 +65,7 @@ test('an undated event keeps optional email consent event-scoped without implyin
   await page.getByLabel('Email address').fill('interest@example.com');
   await page.getByRole('checkbox', { name: /I accept the event terms/ }).check();
   await page.getByRole('button', { name: 'Send my confirmation link' }).click();
-  await expect(page.getByRole('status')).toHaveText('Test registration stopped before sending email.');
+  await expect(page.getByRole('alert')).toHaveText('Test registration stopped before sending email.');
   expect(attempts).toBe(1);
   await updates.check();
   await page.getByRole('button', { name: 'Send my confirmation link' }).click();

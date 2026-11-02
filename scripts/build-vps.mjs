@@ -14,7 +14,7 @@ const stage = path.join(root, '.vps-build');
 await rm(stage, { recursive: true, force: true });
 await mkdir(stage);
 // Explicit source allowlist: no secrets, local DBs, logs or Cloudflare config.
-for (const item of ['app', 'lib', 'db', 'public', 'styles', 'worker', 'runtime', 'package.json', 'tsconfig.json', 'next-env.d.ts', 'next.config.ts', 'postcss.config.mjs', 'cloudflare-env.d.ts']) {
+for (const item of ['app', 'components', 'lib', 'db', 'public', 'styles', 'worker', 'runtime', 'package.json', 'tsconfig.json', 'next-env.d.ts', 'next.config.ts', 'postcss.config.mjs', 'cloudflare-env.d.ts']) {
   try { await cp(path.join(root, item), path.join(stage, item), { recursive: true }); }
   catch (error) { if (item !== 'next-env.d.ts' || error.code !== 'ENOENT') throw error; }
 }
