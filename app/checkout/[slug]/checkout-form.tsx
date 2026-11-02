@@ -189,7 +189,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
                     <b>{tier.status === "sold_out" ? "Sold out" : tier.status === "upcoming" ? "Sales soon" : tier.status === "closed" ? "Sales closed" : formatGhanaCedis(tier.priceMinor)}</b>
                   </button>
                   {selected && !soldOut && (
-                    <div className="quantity-control">
+                    <div className="quantity-control"><span className="quantity-label">Quantity</span>
                       <select
                         aria-label={`${tier.name} quantity`}
                         value={quantity}
@@ -275,7 +275,7 @@ export default function CheckoutForm({ slug, event, feeBasisPoints, seevEnabled 
           <p className="eyebrow">Order summary</p>
           <h2>{event.title}</h2>
           <p>{event.shortDate} · {event.time.split(" — ")[0]}<br />{event.venue}, {event.area}</p>
-          <div className="checkout-coupon"><label htmlFor="checkout-coupon">Discount code</label><div><input id="checkout-coupon" value={couponCode} maxLength={32} disabled={isPaying||quoting} onChange={e=>{setCouponCode(e.target.value);setCoupon(null);setCouponMessage('');}}/><button type="button" disabled={!ready||quoting||isPaying||!couponCode.trim()} onClick={()=>void applyCoupon()}>{quoting?'Checking…':'Apply'}</button>{activeCoupon?<button type="button" disabled={isPaying} onClick={()=>{setCoupon(null);setCouponCode('');setCouponMessage('');}}>Remove</button>:null}</div><p role="status">{coupon&&!activeCoupon?'Your ticket selection changed. Apply the code again.':couponMessage}</p></div>
+          <details className="checkout-discount"><summary>{activeCoupon ? `Discount applied · ${activeCoupon.code}` : coupon ? "Reapply your discount code" : "Have a discount code?"}</summary><div className="checkout-coupon"><label htmlFor="checkout-coupon">Discount code</label><div><input id="checkout-coupon" value={couponCode} maxLength={32} disabled={isPaying||quoting} onChange={e=>{setCouponCode(e.target.value);setCoupon(null);setCouponMessage('');}}/><button type="button" disabled={!ready||quoting||isPaying||!couponCode.trim()} onClick={()=>void applyCoupon()}>{quoting?'Checking…':'Apply'}</button>{activeCoupon?<button type="button" disabled={isPaying} onClick={()=>{setCoupon(null);setCouponCode('');setCouponMessage('');}}>Remove</button>:null}</div><p role="status">{coupon&&!activeCoupon?'Your ticket selection changed. Apply the code again.':couponMessage}</p></div></details>
           <div className="summary-lines">
             <span>{quantity} × {selectedTier.name} <b>{formatGhanaCedis(ticketTotalMinor)}</b></span>
             {discountMinor>0?<span>Discount · {activeCoupon?.code}<b>−{formatGhanaCedis(discountMinor)}</b></span>:null}

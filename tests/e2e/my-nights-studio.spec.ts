@@ -79,13 +79,13 @@ test("registration-only guests keep access and cancellation is deliberate", asyn
 test("recovery remains usable with reduced motion", async ({ page }, info) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/my-nights");
-  await expect(page.getByRole("heading", { name: "Your plans are still here." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Find your tickets & RSVPs." })).toBeVisible();
   await page.route("**/api/customer/recovery", route => route.fulfill({ json: { sent: true } }));
   await page.getByLabel("Booking or registration email").fill("isolated@example.com");
-  await page.getByRole("button", { name: "Bring back my Nights" }).click();
+  await page.getByRole("button", { name: "Email my access link" }).click();
   await expect(page.getByRole("button", { name: "Check your email" })).toBeDisabled();
   await page.getByRole("button", { name: "Use another email" }).click();
-  await expect(page.getByRole("button", { name: "Bring back my Nights" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Email my access link" })).toBeEnabled();
   await page.getByRole("button", { name: "Notifications", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "The Buzz" })).toBeVisible();
   expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze()).violations).toEqual([]);

@@ -1,0 +1,29 @@
+{
+  "base": "32b5956549cb3eff04e2abbcfda177bccb07b0f8",
+  "branch": "feat/customer-experience-20261102",
+  "productionFileCount": 7,
+  "sha256": {
+    "app/customer-experience.css": "1205882825920ce3061023654674d41407f355389804a2d12a056783baf7b474",
+    "styles/customer.css": "191f2aa9cf8a6fc21d81e34084c1f4c0e7b9e112eefab701b284c14f6b99bc45",
+    "app/event-explorer.tsx": "84692b68365c59738d48898c66c92ecf409c3fd02616feabcfe31d103c093926",
+    "app/events/events-screen.tsx": "380f28fcdc224a90350099a361a8598bccbc3c377a1e423dcdf54e4692ac147e",
+    "app/event/[slug]/event-screen.tsx": "c2e82a329f87518d153dd33ce7bfd307b34ef06ec65bb8fefb7f2cf5a92f0ea6",
+    "app/checkout/[slug]/checkout-form.tsx": "360be34c4fb8aab3a2223f1c7ad5b2e2ea3f307151db40b232bf5a9704e78b2a",
+    "app/my-nights/my-nights-client.tsx": "f5b1ae811a2ef048276d391b86f3f4d723c9c0b22a92b75d900bf67de972ca7b"
+  },
+  "unchangedProtectedPaths": [
+    ".github",
+    "ops",
+    "lib",
+    "worker",
+    "components",
+    "app/room",
+    "app/flashes",
+    "app/the-yorke-way",
+    "package.json",
+    "package-lock.json",
+    "mobile/package.json",
+    "mobile/package-lock.json"
+  ],
+  "deployment": false
+}

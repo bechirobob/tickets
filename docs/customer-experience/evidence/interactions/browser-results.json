@@ -1,0 +1,22 @@
+{
+  "browser": "154.0.8037.57",
+  "scenarios": [
+    "desktop: discovery search/date/clear/empty/pagination and menu keyboard focus",
+    "desktop: checkout validation focus/association, fee total, repeated interrupted request retains idempotency and optional consent unchecked",
+    "desktop: RSVP opening/closing focus, pending duplicate guard, error announcement and preserved draft",
+    "desktop: My Nights loading/error/retry/empty, pass/Room destinations, tab search reset and Back/Forward; notification dialog Escape and focus",
+    "desktop: empty state customer routes, visible refinements, event admission anchors/status guards, discount/quantity totals and recovery interruption",
+    "mobile: discovery search/date/clear/empty/pagination and menu keyboard focus",
+    "mobile: checkout validation focus/association, fee total, repeated interrupted request retains idempotency and optional consent unchecked",
+    "mobile: RSVP opening/closing focus, pending duplicate guard, error announcement and preserved draft",
+    "mobile: My Nights loading/error/retry/empty, pass/Room destinations, tab search reset and Back/Forward; notification dialog Escape and focus",
+    "mobile: empty state customer routes, visible refinements, event admission anchors/status guards, discount/quantity totals and recovery interruption",
+    "narrow: discovery search/date/clear/empty/pagination and menu keyboard focus",
+    "narrow: checkout validation focus/association, fee total, repeated interrupted request retains idempotency and optional consent unchecked",
+    "narrow: RSVP opening/closing focus, pending duplicate guard, error announcement and preserved draft",
+    "narrow: My Nights loading/error/retry/empty, pass/Room destinations, tab search reset and Back/Forward; notification dialog Escape and focus",
+    "narrow: empty state customer routes, visible refinements, event admission anchors/status guards, discount/quantity totals and recovery interruption"
+  ],
+  "errors": [],
+  "limits": "Real client components, synthetic intercepted requests; Chromium desktop and simulated mobile only. No live payments, RSVPs, emails, credentials or production data."
+}

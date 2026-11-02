@@ -18,8 +18,10 @@ test('an empty website catalogue renders the real empty state without nonfunctio
   for (const full of [false, true]) {
     const html = renderToStaticMarkup(createElement(component.exports.default, { events: [], full }));
     assert.match(html, /class="event-empty"/u);
-    assert.match(html, /The next plan is still cooking\./u);
-    assert.match(html, /href="\/organizer\/submit"/u);
+    assert.match(html, /No upcoming nights announced\./u);
+    assert.match(html, /href="\/my-nights"/u);
+    assert.match(html, /href="\/hosts"/u);
+    assert.doesNotMatch(html, /href="\/organizer\/submit"/u);
     assert.doesNotMatch(html, /drop-card|discovery-search|Pick a date|Next up/u);
   }
 });

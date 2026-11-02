@@ -418,8 +418,8 @@ test("returning buyers recover and manage the whole purchase through My Nights",
     readFile(new URL("../app/api/customer/recovery/claim/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/payment/return/page.tsx", import.meta.url), "utf8"),
   ]);
-  assert.match(myNights, /Bring back my Nights/u);
-  assert.match(myNights, /Use your booking email/u);
+  assert.match(myNights, /Email my access link/u);
+  assert.match(myNights, /Enter the email you booked with/u);
   assert.match(myNights, /Show my ticket/u);
   assert.match(myNights, /The Room/u);
   assert.match(myNights, /canEnterRoom/u);

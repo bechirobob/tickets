@@ -37,10 +37,9 @@ test("date selection survives an event visit and clearing restores the catalogue
   if (!upcoming.length) await expect(page.getByRole('heading', { name: 'Even Accra has a quiet corner.' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
   await page.screenshot({ path: info.outputPath("discovery-dates.png"), fullPage: true });
-  await page.locator(".discovery-filters summary").click();
   await expect(page.getByLabel("Area", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Amapiano", exact: true }).click();
-  await expect(page.locator(".discovery-filters summary")).toContainText("Filters (1)");
+  await page.getByRole("combobox", { name: "Music and mood", exact: true }).selectOption("Amapiano");
+  await expect(page.locator(".discovery-active-filters")).toContainText("Amapiano");
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
   await page.screenshot({ path: info.outputPath("discovery-filters-expanded.png"), fullPage: true });
   await page.setViewportSize({ width: 320, height: 850 });
@@ -48,7 +47,7 @@ test("date selection survives an event visit and clearing restores the catalogue
   await expect(date).toHaveValue(selectedDate);
   await expect(page.getByLabel("Area", { exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
-  await expect(page.locator(".discovery-filters summary")).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Music and mood", exact: true })).toBeVisible();
   await page.screenshot({ path: info.outputPath("discovery-narrow-date-expanded.png"), fullPage: true });
   // An explicit date legitimately clears the relative date-window selection.
   await page.getByRole("button", { name: "Next up", exact: true }).click();

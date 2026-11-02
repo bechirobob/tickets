@@ -1,0 +1,191 @@
+[
+  {
+    "device": "desktop",
+    "screen": "empty",
+    "beforeHeight": 1035,
+    "afterHeight": 1035,
+    "heightDifference": 0,
+    "beforeH1": "48px",
+    "afterH1": "38px"
+  },
+  {
+    "device": "desktop",
+    "screen": "browse",
+    "beforeHeight": 1057,
+    "afterHeight": 1187,
+    "heightDifference": 130,
+    "beforeH1": "48px",
+    "afterH1": "38px"
+  },
+  {
+    "device": "desktop",
+    "screen": "event",
+    "beforeHeight": 1132,
+    "afterHeight": 1187,
+    "heightDifference": 55,
+    "beforeH1": "48px",
+    "afterH1": "38px"
+  },
+  {
+    "device": "desktop",
+    "screen": "checkout",
+    "beforeHeight": 1192,
+    "afterHeight": 1035,
+    "heightDifference": -157,
+    "beforeH1": "35px",
+    "afterH1": "30px"
+  },
+  {
+    "device": "desktop",
+    "screen": "rsvp",
+    "beforeHeight": 1000,
+    "afterHeight": 1000,
+    "heightDifference": 0,
+    "beforeH1": "16px",
+    "afterH1": "16px"
+  },
+  {
+    "device": "desktop",
+    "screen": "nights",
+    "beforeHeight": 1644,
+    "afterHeight": 1588,
+    "heightDifference": -56,
+    "beforeH1": "56px",
+    "afterH1": "32px"
+  },
+  {
+    "device": "desktop",
+    "screen": "recovery",
+    "beforeHeight": 1035,
+    "afterHeight": 1035,
+    "heightDifference": 0,
+    "beforeH1": "56px",
+    "afterH1": "32px"
+  },
+  {
+    "device": "mobile",
+    "screen": "empty",
+    "beforeHeight": 898,
+    "afterHeight": 898,
+    "heightDifference": 0,
+    "beforeH1": "30px",
+    "afterH1": "28px"
+  },
+  {
+    "device": "mobile",
+    "screen": "browse",
+    "beforeHeight": 898,
+    "afterHeight": 898,
+    "heightDifference": 0,
+    "beforeH1": "30px",
+    "afterH1": "28px"
+  },
+  {
+    "device": "mobile",
+    "screen": "event",
+    "beforeHeight": 1950,
+    "afterHeight": 1763,
+    "heightDifference": -187,
+    "beforeH1": "31px",
+    "afterH1": "28px"
+  },
+  {
+    "device": "mobile",
+    "screen": "checkout",
+    "beforeHeight": 2080,
+    "afterHeight": 1736,
+    "heightDifference": -344,
+    "beforeH1": "29px",
+    "afterH1": "27px"
+  },
+  {
+    "device": "mobile",
+    "screen": "rsvp",
+    "beforeHeight": 844,
+    "afterHeight": 844,
+    "heightDifference": 0,
+    "beforeH1": "16px",
+    "afterH1": "16px"
+  },
+  {
+    "device": "mobile",
+    "screen": "nights",
+    "beforeHeight": 1606,
+    "afterHeight": 1332,
+    "heightDifference": -274,
+    "beforeH1": "38px",
+    "afterH1": "32px"
+  },
+  {
+    "device": "mobile",
+    "screen": "recovery",
+    "beforeHeight": 898,
+    "afterHeight": 898,
+    "heightDifference": 0,
+    "beforeH1": "38px",
+    "afterH1": "32px"
+  },
+  {
+    "device": "narrow",
+    "screen": "empty",
+    "beforeHeight": 794,
+    "afterHeight": 794,
+    "heightDifference": 0,
+    "beforeH1": "30px",
+    "afterH1": "28px"
+  },
+  {
+    "device": "narrow",
+    "screen": "browse",
+    "beforeHeight": 968,
+    "afterHeight": 794,
+    "heightDifference": -174,
+    "beforeH1": "30px",
+    "afterH1": "28px"
+  },
+  {
+    "device": "narrow",
+    "screen": "event",
+    "beforeHeight": 1885,
+    "afterHeight": 1857,
+    "heightDifference": -28,
+    "beforeH1": "31px",
+    "afterH1": "28px"
+  },
+  {
+    "device": "narrow",
+    "screen": "checkout",
+    "beforeHeight": 2098,
+    "afterHeight": 1796,
+    "heightDifference": -302,
+    "beforeH1": "29px",
+    "afterH1": "27px"
+  },
+  {
+    "device": "narrow",
+    "screen": "rsvp",
+    "beforeHeight": 823,
+    "afterHeight": 823,
+    "heightDifference": 0,
+    "beforeH1": "16px",
+    "afterH1": "16px"
+  },
+  {
+    "device": "narrow",
+    "screen": "nights",
+    "beforeHeight": 1833,
+    "afterHeight": 1540,
+    "heightDifference": -293,
+    "beforeH1": "38px",
+    "afterH1": "32px"
+  },
+  {
+    "device": "narrow",
+    "screen": "recovery",
+    "beforeHeight": 834,
+    "afterHeight": 794,
+    "heightDifference": -40,
+    "beforeH1": "38px",
+    "afterH1": "32px"
+  }
+]
