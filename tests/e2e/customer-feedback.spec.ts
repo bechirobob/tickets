@@ -22,7 +22,7 @@ test("a failed recovery preserves the email and allows a successful retry", asyn
   await page.goto("/my-nights");
   const email = page.getByLabel("Booking or registration email");
   await email.fill("recovery@example.com");
-  const submit = page.getByRole("button", { name: "Bring back my Nights" });
+  const submit = page.getByRole("button", { name: "Email my access link" });
   await submit.click();
   await expect(page.getByRole("alert")).toContainText("temporarily unavailable");
   expect(attempts).toBe(1);

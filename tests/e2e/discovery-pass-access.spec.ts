@@ -132,7 +132,7 @@ test('explicit recovery can switch email-owner proof without signing out another
   await expect(page.getByLabel('Booking or registration email')).toBeVisible();
   expect(recoveries).toBe(0);
   await page.getByLabel('Booking or registration email').fill('approved-guest@example.com');
-  await page.getByRole('button', { name: 'Bring back my Nights' }).click();
+  await page.getByRole('button', { name: 'Email my access link' }).click();
   await expect(page.getByRole('button', { name: 'Check your email' })).toBeDisabled();
   expect(recoveries).toBe(1);
 });
@@ -161,7 +161,7 @@ test('recovery is unavailable before hydration and preserves early entry through
   try {
     await page.goto('/my-nights?recover=1', { waitUntil: 'commit' });
     const email = page.getByLabel('Booking or registration email');
-    const submit = page.getByRole('button', { name: 'Bring back my Nights' });
+    const submit = page.getByRole('button', { name: 'Email my access link' });
     await expect(email).toBeDisabled();
     await expect(submit).toBeDisabled();
     await expect(page.getByRole('status').filter({ hasText: 'Getting secure recovery ready' })).toBeVisible();

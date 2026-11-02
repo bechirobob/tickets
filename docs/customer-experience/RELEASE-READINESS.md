@@ -21,7 +21,7 @@ Branch: `feat/customer-experience-20261102`. This documentation/evidence follow-
 
 ## Current evidence and provenance
 
-- Parent independently verified full run161 at `2b56a4d072e55de8a2e01d1d100348fbfb5d38c3`:24 completed compiled check groups per engine, desktop/390/320 Chromium and WebKit, zero page errors. Four previously implicated RSC paths returned200 `text/x-component`. Its run ID must be taken from the parent's original receipt; it was not supplied in this task handoff.
+- Parent independently verified full run161 at `2b56a4d072e55de8a2e01d1d100348fbfb5d38c3`:24 completed compiled check groups per engine, desktop/390/320 Chromium and WebKit, zero page errors. Four previously implicated RSC paths returned200 `text/x-component`. Full run ID:41455676657.
 - [Focused run162](https://github.com/bechirobob/tickets/actions/runs/41457813899) at exactf0920bed passed three390px WebKit empty captures. Parent reviewed original pixels: naturally hidden intro, unobscured heading, readable customer actions/navigation, no overlap. All three PNGs SHA256 `1d8f88b6c93583b2f72d5fd2e87356342a09c5c0a733467b381ea8a43c1175f5`. Artifact13147886956 ZIP SHA256 `1860e309fcd2a0348f2ee8918420a577717111e658548aa2b9cd85a62af9979c`. Zero errors/outbound attempts; temporary database removed. This closes only the capture gap and does not replace full161.
 - Original failed159 (`41451355779`) and160 (`41453460812`) remain preserved. The HTTP/Secure-cookie cause of159 was a hypothesis; corrected confirmed-state behaviour is proven. Run160's four RSC errors are not erased by161; rapid interrupted navigation is not exhaustively proven by settled-navigation success.
 - Application/lib/styles/worker/dependency/mobile bytes are identical between earlier compiled snapshotef2e534f, full161 source2b56a4d and focused162 sourcef0920bed (verified Git diff). Later changes were harness diagnostics/readiness, workflow selection, tests and evidence. Therefore full browser product evidence remains applicable; it does not imply every later diagnostic mode received a full-suite rerun.
@@ -237,3 +237,16 @@ tests/e2e/room-identity.spec.ts
 tests/mobile-ui.test.mjs
 ```
 </details>
+
+
+## Approved test completion and publication follow-up
+
+The user explicitly approved customer PR publication/read-only checks, bounded exact-source admission, ready/verified merge/deployment, and the named host-navigation fix/release record on2026-11-02. This supersedes the earlier publication deferral. The first PR tool attempt was rejected before this explicit approval; the outcome will be state-checked before one supported retry.
+
+Four stale tests now use the exact current recovery heading/button and Home music-reset label. Home still has its filter disclosure; its alignment/keyboard/forced-colour/axe checks are retained. The Drop's native-select tests remain separate. No assertions were removed or broadened. All five affected existing tests passed on desktop and mobile Chromium:10 passes,0 retries. They used the compiled app with isolated temporary fictional D1, blocked Worker outbound service and blocked external browser traffic; recovery writes remained fixture-intercepted. The temporary runner/config and raw evidence are preserved under evidence/stale-e2e. Fixture cleanup passed. The server logged local certificate handshake diagnostics; this is not a zero-console-error acceptance run and does not replace full161. No new certificate bypass was added to product or shared test configuration. Local WebKit remains unavailable.
+
+Typecheck and affected-file lint passed; fresh normal root npm audit returned0 vulnerabilities. A separate trusted-wrapper audit probe reached npm but failed DNS (EAI_AGAIN); it is not fresh security proof. The candidate workflow may use32b595 as a distinct immutable main ancestor; its checkout verifier and saved-clean-report policy validation passed. The prior controls-only748a5abc applies to historical release admission, not the clean-audit candidate build gate. Future final candidate/runtime evidence must bind the independently approved controls baseline.
+
+Included exactly the approved host branch diff through9ebe6fa: two added test lines in tests/e2e/host-brand-identity.spec.ts (wait for actual Events heading after URL change), and the release record in docs/operations/dual-hosting.md from8ef3e35/9ebe6fa. No host application code changed. The host test's actual browser execution remains part of fresh hosted candidate checks; no local host-flow pass is claimed here. This inclusion is explicitly authorised and is not an alternate route around the prior denial.
+
+This follow-up supersedes the earlier191-path count; the handoff supplies the revised exact complete inventory. Application bytes remain identical to accepted browser sources; only tests, documentation and verification evidence changed. Security controls are still untouched in this snapshot. Full candidate dispatch waits until the exact frozen snapshot and independently reviewed controls identity are coordinated.

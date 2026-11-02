@@ -30,7 +30,7 @@ test("discovery keeps dates, count and filters coherent across selection and nar
   await expect(page.getByLabel("Area", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Amapiano", exact: true }).click();
   await expect(summary).toContainText("Filters (1)");
-  await page.getByRole("button", { name: "All music & moods", exact: true }).click();
+  await page.getByRole("button", { name: "All music", exact: true }).click();
   await expect(summary).toHaveText("Filters");
   await summary.click();
   for (const width of [320, 390, 768, 1440]) {
