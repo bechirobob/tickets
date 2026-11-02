@@ -98,3 +98,7 @@ Candidate and current main workflow triggers were inspected before publishing;
 no push selector matches this branch. Branch publication only: no PR, workflow
 dispatch, merge, deployment or release-admission change. Release verification is
 owned elsewhere and none of its gates is declared resolved by this preview.
+
+## Compiled follow-up
+
+The subsequent customer completion pass adds Home/Hosts customer actions, narrow filter fixes, deliberate control/icon review and a discount-label contrast fix. See [compiled verification and scope ledger](COMPILED-VERIFICATION.md) for actual browser-to-server journeys, fresh screenshots, final checks and remaining limits. Original before/after images above are intentionally unchanged.

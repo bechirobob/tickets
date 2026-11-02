@@ -384,5 +384,11 @@
       "path": ".github/workflows/vps-runtime.yml",
       "triggers": "on:\n  push:\n    branches: [main]\n    paths:\n      - '.github/workflows/vps-runtime.yml'\n      - 'runtime/**'\n      - 'ops/vps/**'\n      - 'ops/handover/**'\n      - 'scripts/**'\n      - 'worker/**'\n      - 'lib/**'\n      - 'app/**'\n      - 'db/**'\n      - 'drizzle/**'\n      - 'public/**'\n      - 'styles/**'\n      - 'tests/**'\n      - 'package*.json'\n      - '*config*'\n      # Keep exclusions after positive patterns; mixed app changes still run.\n      - '!.github/workflows/d1-recovery-rehearsal.yml'\n      - '!scripts/check-d1-recovery-runtime.mjs'\n      - '!tests/d1-recovery-privacy.test.mjs'\n      - '!docs/runbooks/d1-recovery.md'"
     }
-  ]
+  ],
+  "followup": {
+    "reviewedAt": "2026-11-02",
+    "remoteMain": "32b5956549cb3eff04e2abbcfda177bccb07b0f8",
+    "workflowChangesSinceBase": [],
+    "action": "Push existing feat/customer-experience-20261102 branch only; no matching push trigger; no PR, dispatch or deployment"
+  }
 }
