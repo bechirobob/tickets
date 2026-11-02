@@ -29,7 +29,9 @@ async function phone(page:Page, permission:'default'|'denied'='default') {
   await page.addInitScript(({permission}) => {
     Object.defineProperty(navigator,'userAgent',{configurable:true,value:'Mozilla/5.0 Android Chrome'});
     Object.defineProperty(navigator,'platform',{configurable:true,value:'Linux'});
+    Object.assign(window, { notificationPermissionRequests: 0 });
     Object.defineProperty(window,'Notification',{configurable:true,value:{permission:permission === 'denied' ? permission : sessionStorage.getItem('fixture-push-permission') ?? permission,requestPermission:async()=>{
+      (window as unknown as { notificationPermissionRequests: number }).notificationPermissionRequests++;
       if (permission === 'denied') throw new Error('Denied permission must not request access again');
       sessionStorage.setItem('fixture-push-permission','granted');
       Object.defineProperty(window.Notification,'permission',{configurable:true,value:'granted'});return 'granted';
@@ -92,6 +94,7 @@ test('declined notification permission leaves booking access available',async({p
   const card=page.getByRole('complementary',{name:'Event notifications'});
   await openNotificationDetails(card.locator('summary'));await expect(card.getByText(/Alerts are blocked/)).toBeVisible();await expect(card.getByRole('button')).toHaveCount(0);
   expect(await page.evaluate(() => Notification.permission)).toBe('denied');
+  expect(await page.evaluate(() => (window as unknown as { notificationPermissionRequests: number }).notificationPermissionRequests)).toBe(0);
   await expect(page.getByRole('heading',{name:'My Nights',exact:true})).toBeVisible();
 });
 
