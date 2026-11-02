@@ -4060,8 +4060,61 @@ def reviewed_customer_application_blobs(expected, source):
     return {name: blob for name, (_, blob) in candidate.items()}
 
 
+# Owner-approved room_refresh source; independent controls may change only these two files.
+ROOM_REFRESH_LIVE = '3836f3fd96092d0291332b3986955139237a3b03'
+ROOM_REFRESH_BASE = '3836f3fd96092d0291332b3986955139237a3b03'
+ROOM_REFRESH_BASE_TREE = '48a72bb05cc6397784a9223cc35c2ca3310299ba'
+ROOM_REFRESH_SNAPSHOT = 'c1da4ba019bbb3acab66984d0df67adaea727357'
+ROOM_REFRESH_SNAPSHOT_TREE = '8b2fb0ba89130f901a11b924eca504d57404ee1d'
+ROOM_REFRESH_CANDIDATE_BRANCH = 'release/tickets-room-refresh-20261102'
+ROOM_REFRESH_CONTROLS = frozenset({'ops/vps/code-release.py', 'ops/vps/test_code_release.py'})
+
+
+def room_refresh_tree_entries(revision):
+    entries = {}
+    for record in git('ls-tree', '-r', '--full-tree', revision).splitlines():
+        metadata, name = record.split('\t', 1)
+        mode, kind, blob = metadata.split()
+        require(kind == 'blob' and mode in ('100644', '100755'), 'Room refresh source has unsupported entry.')
+        entries[name] = (mode, blob)
+    return entries
+
+
+def reviewed_room_refresh_application_blobs(expected, source):
+    require(expected == ROOM_REFRESH_LIVE, 'Room refresh live baseline differs.')
+    for revision, tree in ((ROOM_REFRESH_BASE, ROOM_REFRESH_BASE_TREE), (ROOM_REFRESH_SNAPSHOT, ROOM_REFRESH_SNAPSHOT_TREE)):
+        require(git('rev-parse', revision + '^{tree}') == tree, 'Room refresh reviewed tree differs.')
+    for before, after in ((expected, ROOM_REFRESH_BASE), (ROOM_REFRESH_BASE, ROOM_REFRESH_SNAPSHOT), (ROOM_REFRESH_SNAPSHOT, source)):
+        subprocess.run(['git', '--no-replace-objects', 'merge-base', '--is-ancestor', before, after],
+                       check=True, env=git_environment(), timeout=60)
+    verify_trusted_operator(source)
+    trusted = os.environ['BECORE_TRUSTED_BASE']
+    require(trusted not in (expected, ROOM_REFRESH_BASE, ROOM_REFRESH_SNAPSHOT, source),
+            'Room refresh source requires independent merged controls.')
+    subprocess.run(['git', '--no-replace-objects', 'merge-base', '--is-ancestor', ROOM_REFRESH_BASE, trusted],
+                   check=True, env=git_environment(), timeout=60)
+    require(set(git('diff', '--name-only', ROOM_REFRESH_BASE, trusted).splitlines()) == ROOM_REFRESH_CONTROLS,
+            'Room refresh controls changed outside their approved scope.')
+    base, snapshot = room_refresh_tree_entries(ROOM_REFRESH_BASE), room_refresh_tree_entries(ROOM_REFRESH_SNAPSHOT)
+    control, candidate = room_refresh_tree_entries(trusted), room_refresh_tree_entries(source)
+    without_controls = lambda entries: {name: entry for name, entry in entries.items() if name not in ROOM_REFRESH_CONTROLS}
+    require(without_controls(control) == without_controls(base), 'Room refresh trusted inventory differs.')
+    require(without_controls(candidate) == without_controls(snapshot), 'Room refresh complete source inventory differs.')
+    for name in ROOM_REFRESH_CONTROLS:
+        require(control.get(name) == candidate.get(name) and control.get(name, (None,))[0] == '100644',
+                'Room refresh source control bytes or mode differ: ' + name)
+    changed = set(git('diff', '--name-only', expected, source).splitlines())
+    require(not migration_plan(changed) and not any(name.startswith('drizzle/') for name in changed),
+            'Room refresh source cannot introduce migrations.')
+    require(not any(Path(name).name in ('package.json', 'package-lock.json', 'npm-shrinkwrap.json', 'pnpm-lock.yaml', 'yarn.lock', 'bun.lock', 'bun.lockb') for name in changed),
+            'Room refresh source cannot change dependencies.')
+    return {name: blob for name, (_, blob) in candidate.items()}
+
+
 def reviewed_application_blobs(expected, source):
     """Select each exact application tree only from its approved live baseline."""
+    if expected == ROOM_REFRESH_LIVE:
+        return reviewed_room_refresh_application_blobs(expected, source)
     if expected == CUSTOMER_LIVE:
         return reviewed_customer_application_blobs(expected, source)
     if expected == COMBINED_LIVE and git('merge-base', COMBINED_SNAPSHOT, source) == COMBINED_SNAPSHOT:
@@ -4461,7 +4514,7 @@ def admitted_parallel_ref(event, branch):
     # Preserve historical admission; only this reviewed release gains a manual ref.
     return (branch == "improve/release-evidence-parallel-20261013"
             and event in ("push", "workflow_dispatch")) or (
-                branch in (COMBINED_CANDIDATE_BRANCH, CUSTOMER_CANDIDATE_BRANCH) and event == "workflow_dispatch")
+                branch in (COMBINED_CANDIDATE_BRANCH, CUSTOMER_CANDIDATE_BRANCH, ROOM_REFRESH_CANDIDATE_BRANCH) and event == "workflow_dispatch")
 
 
 def verify_combined_parallel_scope(candidate, expected, source):
@@ -4476,6 +4529,14 @@ def verify_customer_parallel_scope(candidate, expected, source, candidate_mode="
         require(candidate.get("head_branch") == CUSTOMER_CANDIDATE_BRANCH, "Customer candidate branch differs.")
         require(candidate.get("event") == "workflow_dispatch", "Customer candidate must be manually dispatched.")
         reviewed_customer_application_blobs(expected, source)
+
+
+def verify_room_refresh_parallel_scope(candidate, expected, source, candidate_mode="parallel-v1"):
+    if expected == ROOM_REFRESH_LIVE or candidate.get("head_branch") == ROOM_REFRESH_CANDIDATE_BRANCH:
+        require(candidate_mode == "parallel-v1", "Room refresh release requires parallel-v1 candidate evidence.")
+        require(candidate.get("head_branch") == ROOM_REFRESH_CANDIDATE_BRANCH, "Room refresh candidate branch differs.")
+        require(candidate.get("event") == "workflow_dispatch", "Room refresh candidate must be manually dispatched.")
+        reviewed_room_refresh_application_blobs(expected, source)
 
 
 def verify_parallel_run(run, jobs, *, repository):
@@ -4788,6 +4849,7 @@ def verify_ci(args):
     verify_run(runtime, workflow="vps-runtime.yml", source=args.source, repository=args.repository)
     candidate_mode = getattr(args, "candidate_mode", "legacy")
     require(candidate_mode in ("legacy", "parallel-v1", "parallel-retry-v3"), "Unknown candidate verification mode.")
+    verify_room_refresh_parallel_scope(candidate, args.expected, args.source, candidate_mode)
     verify_customer_parallel_scope(candidate, args.expected, args.source, candidate_mode)
     if candidate_mode == "parallel-retry-v3":
         require(getattr(args, "audit_directory", None), "Retry admission requires the final current dependency audit.")
