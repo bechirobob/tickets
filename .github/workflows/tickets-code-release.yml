@@ -277,7 +277,7 @@ jobs:
         run: printf 'Verification only; no deployment, host connection or production browser checks were performed.\n' >> "$GITHUB_STEP_SUMMARY"
       - name: Publish executed operator test receipt
         if: ${{ inputs.verify_only && steps.operator_tests.outputs.executed == 'true' }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: operator-regression-receipt-v2
           path: ${{ runner.temp }}/tickets-operator-evidence/receipt.json
