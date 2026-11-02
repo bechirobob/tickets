@@ -1,4 +1,4 @@
-name: iPhone evidence repackaging (one-off)
+name: Original WebKit failure evidence (read-only)
 
 on:
   workflow_dispatch:
@@ -8,12 +8,12 @@ permissions:
   actions: read
 
 concurrency:
-  group: iphone-evidence-repack-41422336206
+  group: iphone-evidence-repack-41438362201
   cancel-in-progress: false
 
 jobs:
   repack:
-    if: github.event_name == 'workflow_dispatch' && github.repository == 'bechirobob/tickets' && github.ref == 'refs/heads/maintenance/iphone-evidence-parts-20261102'
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'bechirobob/tickets' && github.ref == 'refs/heads/maintenance/webkit-failure-evidence-20261102'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -24,22 +24,23 @@ jobs:
       - name: Verify the fixed original run and artifact metadata
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 scripts/maintenance/repack_iphone_evidence.py metadata "$RUNNER_TEMP/original-provenance.json"
-      - name: Download only the approved existing artifact
+        run: python3 scripts/maintenance/repack_webkit_failure.py metadata "$RUNNER_TEMP/original-provenance.json"
+      - name: Download only the fixed original failed-run artifact
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           repository: bechirobob/tickets
-          run-id: '41422336206'
-          artifact-ids: '13129663703'
+          run-id: '41438362201'
+          artifact-ids: '13141215982'
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/original-iphone-evidence
           merge-multiple: true
       - name: Verify manifests and preserve every original file in bounded parts
         id: package
-        run: python3 scripts/maintenance/repack_iphone_evidence.py package "$RUNNER_TEMP/original-iphone-evidence" "$RUNNER_TEMP/iphone-evidence-parts" "$RUNNER_TEMP/original-provenance.json"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        run: python3 scripts/maintenance/repack_webkit_failure.py package "$RUNNER_TEMP/original-iphone-evidence" "$RUNNER_TEMP/iphone-evidence-parts" "$RUNNER_TEMP/original-provenance.json"
+      - if: steps.package.outputs.parts >= 1
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: iphone-41422336206-part-01
+          name: webkit-failure-41438362201-part-01
           path: ${{ runner.temp }}/iphone-evidence-parts/part-01/
           compression-level: 0
           if-no-files-found: error
@@ -47,7 +48,7 @@ jobs:
       - if: steps.package.outputs.parts >= 2
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: iphone-41422336206-part-02
+          name: webkit-failure-41438362201-part-02
           path: ${{ runner.temp }}/iphone-evidence-parts/part-02/
           compression-level: 0
           if-no-files-found: error
@@ -55,7 +56,7 @@ jobs:
       - if: steps.package.outputs.parts >= 3
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: iphone-41422336206-part-03
+          name: webkit-failure-41438362201-part-03
           path: ${{ runner.temp }}/iphone-evidence-parts/part-03/
           compression-level: 0
           if-no-files-found: error
@@ -63,8 +64,40 @@ jobs:
       - if: steps.package.outputs.parts >= 4
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: iphone-41422336206-part-04
+          name: webkit-failure-41438362201-part-04
           path: ${{ runner.temp }}/iphone-evidence-parts/part-04/
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 14
+      - if: steps.package.outputs.parts >= 5
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: webkit-failure-41438362201-part-05
+          path: ${{ runner.temp }}/iphone-evidence-parts/part-05/
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 14
+      - if: steps.package.outputs.parts >= 6
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: webkit-failure-41438362201-part-06
+          path: ${{ runner.temp }}/iphone-evidence-parts/part-06/
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 14
+      - if: steps.package.outputs.parts >= 7
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: webkit-failure-41438362201-part-07
+          path: ${{ runner.temp }}/iphone-evidence-parts/part-07/
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 14
+      - if: steps.package.outputs.parts >= 8
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: webkit-failure-41438362201-part-08
+          path: ${{ runner.temp }}/iphone-evidence-parts/part-08/
           compression-level: 0
           if-no-files-found: error
           retention-days: 14
