@@ -51,7 +51,7 @@ jobs:
       - name: Classify exact recovery maintenance
         id: recovery_maintenance
         env:
-          RECOVERY_MAINTENANCE_SOURCE: REVIEWED_RECOVERY_SOURCE
+          RECOVERY_MAINTENANCE_SOURCE: b37fc9b91d70743f8598c76663d1f3b16e4b16c8
           RECOVERY_BEFORE: ${{ github.event.before }}
         run: |
           set -euo pipefail
