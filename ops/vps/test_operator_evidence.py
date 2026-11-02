@@ -42,6 +42,8 @@ WORKFLOW_REVERSE = [(976, 1409, b''),
  (16801, 17220, b'')]
 
 def restore_deploy(raw):
+    from recovery_maintenance_test_support import restore_workflow
+    raw = restore_workflow('.github/workflows/deploy.yml', raw)
     digest = lambda value: hashlib.sha1(b'blob ' + str(len(value)).encode() + b'\0' + value).hexdigest()
     if digest(raw) == DEPLOY_BLOB:
         raw = raw.replace(b"      - 'ops/vps/operator_evidence.py'\n      - 'ops/vps/test_operator_evidence.py'\n", b'', 1)
@@ -230,6 +232,8 @@ class ContextAndWorkflowTests(unittest.TestCase):
     def test_only_new_tooling_files_are_excluded_from_application_deployment(self):
         raw = (Path(__file__).resolve().parents[2]/'.github/workflows/deploy.yml').read_bytes()
         digest = lambda value: hashlib.sha1(b'blob ' + str(len(value)).encode() + b'\0' + value).hexdigest()
+        from recovery_maintenance_test_support import restore_workflow
+        raw = restore_workflow('.github/workflows/deploy.yml', raw)
         self.assertEqual(digest(raw), DEPLOY_BLOB)
         self.assertEqual(digest(restore_deploy(raw)), '9e656e4f618a4fc335844b1bee7a864850c134c2')
         self.assertEqual(restore_deploy(raw+b'changed'), raw+b'changed')

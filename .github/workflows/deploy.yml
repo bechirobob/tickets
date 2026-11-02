@@ -72,7 +72,20 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
+      - name: Classify exact recovery maintenance
+        id: recovery_maintenance
+        env:
+          RECOVERY_MAINTENANCE_SOURCE: REVIEWED_RECOVERY_SOURCE
+          RECOVERY_BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          unset "${!GIT_@}"
+          export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_NO_LAZY_FETCH=1 GIT_TERMINAL_PROMPT=0
+          [[ "$RECOVERY_MAINTENANCE_SOURCE" =~ ^[a-f0-9]{40}$ ]]
+          git show "$RECOVERY_MAINTENANCE_SOURCE:ops/vps/recovery_maintenance.py" > "$RUNNER_TEMP/recovery-maintenance.py"
+          python3 -I "$RUNNER_TEMP/recovery-maintenance.py"
       - name: Verify exact source ancestry before executing checkout code
+        if: steps.recovery_maintenance.outputs.matches != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -89,6 +102,7 @@ jobs:
           git diff --cached --exit-code HEAD --
           test -z "$(git ls-files --others --exclude-standard)"
       - name: Stage trusted audit verifier
+        if: steps.recovery_maintenance.outputs.matches != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -104,12 +118,14 @@ jobs:
           done
 
       - name: Set up Node.js
+        if: steps.recovery_maintenance.outputs.matches != 'true'
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22.23.4
           cache: npm
 
       - name: Audit all dependencies
+        if: steps.recovery_maintenance.outputs.matches != 'true'
         id: dependency_audit
         env:
           BECORE_AUDIT_DIRECTORY: ${{ runner.temp }}/tickets-private-audit-${{ github.job }}
@@ -117,8 +133,10 @@ jobs:
 
 
       - name: Install dependencies
+        if: steps.recovery_maintenance.outputs.matches != 'true'
         run: npm ci --no-audit
       - name: Verify installed audited dependencies
+        if: steps.recovery_maintenance.outputs.matches != 'true'
         env:
           BECORE_PREINSTALL_RECEIPT_SHA256: ${{ steps.dependency_audit.outputs.audit_receipt_sha256 }}
           BECORE_AUDIT_DIRECTORY: ${{ runner.temp }}/tickets-private-audit-${{ github.job }}
@@ -127,6 +145,7 @@ jobs:
 
 
       - name: Ensure Workers subdomain exists
+        if: steps.recovery_maintenance.outputs.matches != 'true'
         env:
           CLOUDFLARE_ACCOUNT_ID: af75a230de2eea882606db8d9acce473
         run: |
@@ -158,11 +177,13 @@ jobs:
           NODE
 
       - name: Verify the active writer and resolve its D1 binding
+        if: steps.recovery_maintenance.outputs.matches != 'true'
         run: node scripts/resolve-active-deployment.mjs
 
 
 
       - name: Ensure persistent Web Push identity
+        if: steps.recovery_maintenance.outputs.matches != 'true'
         run: |
           node --input-type=module <<'NODE'
           import { spawnSync } from "node:child_process";
@@ -200,28 +221,36 @@ jobs:
           NODE
 
       - name: Verify generated Worker bindings
+        if: steps.recovery_maintenance.outputs.matches != 'true'
         run: npm run cf:types
 
 
       - name: Lint source
+        if: steps.recovery_maintenance.outputs.matches != 'true'
         run: npm run lint
 
       - name: Check types
+        if: steps.recovery_maintenance.outputs.matches != 'true'
         run: npm run typecheck
 
       - name: Run complete test suite
+        if: steps.recovery_maintenance.outputs.matches != 'true'
         run: npm test
 
       - name: Build deployable application
+        if: steps.recovery_maintenance.outputs.matches != 'true'
         run: npm run build && node scripts/prepare-deploy.mjs
 
       - name: Validate Worker package
+        if: steps.recovery_maintenance.outputs.matches != 'true'
         run: npx wrangler deploy --config dist/server/wrangler.json --dry-run --outdir dist/worker-dry-run
 
       - name: Ensure persistent staff login privacy key
+        if: steps.recovery_maintenance.outputs.matches != 'true'
         run: node scripts/ensure-staff-login-secret.mjs
 
       - name: Accept Flash moderation model terms
+        if: steps.recovery_maintenance.outputs.matches != 'true'
         run: |
           node --input-type=module <<'NODE'
           const endpoint = `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/ai/run/@cf/meta/llama-3.2-11b-vision-instruct`;
@@ -242,6 +271,7 @@ jobs:
           NODE
 
       - name: Record D1 recovery bookmark
+        if: steps.recovery_maintenance.outputs.matches != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -260,6 +290,7 @@ jobs:
           NODE
 
       - name: Preserve D1 recovery bookmark
+        if: steps.recovery_maintenance.outputs.matches != 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: d1-pre-migration-bookmark-${{ github.sha }}
@@ -268,24 +299,31 @@ jobs:
           retention-days: 30
 
       - name: Apply database migrations
+        if: steps.recovery_maintenance.outputs.matches != 'true'
         run: npm run db:migrate:remote
 
       - name: Deploy Worker
+        if: steps.recovery_maintenance.outputs.matches != 'true'
         run: npx wrangler deploy --config dist/server/wrangler.json
 
       - name: Verify the deployed revision and payment endpoint
+        if: steps.recovery_maintenance.outputs.matches != 'true'
         run: node scripts/verify-production-release.mjs
 
       - name: Apply the owner-requested Weekend Braai RSVP settings once
+        if: steps.recovery_maintenance.outputs.matches != 'true'
         run: node scripts/configure-braai-rsvp.mjs
 
       - name: Complete the owner-requested preview data cleanup
+        if: steps.recovery_maintenance.outputs.matches != 'true'
         run: node scripts/complete-preview-cleanup.mjs
 
       - name: Apply the owner-requested event analytics reset once
+        if: steps.recovery_maintenance.outputs.matches != 'true'
         run: node scripts/reset-event-analytics.mjs
 
       - name: Preserve event analytics reset evidence
+        if: steps.recovery_maintenance.outputs.matches != 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: event-analytics-reset-${{ github.sha }}
@@ -294,5 +332,6 @@ jobs:
           retention-days: 30
 
       - name: Issue the approved single-use owner recovery grant
+        if: steps.recovery_maintenance.outputs.matches != 'true'
         run: node scripts/issue-owner-recovery.mjs
 

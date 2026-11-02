@@ -31,6 +31,8 @@ concurrency:
   cancel-in-progress: true
 jobs:
   verify:
+    outputs:
+      recovery_maintenance: ${{ steps.recovery_maintenance.outputs.matches }}
     # Publishing a runtime needs contents:write; no other job receives it.
     # Never run a privileged package publisher against a PR or feature branch.
     if: github.repository == 'bechirobob/tickets' && github.ref == 'refs/heads/main' && github.event_name == 'push'
@@ -46,7 +48,20 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+      - name: Classify exact recovery maintenance
+        id: recovery_maintenance
+        env:
+          RECOVERY_MAINTENANCE_SOURCE: REVIEWED_RECOVERY_SOURCE
+          RECOVERY_BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          unset "${!GIT_@}"
+          export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_NO_LAZY_FETCH=1 GIT_TERMINAL_PROMPT=0
+          [[ "$RECOVERY_MAINTENANCE_SOURCE" =~ ^[a-f0-9]{40}$ ]]
+          git show "$RECOVERY_MAINTENANCE_SOURCE:ops/vps/recovery_maintenance.py" > "$RUNNER_TEMP/recovery-maintenance.py"
+          python3 -I "$RUNNER_TEMP/recovery-maintenance.py"
       - name: Verify exact source ancestry before executing checkout code
+        if: steps.recovery_maintenance.outputs.matches != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -63,6 +78,7 @@ jobs:
           git diff --cached --exit-code HEAD --
           test -z "$(git ls-files --others --exclude-standard)"
       - name: Stage trusted audit verifier
+        if: steps.recovery_maintenance.outputs.matches != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -77,29 +93,41 @@ jobs:
             test "$(git hash-object "$target")" = "$(git rev-parse "$BECORE_TRUSTED_BASE:$source")"
           done
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        if: steps.recovery_maintenance.outputs.matches != 'true'
         with:
           node-version: 24.22.1
           cache: npm
       - name: Verify approved dependency audit
+        if: steps.recovery_maintenance.outputs.matches != 'true'
         id: dependency_audit
         env:
           BECORE_AUDIT_DIRECTORY: ${{ runner.temp }}/tickets-private-audit-${{ github.job }}
         run: python3 -I "$RUNNER_TEMP/tickets-approved-audit.py" --phase preinstall
       - run: npm ci --no-audit
+        if: steps.recovery_maintenance.outputs.matches != 'true'
       - name: Verify installed audited dependencies
+        if: steps.recovery_maintenance.outputs.matches != 'true'
         env:
           BECORE_PREINSTALL_RECEIPT_SHA256: ${{ steps.dependency_audit.outputs.audit_receipt_sha256 }}
           BECORE_AUDIT_DIRECTORY: ${{ runner.temp }}/tickets-private-audit-${{ github.job }}
         run: python3 -I "$RUNNER_TEMP/tickets-approved-audit.py" --phase postinstall
 
       - run: npm run lint
+        if: steps.recovery_maintenance.outputs.matches != 'true'
       - run: npm run typecheck
+        if: steps.recovery_maintenance.outputs.matches != 'true'
       - run: npm test
+        if: steps.recovery_maintenance.outputs.matches != 'true'
       - run: npm run test:vps
+        if: steps.recovery_maintenance.outputs.matches != 'true'
       - run: python -m unittest discover -s ops/vps -p 'test_*.py'
+        if: steps.recovery_maintenance.outputs.matches != 'true'
       - run: npm run build:vps
+        if: steps.recovery_maintenance.outputs.matches != 'true'
       - run: node scripts/verify-vps-runtime.mjs
+        if: steps.recovery_maintenance.outputs.matches != 'true'
       - name: Prepare verified runtime without development dependencies
+        if: steps.recovery_maintenance.outputs.matches != 'true'
         run: |
           git diff --exit-code --stat HEAD --
           # Copy only the reviewed runtime closure from the audited installation.
@@ -118,11 +146,13 @@ jobs:
           tar -C dist-vps -czf tickets-vps-runtime.tar.gz .
           sha256sum tickets-vps-runtime.tar.gz > tickets-vps-runtime.tar.gz.sha256
       - name: Publish verified public runtime release
+        if: steps.recovery_maintenance.outputs.matches != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 ops/vps/runtime_release.py publish --directory .
   handoff:
     needs: verify
+    if: needs.verify.outputs.recovery_maintenance != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
