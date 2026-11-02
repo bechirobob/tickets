@@ -1,0 +1,38 @@
+{
+  "sharedBase": "4bb0532f4b14450451fa7bbe0bab49e436aa8354",
+  "dashboardParent": "9074277fbaa486ed905894605c7a858d3c2a3b81",
+  "customerParent": "01ca0fec952de1766d9ac42fb222a0c16f34d247",
+  "testedSourceCommit": "97d433fe6964527009762381e9e05783173e6a31",
+  "testedSourceTree": "ed3798342025f67403dbdb7f56cdc43c089c5d84",
+  "mergeParents": [
+    "9074277fbaa486ed905894605c7a858d3c2a3b81",
+    "01ca0fec952de1766d9ac42fb222a0c16f34d247"
+  ],
+  "overlappingChangedPaths": [],
+  "customerChangedFiles": 55,
+  "dashboardChangedFiles": 9,
+  "applicationChanges": [
+    "app/booking-consent.css",
+    "app/checkout/[slug]/checkout-form.tsx",
+    "app/discovery.css",
+    "app/event-explorer.tsx",
+    "app/my-nights/my-nights-client.tsx",
+    "app/registration-form.tsx"
+  ],
+  "parentBlobEqualityVerified": true,
+  "unchangedProtectedPaths": [
+    ".github/workflows",
+    "ops",
+    "scripts/audit-release-manifest.json",
+    "scripts/caption-source-manifest.json",
+    "package.json",
+    "package-lock.json",
+    "mobile/package.json",
+    "mobile/package-lock.json",
+    "lib",
+    "worker",
+    "components"
+  ],
+  "authenticatedAcceptance": "Preserved prior dashboard evidence; not rerun because helper creates temporary credentials, excluded in customer workstream.",
+  "releaseBlocker": "Original PR #392 screenshot release blocker remains unresolved; combined tests/audits do not admit a release."
+}

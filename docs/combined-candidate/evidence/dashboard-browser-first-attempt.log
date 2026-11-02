@@ -1,0 +1,44 @@
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+ExpectError: expect(locator).toBeVisible() failed
+
+Locator: getByRole('button').filter({ hasText: 'Fictional staff 1' }).first()
+Expected: visible
+Timeout: 5000ms
+Error: element(s) not found
+
+Call log:
+  - Expect "to.be.visible" with timeout 5000ms
+  - waiting for getByRole('button').filter({ hasText: 'Fictional staff 1' }).first()
+
+    at captureRawStack (/workspace/tickets-combined/node_modules/playwright-core/lib/coreBundle.js:9681:17)
+    at callMatcherAsStep (/workspace/tickets-combined/node_modules/playwright/lib/matchers/expect.js:13310:57)
+    at Object.toBeVisible (/workspace/tickets-combined/node_modules/playwright/lib/matchers/expect.js:13300:23)
+    at /workspace/tickets-combined/scripts/boardui-integration/.tmp-combined-dashboard.mjs:25:129 {
+  matcherResult: {
+    message: 'expect(locator).toBeVisible() failed\n' +
+      '\n' +
+      "Locator: getByRole('button').filter({ hasText: 'Fictional staff 1' }).first()\n" +
+      'Expected: visible\n' +
+      'Timeout: 5000ms\n' +
+      'Error: element(s) not found\n' +
+      '\n' +
+      'Call log:\n' +
+      '  - Expect "to.be.visible" with timeout 5000ms\n' +
+      "  - waiting for getByRole('button').filter({ hasText: 'Fictional staff 1' }).first()\n",
+    pass: false,
+    actual: undefined,
+    name: 'toBeVisible',
+    expected: 'visible',
+    log: [
+      '  - Expect "to.be.visible" with timeout 5000ms',
+      "  - waiting for getByRole('button').filter({ hasText: 'Fictional staff 1' }).first()"
+    ],
+    timeout: 5000,
+    ariaSnapshot: undefined
+  }
+}
+
+Node.js v24.19.0
