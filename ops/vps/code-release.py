@@ -4009,8 +4009,61 @@ def reviewed_combined_application_blobs(expected, source):
     return {name: blob for name, (_, blob) in candidate.items()}
 
 
+# Owner-approved customer source; independent controls may change only these two files.
+CUSTOMER_LIVE = '32b5956549cb3eff04e2abbcfda177bccb07b0f8'
+CUSTOMER_BASE = '32b5956549cb3eff04e2abbcfda177bccb07b0f8'
+CUSTOMER_BASE_TREE = '27ab8d9c8df6916f45eb5b2da7807d52ff44d897'
+CUSTOMER_SNAPSHOT = '49a77855da8bb663e91f21752b1d540381eebf62'
+CUSTOMER_SNAPSHOT_TREE = '26b3deefd9ebdc3178a22c9300f7403dc1d2bedd'
+CUSTOMER_CANDIDATE_BRANCH = 'release/tickets-customer-20261102'
+CUSTOMER_CONTROLS = frozenset({'ops/vps/code-release.py', 'ops/vps/test_code_release.py'})
+
+
+def customer_tree_entries(revision):
+    entries = {}
+    for record in git('ls-tree', '-r', '--full-tree', revision).splitlines():
+        metadata, name = record.split('\t', 1)
+        mode, kind, blob = metadata.split()
+        require(kind == 'blob' and mode in ('100644', '100755'), 'Customer source has unsupported entry.')
+        entries[name] = (mode, blob)
+    return entries
+
+
+def reviewed_customer_application_blobs(expected, source):
+    require(expected == CUSTOMER_LIVE, 'Customer live baseline differs.')
+    for revision, tree in ((CUSTOMER_BASE, CUSTOMER_BASE_TREE), (CUSTOMER_SNAPSHOT, CUSTOMER_SNAPSHOT_TREE)):
+        require(git('rev-parse', revision + '^{tree}') == tree, 'Customer reviewed tree differs.')
+    for before, after in ((expected, CUSTOMER_BASE), (CUSTOMER_BASE, CUSTOMER_SNAPSHOT), (CUSTOMER_SNAPSHOT, source)):
+        subprocess.run(['git', '--no-replace-objects', 'merge-base', '--is-ancestor', before, after],
+                       check=True, env=git_environment(), timeout=60)
+    verify_trusted_operator(source)
+    trusted = os.environ['BECORE_TRUSTED_BASE']
+    require(trusted not in (expected, CUSTOMER_BASE, CUSTOMER_SNAPSHOT, source),
+            'Customer source requires independent merged controls.')
+    subprocess.run(['git', '--no-replace-objects', 'merge-base', '--is-ancestor', CUSTOMER_BASE, trusted],
+                   check=True, env=git_environment(), timeout=60)
+    require(set(git('diff', '--name-only', CUSTOMER_BASE, trusted).splitlines()) == CUSTOMER_CONTROLS,
+            'Customer controls changed outside their approved scope.')
+    base, snapshot = customer_tree_entries(CUSTOMER_BASE), customer_tree_entries(CUSTOMER_SNAPSHOT)
+    control, candidate = customer_tree_entries(trusted), customer_tree_entries(source)
+    without_controls = lambda entries: {name: entry for name, entry in entries.items() if name not in CUSTOMER_CONTROLS}
+    require(without_controls(control) == without_controls(base), 'Customer trusted inventory differs.')
+    require(without_controls(candidate) == without_controls(snapshot), 'Customer complete source inventory differs.')
+    for name in CUSTOMER_CONTROLS:
+        require(control.get(name) == candidate.get(name) and control.get(name, (None,))[0] == '100644',
+                'Customer source control bytes or mode differ: ' + name)
+    changed = set(git('diff', '--name-only', expected, source).splitlines())
+    require(not migration_plan(changed) and not any(name.startswith('drizzle/') for name in changed),
+            'Customer source cannot introduce migrations.')
+    require(not any(Path(name).name in ('package.json', 'package-lock.json', 'npm-shrinkwrap.json', 'pnpm-lock.yaml', 'yarn.lock', 'bun.lock', 'bun.lockb') for name in changed),
+            'Customer source cannot change dependencies.')
+    return {name: blob for name, (_, blob) in candidate.items()}
+
+
 def reviewed_application_blobs(expected, source):
     """Select each exact application tree only from its approved live baseline."""
+    if expected == CUSTOMER_LIVE:
+        return reviewed_customer_application_blobs(expected, source)
     if expected == COMBINED_LIVE and git('merge-base', COMBINED_SNAPSHOT, source) == COMBINED_SNAPSHOT:
         return reviewed_combined_application_blobs(expected, source)
     if expected == SCANNER_DEPS_LIVE:
@@ -4408,13 +4461,21 @@ def admitted_parallel_ref(event, branch):
     # Preserve historical admission; only this reviewed release gains a manual ref.
     return (branch == "improve/release-evidence-parallel-20261013"
             and event in ("push", "workflow_dispatch")) or (
-                branch == COMBINED_CANDIDATE_BRANCH and event == "workflow_dispatch")
+                branch in (COMBINED_CANDIDATE_BRANCH, CUSTOMER_CANDIDATE_BRANCH) and event == "workflow_dispatch")
 
 
 def verify_combined_parallel_scope(candidate, expected, source):
     if candidate.get("head_branch") == COMBINED_CANDIDATE_BRANCH:
         require(candidate.get("event") == "workflow_dispatch", "Combined candidate must be manually dispatched.")
         reviewed_combined_application_blobs(expected, source)
+
+
+def verify_customer_parallel_scope(candidate, expected, source, candidate_mode="parallel-v1"):
+    if expected == CUSTOMER_LIVE or candidate.get("head_branch") == CUSTOMER_CANDIDATE_BRANCH:
+        require(candidate_mode == "parallel-v1", "Customer release requires parallel-v1 candidate evidence.")
+        require(candidate.get("head_branch") == CUSTOMER_CANDIDATE_BRANCH, "Customer candidate branch differs.")
+        require(candidate.get("event") == "workflow_dispatch", "Customer candidate must be manually dispatched.")
+        reviewed_customer_application_blobs(expected, source)
 
 
 def verify_parallel_run(run, jobs, *, repository):
@@ -4727,6 +4788,7 @@ def verify_ci(args):
     verify_run(runtime, workflow="vps-runtime.yml", source=args.source, repository=args.repository)
     candidate_mode = getattr(args, "candidate_mode", "legacy")
     require(candidate_mode in ("legacy", "parallel-v1", "parallel-retry-v3"), "Unknown candidate verification mode.")
+    verify_customer_parallel_scope(candidate, args.expected, args.source, candidate_mode)
     if candidate_mode == "parallel-retry-v3":
         require(getattr(args, "audit_directory", None), "Retry admission requires the final current dependency audit.")
     workflow = "candidate-checks.yml" if candidate_mode == "legacy" else "candidate-parallel-checks.yml"
