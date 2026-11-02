@@ -321,7 +321,7 @@ test("customer controls use neutral keyboard focus without halos", async ({ page
       // interactive readiness signal rather than focusing server markup.
       listed = await expectWebsiteDiscovery(page, catalogue);
     }
-    const controls = path === "/" ? (listed ? page.locator('.compact-hero .ticket-action[data-variant="primary"]') : page.locator('.event-empty a[href="/organizer/submit"]')) : path === "/my-nights" ? page.locator('.nights-privacy') : page.locator('.account-navigation a[aria-current="page"]');
+    const controls = path === "/" ? (listed ? page.locator('.compact-hero .ticket-action[data-variant="primary"]') : page.locator('.event-empty').getByRole('link', { name: 'My Nights', exact: true })) : path === "/my-nights" ? page.locator('.nights-privacy') : page.locator('.account-navigation a[aria-current="page"]');
     await page.keyboard.press("Tab");
     await controls.focus();
     await expect(controls).toBeFocused();

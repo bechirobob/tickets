@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { requestJson } from '../lib/client-request';
 import type { RoomUpdateSummary } from '../lib/room-update-summary';
 
-export function useRoomUpdates(enabled: boolean, pathname: string) {
+export function useRoomUpdates(enabled: boolean, pathname: string, isVisible: () => boolean) {
   const [result, setResult] = useState<{ pathname: string; rooms: RoomUpdateSummary[] }>({ pathname: '', rooms: [] });
   // Discard the old path before commit, including a trip through a disabled
   // Room/checkout route followed by a return to the same public page.
@@ -12,9 +12,19 @@ export function useRoomUpdates(enabled: boolean, pathname: string) {
   // A route transition must not flash a previous page's private result.
   const rooms = useMemo(() => enabled && result.pathname === pathname ? result.rooms : [], [enabled, pathname, result]);
   const request = useRef<AbortController | null>(null);
+  const committed = useRef({ enabled: false, pathname });
+  useLayoutEffect(() => {
+    committed.current = { enabled, pathname };
+    return () => {
+      committed.current = { enabled: false, pathname };
+      request.current?.abort();
+    };
+  }, [enabled, pathname]);
   const refresh = useCallback(async () => {
+    // Queued callbacks can outlive their render and passive-effect cleanup.
+    if (!enabled || !committed.current.enabled || committed.current.pathname !== pathname || !isVisible()) return null;
     request.current?.abort();
-    if (!enabled || document.visibilityState !== 'visible') return null;
+    if (document.visibilityState !== 'visible') return null;
     const controller = new AbortController();
     request.current = controller;
     try {
@@ -29,7 +39,7 @@ export function useRoomUpdates(enabled: boolean, pathname: string) {
       if (!controller.signal.aborted) setResult({ pathname, rooms: [] });
       return null;
     }
-  }, [enabled, pathname]);
+  }, [enabled, pathname, isVisible]);
 
   useEffect(() => {
     if (!enabled) return;
