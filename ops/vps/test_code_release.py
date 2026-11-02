@@ -3630,7 +3630,7 @@ def scanner_dependency_source_family(root):
 
 
 COMBINED_TEST_FILE = Path(__file__).resolve()
-COMBINED_OPERATOR_BLOB = 'c59b355e39509b9628fccb05c8780b1766fbf1d8'
+COMBINED_OPERATOR_BLOB = 'b25d401ba7cee4be2eb2755da45710fa7e523cf4'
 COMBINED_STAGED_PINS = {'.github/scripts/verify-audit-control.py': ('100644', '87cd21e095c76efc9e607484b8c0836db9bc58b5'),
  '.github/scripts/verify-caption-control.py': ('100644', '19366f37243794bba916dd6cff0b7731aaec8f1c'),
  '.github/workflows/candidate-checks.yml': ('100644', 'fce0c733744bf53af146a1c707d347935ce80fd3'),
@@ -16466,6 +16466,20 @@ class CombinedAdmissionTests(unittest.TestCase):
 
     def verify(self): return release.reviewed_combined_application_blobs(self.live,self.git('rev-parse','HEAD'))
 
+    def test_release_branch_requires_complete_reviewed_inventory(self):
+        candidate = {'head_branch': release.COMBINED_CANDIDATE_BRANCH, 'event': 'workflow_dispatch'}
+        release.verify_combined_parallel_scope(candidate, self.live, self.source)
+        with self.assertRaises(release.ReleaseError):
+            release.verify_combined_parallel_scope(dict(candidate, event='push'), self.live, self.source)
+        with self.assertRaises(release.ReleaseError):
+            release.verify_combined_parallel_scope(candidate, self.base, self.source)
+        for name in ('app/page.tsx', 'unreviewed.txt', 'ops/vps/code-release.py'):
+            with self.subTest(name=name):
+                self.git('reset', '--hard', self.source)
+                self.write(name, 'unreviewed change\n'); changed = self.commit()
+                with self.assertRaises(release.ReleaseError):
+                    release.verify_combined_parallel_scope(candidate, self.live, changed)
+
     def test_exact_combined_tree_with_independent_controls_passes(self):
         pins=self.verify();self.assertEqual(pins['app/page.tsx'],self.git('rev-parse',self.snapshot+':app/page.tsx'))
         self.assertEqual(release.reviewed_application_blobs(self.live,self.source),pins)
@@ -16556,6 +16570,43 @@ class CombinedAdmissionTests(unittest.TestCase):
                     with self.assertRaises(AssertionError):combined_source_family(stage)
                     if (stage/'extra').exists():(stage/'extra').unlink()
                     target.write_bytes(raw);target.chmod(0o644)
+
+
+class CombinedParallelIdentityTests(unittest.TestCase):
+    def test_exact_manual_branch_binds_run_and_proof(self):
+        from test_parallel_admission import ParallelSelectionTests, proof_fixture
+        run, jobs = ParallelSelectionTests().fixture()
+        proof = proof_fixture()
+        for value in (run, proof):
+            value.update(head_branch=release.COMBINED_CANDIDATE_BRANCH, event='workflow_dispatch')
+        def validate(value):
+            return release.validate_parallel_proof(value, repository='bechirobob/tickets',
+                candidate='b'*40, tree='d'*40, run_id='456', attempt=2, baseline='c'*40)
+        release.verify_parallel_run(run, jobs, repository='bechirobob/tickets')
+        self.assertIs(validate(proof), proof)
+        for key, value in (('head_branch', 'main'), ('head_branch', 'release/other'),
+                           ('head_branch', release.COMBINED_CANDIDATE_BRANCH + '-extra'),
+                           ('event', 'push'), ('event', 'pull_request'),
+                           ('head_branch', 'refs/heads/' + release.COMBINED_CANDIDATE_BRANCH)):
+            with self.subTest(key=key, value=value):
+                with self.assertRaises(release.ReleaseError):
+                    release.verify_parallel_run(dict(run, **{key:value}), jobs, repository='bechirobob/tickets')
+                with self.assertRaises(release.ReleaseError): validate(dict(proof, **{key:value}))
+        for key, value in (('source_sha', 'f'*40), ('source_tree', 'f'*40),
+                           ('audit_trusted_base', 'f'*40), ('workflow_sha', 'f'*40),
+                           ('run_id', 999), ('repository', 'fork/tickets')):
+            with self.subTest(key=key), self.assertRaises(release.ReleaseError):
+                validate(dict(proof, **{key:value}))
+
+    def test_historical_ref_and_retry_admission_remain_unchanged(self):
+        for event in ('push', 'workflow_dispatch'):
+            self.assertTrue(release.admitted_parallel_ref(event, 'improve/release-evidence-parallel-20261013'))
+        from test_parallel_retry_admission import retry_proof
+        proof = retry_proof()
+        proof.update(head_branch=release.COMBINED_CANDIDATE_BRANCH, event='workflow_dispatch')
+        with self.assertRaises(release.ReleaseError):
+            release.validate_parallel_proof(proof, repository='bechirobob/tickets',
+                candidate='b'*40, tree='d'*40, run_id='456', attempt=2, baseline='c'*40)
 
 
 if __name__ == "__main__":
