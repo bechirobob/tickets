@@ -3630,7 +3630,7 @@ def scanner_dependency_source_family(root):
 
 
 COMBINED_TEST_FILE = Path(__file__).resolve()
-COMBINED_OPERATOR_BLOB = '6c8a068b4f647b9e11e24c8aca4db7d701725498'
+COMBINED_OPERATOR_BLOB = '91c3fef1733d6aea9a01fde8c79c5e038a39b6ce'
 COMBINED_STAGED_PINS = {'.github/scripts/verify-audit-control.py': ('100644', '87cd21e095c76efc9e607484b8c0836db9bc58b5'),
  '.github/scripts/verify-caption-control.py': ('100644', '19366f37243794bba916dd6cff0b7731aaec8f1c'),
  '.github/workflows/candidate-checks.yml': ('100644', 'fce0c733744bf53af146a1c707d347935ce80fd3'),
@@ -16449,7 +16449,7 @@ class CombinedAdmissionTests(unittest.TestCase):
         self.git('init', '-q'); self.git('config', 'user.email', 'fixture@example.invalid'); self.git('config', 'user.name', 'Fixture')
         self.controls = set(release.COMBINED_CONTROLS)
         for name in self.controls | {'package.json', 'app/page.tsx', 'stable.txt'}: self.write(name, 'live\n')
-        self.corrections = ('scripts/build-vps.mjs', 'tests/browser-environment.test.mjs', 'tests/e2e/registration.spec.ts', 'tests/vps-runtime-packaging.test.mjs')
+        self.corrections = ('scripts/build-vps.mjs', 'tests/browser-environment.test.mjs', 'tests/e2e/registration.spec.ts', 'tests/vps-runtime-packaging.test.mjs', 'app/hosts/hosts.css', 'tests/e2e/host-brand-identity.spec.ts', 'tests/e2e/operations.spec.ts', 'tests/e2e/segmented-control.ts')
         for name in self.corrections: self.write(name, 'before correction\n')
         self.live = self.commit()
         self.write('ops/vps/maintenance.py', 'reviewed maintenance\n'); self.base = self.commit()

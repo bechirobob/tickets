@@ -3965,8 +3965,8 @@ def reviewed_scanner_dependency_blobs(expected, source):
 COMBINED_LIVE = '72fa3f6a77d922dadd65fa3a788807e1ec57549f'
 COMBINED_BASE = 'c3711fed843d2dd9ef7c722e15be48852de5a34b'
 COMBINED_BASE_TREE = '86788f925b346c291a03f1a18c33d17fa42275e9'
-COMBINED_SNAPSHOT = 'cffd935aa12437a9036239bcdbefd6a2f4a0a939'
-COMBINED_SNAPSHOT_TREE = '096a531afecc3b9d417d396dd8346926c238278a'
+COMBINED_SNAPSHOT = '544166af8b0a50313121cf69cc262bea7ed328be'
+COMBINED_SNAPSHOT_TREE = 'd440a6cf8a862f517fb794db2f4a9a7e5b944548'
 COMBINED_CONTROLS = frozenset({'ops/vps/code-release.py', 'ops/vps/test_code_release.py'})
 
 
