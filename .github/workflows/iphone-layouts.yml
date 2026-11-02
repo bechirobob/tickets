@@ -34,7 +34,7 @@ jobs:
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/original-iphone-evidence
           merge-multiple: true
-      - name: Verify manifests and preserve every original file in bounded parts
+      - name: Hash full inventory and export exact failure bytes in bounded parts
         id: package
         run: python3 scripts/maintenance/repack_webkit_failure.py package "$RUNNER_TEMP/original-iphone-evidence" "$RUNNER_TEMP/iphone-evidence-parts" "$RUNNER_TEMP/original-provenance.json"
       - if: steps.package.outputs.parts >= 1
