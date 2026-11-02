@@ -51,7 +51,7 @@ jobs:
       - name: Classify exact recovery maintenance
         id: recovery_maintenance
         env:
-          RECOVERY_MAINTENANCE_SOURCE: b37fc9b91d70743f8598c76663d1f3b16e4b16c8
+          RECOVERY_MAINTENANCE_SOURCE: REVIEWED_RECOVERY_SOURCE
           RECOVERY_BEFORE: ${{ github.event.before }}
         run: |
           set -euo pipefail
@@ -127,7 +127,6 @@ jobs:
       - run: node scripts/verify-vps-runtime.mjs
         if: steps.recovery_maintenance.outputs.matches != 'true'
       - name: Prepare verified runtime without development dependencies
-        if: steps.recovery_maintenance.outputs.matches != 'true'
         run: |
           git diff --exit-code --stat HEAD --
           # Copy only the reviewed runtime closure from the audited installation.
@@ -145,6 +144,7 @@ jobs:
           done
           tar -C dist-vps -czf tickets-vps-runtime.tar.gz .
           sha256sum tickets-vps-runtime.tar.gz > tickets-vps-runtime.tar.gz.sha256
+        if: steps.recovery_maintenance.outputs.matches != 'true'
       - name: Publish verified public runtime release
         if: steps.recovery_maintenance.outputs.matches != 'true'
         env:
