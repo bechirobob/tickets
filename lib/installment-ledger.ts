@@ -16,7 +16,7 @@ export async function readInstallmentBalance(db: D1Database, orderId: string) {
  * Uncertain provider outcomes remain pending/review and block another charge.
  * The database guard protects the gap between the balance read and insertion.
  */
-export async function reserveInstallmentCharge(db:D1Database,input:{orderId:string;buyerEmail:string;id:string;idempotencyHash:string;requestHash:string;choice:'installment'|'balance'}) {
+export async function reserveInstallmentCharge(db:D1Database,input:{orderId:string;buyerEmail:string;id:string;idempotencyHash:string;requestHash:string;choice:'installment'|'balance';checkout?:{origin:string;returnPath:string}}) {
   const existing=await db.prepare(`SELECT id,order_id AS orderId,request_hash AS requestHash,amount_minor AS amountMinor,state
     FROM installment_charges WHERE idempotency_hash=?`).bind(input.idempotencyHash)
     .first<{id:string;orderId:string;requestHash:string;amountMinor:number;state:string}>();
@@ -27,18 +27,30 @@ export async function reserveInstallmentCharge(db:D1Database,input:{orderId:stri
     return existing;
   }
   const amountMinor=nextInstallmentMinor(balance.totalMinor,balance.collectedMinor,balance.stepMinor,input.choice);
-  const inserted=await db.prepare(`INSERT INTO installment_charges(id,order_id,idempotency_hash,request_hash,amount_minor,state,created_at)
+  const now=new Date().toISOString();
+  const statements:D1PreparedStatement[]=[db.prepare(`INSERT INTO installment_charges(id,order_id,idempotency_hash,request_hash,amount_minor,state,created_at)
     SELECT ?,id,?,?,?,'pending',? FROM orders WHERE id=? AND status IN ('payment_pending','part_paid') AND refunded_amount_minor=0
       AND NOT EXISTS(SELECT 1 FROM provider_operation_records r WHERE r.order_id=orders.id AND r.kind='refund' AND r.status IN ('pending','completed'))
       AND NOT EXISTS(SELECT 1 FROM payment_disputes d WHERE d.order_id=orders.id)`)
-    .bind(input.id,input.idempotencyHash,input.requestHash,amountMinor,new Date().toISOString(),input.orderId).run();
+    .bind(input.id,input.idempotencyHash,input.requestHash,amountMinor,now,input.orderId)];
+  if(input.checkout){
+    const order=await db.prepare(`SELECT reference,event_slug AS eventSlug,customer_name AS name,customer_email AS email,customer_phone AS phone FROM orders WHERE id=?`)
+      .bind(input.orderId).first<{reference:string;eventSlug:string;name:string|null;email:string;phone:string}>();
+    const origin=new URL(input.checkout.origin);const target=new URL(input.checkout.returnPath,origin);
+    if(!order?.name||origin.protocol!=='https:'||origin.username||origin.password||target.origin!==origin.origin
+      ||!((target.pathname==='/payment/return'&&target.searchParams.get('reference')===order.reference)||target.pathname===`/my-nights/${encodeURIComponent(order.eventSlug)}`)) throw new Error('Invalid booking return address.');
+    const body=JSON.stringify({type:'checkout',amount:amountMinor,currency:balance.currency,channels:['mobile_money'],recipient:{name:order.name,email:order.email,phone:order.phone},redirect_url:target.toString(),meta:{orderId:input.orderId,installmentChargeId:input.id,reference:order.reference}});
+    statements.push(db.prepare(`INSERT INTO installment_checkout_sessions(charge_id,request_json,created_at)
+      SELECT id,?,? FROM installment_charges WHERE id=? AND state='pending'`).bind(body,now,input.id));
+  }
+  const [inserted]=await db.batch(statements);
   if(inserted.meta.changes!==1) throw new Error('This booking needs payment review.');
   return {id:input.id,orderId:input.orderId,requestHash:input.requestHash,amountMinor,state:'pending'};
 }
 
 /** Accept only a server-to-server verified result, never browser/webhook payload.
  * Provider HTTP verification must precede this call. Entitlements are deliberately
- * NOT issued here until their atomic integration is implemented and tested.
+ * issued separately by the idempotent entitlement reconciler after this commit.
  */
 export async function creditVerifiedInstallment(db:D1Database,input:{chargeId:string;providerReference:string;transactionId:string;environment:string;currency:string;amountMinor:number}) {
   if(!Number.isSafeInteger(input.amountMinor)||input.amountMinor<1||!input.transactionId||!input.providerReference) throw new Error('Invalid verified payment.');

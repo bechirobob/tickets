@@ -29,7 +29,7 @@ export async function POST(request:Request) {
  const existing=await env.DB.prepare(`SELECT id FROM installment_charges WHERE idempotency_hash=? AND order_id=?`).bind(await hashToken(key),body.orderId).first();
  if(!existing&&!seevAvailable(env,Boolean(order.isTestEvent)))return Response.json({error:'SeevCash payments are temporarily unavailable.'},{status:503,headers});
  try {
-  const charge=await reserveInstallmentCharge(env.DB,{orderId:body.orderId,buyerEmail:identity.normalizedEmail,id:crypto.randomUUID(),idempotencyHash:await hashToken(key),requestHash:await hashToken(JSON.stringify([body.orderId,body.choice,identity.attendeeId])),choice:body.choice});
+  const charge=await reserveInstallmentCharge(env.DB,{orderId:body.orderId,buyerEmail:identity.normalizedEmail,id:crypto.randomUUID(),idempotencyHash:await hashToken(key),requestHash:await hashToken(JSON.stringify([body.orderId,body.choice,identity.attendeeId])),choice:body.choice,checkout:{origin:new URL(request.url).origin,returnPath:`/my-nights/${encodeURIComponent(order.eventSlug)}?payment=1`}});
   if(charge.state==='confirmed')return Response.json({confirmed:true},{headers});
   await prepareInstallmentCheckout(env.DB,{chargeId:charge.id,origin:new URL(request.url).origin,returnPath:`/my-nights/${encodeURIComponent(order.eventSlug)}?payment=1`});
   const authorizationUrl=await createInstallmentCheckout(env.DB,charge.id,env);
@@ -48,5 +48,5 @@ export async function GET(request:Request) {
  const pending=await env.DB.prepare(`SELECT id FROM installment_charges WHERE order_id=? AND state IN ('pending','review') LIMIT 1`).bind(orderId).first<{id:string}>();
  if(pending){try{await recoverInstallmentPayment(env,pending.id);}catch{/* Preserve saved pending charge until provider confirms. */}}
  const current=await readInstallmentBalance(env.DB,orderId);
- return Response.json({balance:current?{collectedMinor:current.collectedMinor,balanceMinor:current.balanceMinor,stepMinor:current.stepMinor}:null,pending:Boolean(pending)},{headers});
+ return Response.json({balance:current?{collectedMinor:current.collectedMinor,balanceMinor:current.balanceMinor,stepMinor:current.stepMinor}:null,pending:Boolean(await env.DB.prepare(`SELECT 1 AS pending FROM installment_charges WHERE order_id=? AND state IN ('pending','review') LIMIT 1`).bind(orderId).first())},{headers});
 }

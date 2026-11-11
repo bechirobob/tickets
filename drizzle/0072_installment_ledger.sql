@@ -34,6 +34,7 @@ CREATE TABLE installment_charges (
   confirmed_at TEXT
 );
 -- A timeout does NOT close a charge: its provider outcome must be reconciled.
+CREATE INDEX installment_booking_history ON installment_charges(order_id,state,created_at);
 CREATE UNIQUE INDEX installment_one_unresolved ON installment_charges(order_id) WHERE state IN ('pending','review');
 CREATE UNIQUE INDEX installment_provider_reference ON installment_charges(provider_reference) WHERE provider_reference IS NOT NULL;
 CREATE UNIQUE INDEX installment_provider_transaction ON installment_charges(provider_transaction_id) WHERE provider_transaction_id IS NOT NULL;

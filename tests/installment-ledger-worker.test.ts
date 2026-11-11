@@ -19,3 +19,19 @@ it('D1 preserves buyer, exact child verification and repeated confirmation',asyn
  const last=await reserveInstallmentCharge(env.DB,{...request,id:'last-'+id,idempotencyHash:'last-'+id,requestHash:'balance',choice:'balance'});
  expect(last.amountMinor).toBe(220000);
 });
+it('continuation charge and checkout request roll back together on interruption',async()=>{
+ const id=crypto.randomUUID();const email='buyer@example.test';
+ await env.DB.prepare(`INSERT INTO orders(id,reference,event_slug,quantity,face_amount_minor,booking_fee_minor,total_amount_minor,currency,customer_email,customer_phone,customer_name,payment_channel,payment_provider,payment_environment,status,created_at)
+ VALUES(?,?,'fixture',1,320000,0,320000,'GHS',?,'0000000000','Buyer','mobile_money','seevplus','sandbox','payment_pending','now')`).bind(id,id,email).run();
+ await env.DB.prepare(`INSERT INTO installment_plans VALUES(?,?,'seevplus','sandbox','{}','GHS',320000,100000,'now')`).bind(id,email).run();
+ const request={orderId:id,buyerEmail:email,id:'charge-'+id,idempotencyHash:id,requestHash:'request',choice:'installment' as const,checkout:{origin:'https://tickets.becoreops.com',returnPath:'/my-nights/fixture?payment=1'}};
+ await env.DB.exec(`CREATE TRIGGER fail_installment_session BEFORE INSERT ON installment_checkout_sessions BEGIN SELECT RAISE(ABORT,'simulated session interruption'); END;`);
+ await expect(reserveInstallmentCharge(env.DB,request)).rejects.toThrow();
+ expect(await env.DB.prepare(`SELECT id FROM installment_charges WHERE order_id=?`).bind(id).first()).toBeNull();
+ await env.DB.exec('DROP TRIGGER fail_installment_session');
+ const charge=await reserveInstallmentCharge(env.DB,request);expect(charge.amountMinor).toBe(100000);
+ const saved=await env.DB.prepare(`SELECT request_json AS request FROM installment_checkout_sessions WHERE charge_id=?`).bind(charge.id).first<{request:string}>();
+ expect(JSON.parse(saved!.request)).toMatchObject({amount:100000,meta:{orderId:id,installmentChargeId:charge.id},recipient:{email}});
+ expect((await reserveInstallmentCharge(env.DB,request)).id).toBe(charge.id);
+ expect((await env.DB.prepare(`SELECT COUNT(*) AS n FROM installment_charges WHERE order_id=?`).bind(id).first<{n:number}>())?.n).toBe(1);
+});

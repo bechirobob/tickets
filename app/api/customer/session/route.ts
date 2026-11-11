@@ -93,7 +93,7 @@ export async function POST(request: Request) {
     const { env } = await import("cloudflare:workers");
     if (record.paymentProvider === "seevplus" || env.PAYSTACK_SECRET_KEY) {
       try {
-        const installment = await db.prepare(`SELECT c.id FROM installment_charges c WHERE c.order_id=? ORDER BY c.created_at DESC,c.id DESC LIMIT 1`).bind(record.orderId).first<{id:string}>();
+        const installment = await db.prepare(`SELECT c.id FROM installment_charges c WHERE c.order_id=? ORDER BY CASE WHEN c.state IN ('pending','review') THEN 0 ELSE 1 END,c.created_at DESC,c.id DESC LIMIT 1`).bind(record.orderId).first<{id:string}>();
         const verified = installment ? await recoverInstallmentPayment(env,installment.id) : record.paymentProvider === "seevplus"
           ? await recoverSeevPayment(env, reference, new URL(request.url).origin)
           : await verifyOrderPayment(env, reference);

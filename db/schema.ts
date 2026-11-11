@@ -1381,6 +1381,7 @@ export const installmentCharges = sqliteTable('installment_charges', {
   createdAt: text('created_at').notNull(),
   confirmedAt: text('confirmed_at'),
 }, (table) => [
+  index('installment_booking_history').on(table.orderId,table.state,table.createdAt),
   uniqueIndex('installment_one_unresolved').on(table.orderId).where(sql`${table.state} IN ('pending','review')`),
   uniqueIndex('installment_provider_reference').on(table.providerReference).where(sql`${table.providerReference} IS NOT NULL`),
   uniqueIndex('installment_provider_transaction').on(table.providerTransactionId).where(sql`${table.providerTransactionId} IS NOT NULL`),

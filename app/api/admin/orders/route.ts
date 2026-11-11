@@ -78,8 +78,20 @@ export async function GET(request: Request) {
     env.DB.prepare("SELECT * FROM event_settlements ORDER BY period_end DESC, event_slug LIMIT 100").all<Record<string, unknown>>(),
     env.DB.prepare("SELECT slug, title FROM curated_event_records WHERE removed_at IS NULL ORDER BY starts_at DESC").all(),
   ]);
+  const installmentDetails = new Map<string, {collectedMinor:number;balanceMinor:number;charges:Array<{id:string;amountMinor:number;state:string;providerReference:string|null}>}>();
+  if(orders.results.length){
+    const ids=orders.results.map(order=>String(order.id));
+    const placeholders=ids.map(()=>'?').join(',');
+    const plans=await env.DB.prepare(`SELECT p.order_id AS orderId,p.total_minor AS totalMinor,
+      COALESCE((SELECT SUM(c.amount_minor) FROM installment_charges c WHERE c.order_id=p.order_id AND c.state='confirmed'),0) AS collectedMinor
+      FROM installment_plans p WHERE p.order_id IN (${placeholders})`).bind(...ids).all<{orderId:string;totalMinor:number;collectedMinor:number}>();
+    const charges=await env.DB.prepare(`SELECT id,order_id AS orderId,amount_minor AS amountMinor,state,provider_reference AS providerReference
+      FROM installment_charges WHERE order_id IN (${placeholders}) ORDER BY created_at,id`).bind(...ids).all<{id:string;orderId:string;amountMinor:number;state:string;providerReference:string|null}>();
+    for(const plan of plans.results) installmentDetails.set(plan.orderId,{collectedMinor:plan.collectedMinor,balanceMinor:plan.totalMinor-plan.collectedMinor,
+      charges:charges.results.filter(charge=>charge.orderId===plan.orderId).map(charge=>({id:charge.id,amountMinor:charge.amountMinor,state:charge.state,providerReference:charge.providerReference}))});
+  }
   const providerCases = await readProviderCases(env.DB, orders.results.map(order => String(order.id)));
-  return Response.json({ orders: orders.results.map(order => ({ ...order, providerCases: providerCases.filter(item => item.orderId === order.id) })), total, page, pageSize, events: eventOptions.results, reconciliationRuns: runs.results, disputes: disputes.results, settlements: settlements.results }, { headers: { "cache-control": "no-store" } });
+  return Response.json({ orders: orders.results.map(order => ({ ...order, installment: installmentDetails.get(String(order.id)) ?? null, providerCases: providerCases.filter(item => item.orderId === order.id) })), total, page, pageSize, events: eventOptions.results, reconciliationRuns: runs.results, disputes: disputes.results, settlements: settlements.results }, { headers: { "cache-control": "no-store" } });
 }
 
 export async function POST(request: Request) {

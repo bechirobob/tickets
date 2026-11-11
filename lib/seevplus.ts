@@ -119,7 +119,7 @@ export async function verifySeevPayment(db: D1Database, reference: string, confi
 
 export async function verifyOrderPayment(env: Cloudflare.Env, reference: string) {
   const installment = await env.DB.prepare(`SELECT c.id FROM orders o JOIN installment_plans p ON p.order_id=o.id
-    JOIN installment_charges c ON c.order_id=o.id WHERE o.reference=? ORDER BY c.created_at DESC,c.id DESC LIMIT 1`).bind(reference).first<{id:string}>();
+    JOIN installment_charges c ON c.order_id=o.id WHERE o.reference=? ORDER BY CASE WHEN c.state IN ('pending','review') THEN 0 ELSE 1 END,c.created_at DESC,c.id DESC LIMIT 1`).bind(reference).first<{id:string}>();
   if (installment) {
     const { verifyInstallmentPayment } = await import('./seev-installments');
     return verifyInstallmentPayment(env.DB, installment.id, env);
