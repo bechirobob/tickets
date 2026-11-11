@@ -4111,8 +4111,65 @@ def reviewed_room_refresh_application_blobs(expected, source):
     return {name: blob for name, (_, blob) in candidate.items()}
 
 
+
+# Narrow security-only transition; no database or event configuration changes.
+RSC_PATCH_LIVE = '6049b25eda0adcfbb25a86c53dbb62f62185358a'
+RSC_PATCH_BASE = '6049b25eda0adcfbb25a86c53dbb62f62185358a'
+RSC_PATCH_BASE_TREE = 'a29796f98ae359fb3b5482a7d7f1f3bc7e6f3204'
+RSC_PATCH_SNAPSHOT = 'a1cdd41f9f3b590ad421c6edcd99d5c548922bb2'
+RSC_PATCH_SNAPSHOT_TREE = '812282d6453ca7dca571a034b57f564bf05c44f8'
+RSC_PATCH_CANDIDATE_BRANCH = 'release/tickets-rsc-security-20261111'
+RSC_PATCH_CONTROLS = frozenset({'ops/vps/code-release.py', 'ops/vps/test_code_release.py'})
+
+RSC_PATCH_DEPENDENCIES = frozenset({'package.json', 'package-lock.json', 'runtime/vps/package.json', 'mobile/package.json', 'mobile/package-lock.json'})
+
+def rsc_patch_tree_entries(revision):
+    entries = {}
+    for record in git('ls-tree', '-r', '--full-tree', revision).splitlines():
+        metadata, name = record.split('\t', 1)
+        mode, kind, blob = metadata.split()
+        require(kind == 'blob' and mode in ('100644', '100755'), 'RSC security patch source has unsupported entry.')
+        entries[name] = (mode, blob)
+    return entries
+
+
+def reviewed_rsc_patch_application_blobs(expected, source):
+    require(expected == RSC_PATCH_LIVE, 'RSC security patch live baseline differs.')
+    for revision, tree in ((RSC_PATCH_BASE, RSC_PATCH_BASE_TREE), (RSC_PATCH_SNAPSHOT, RSC_PATCH_SNAPSHOT_TREE)):
+        require(git('rev-parse', revision + '^{tree}') == tree, 'RSC security patch reviewed tree differs.')
+    for before, after in ((expected, RSC_PATCH_BASE), (RSC_PATCH_BASE, RSC_PATCH_SNAPSHOT), (RSC_PATCH_SNAPSHOT, source)):
+        subprocess.run(['git', '--no-replace-objects', 'merge-base', '--is-ancestor', before, after],
+                       check=True, env=git_environment(), timeout=60)
+    verify_trusted_operator(source)
+    trusted = os.environ['BECORE_TRUSTED_BASE']
+    require(trusted not in (expected, RSC_PATCH_BASE, RSC_PATCH_SNAPSHOT, source),
+            'RSC security patch source requires independent merged controls.')
+    subprocess.run(['git', '--no-replace-objects', 'merge-base', '--is-ancestor', RSC_PATCH_BASE, trusted],
+                   check=True, env=git_environment(), timeout=60)
+    require(set(git('diff', '--name-only', RSC_PATCH_BASE, trusted).splitlines()) == RSC_PATCH_CONTROLS,
+            'RSC security patch controls changed outside their approved scope.')
+    base, snapshot = rsc_patch_tree_entries(RSC_PATCH_BASE), rsc_patch_tree_entries(RSC_PATCH_SNAPSHOT)
+    control, candidate = rsc_patch_tree_entries(trusted), rsc_patch_tree_entries(source)
+    without_controls = lambda entries: {name: entry for name, entry in entries.items() if name not in RSC_PATCH_CONTROLS}
+    require(without_controls(control) == without_controls(base), 'RSC security patch trusted inventory differs.')
+    require(without_controls(candidate) == without_controls(snapshot), 'RSC security patch complete source inventory differs.')
+    for name in RSC_PATCH_CONTROLS:
+        require(control.get(name) == candidate.get(name) and control.get(name, (None,))[0] == '100644',
+                'RSC security patch source control bytes or mode differ: ' + name)
+    changed = set(git('diff', '--name-only', expected, source).splitlines())
+    require(not migration_plan(changed) and not any(name.startswith('drizzle/') for name in changed),
+            'RSC security patch source cannot introduce migrations.')
+    require(changed == RSC_PATCH_CONTROLS | RSC_PATCH_DEPENDENCIES,
+            'RSC security patch must contain only exact dependency and control files.')
+    require(set(git('diff', '--name-only', RSC_PATCH_BASE, RSC_PATCH_SNAPSHOT).splitlines()) == RSC_PATCH_DEPENDENCIES,
+            'RSC security snapshot must contain the exact five dependency files.')
+    return {name: blob for name, (_, blob) in candidate.items()}
+
+
 def reviewed_application_blobs(expected, source):
     """Select each exact application tree only from its approved live baseline."""
+    if expected == RSC_PATCH_LIVE:
+        return reviewed_rsc_patch_application_blobs(expected, source)
     if expected == ROOM_REFRESH_LIVE:
         return reviewed_room_refresh_application_blobs(expected, source)
     if expected == CUSTOMER_LIVE:
@@ -4235,6 +4292,9 @@ def vetted_changes(expected, source):
             "Only the vetted crypto configuration-name addition is permitted.")
     # Security-response changes require their exact entry in the reviewed blob
     # manifest above; there is no broad header-policy or path-pattern exception.
+    if expected == RSC_PATCH_LIVE:
+        require(not migration_plan(changed), "RSC security patch cannot introduce migrations.")
+        return changed
     if expected == SCANNER_DEPS_LIVE:
         require(not migration_plan(changed), 'Scanner dependency patch cannot introduce migrations.')
         return changed
@@ -4514,7 +4574,7 @@ def admitted_parallel_ref(event, branch):
     # Preserve historical admission; only this reviewed release gains a manual ref.
     return (branch == "improve/release-evidence-parallel-20261013"
             and event in ("push", "workflow_dispatch")) or (
-                branch in (COMBINED_CANDIDATE_BRANCH, CUSTOMER_CANDIDATE_BRANCH, ROOM_REFRESH_CANDIDATE_BRANCH) and event == "workflow_dispatch")
+                branch in (COMBINED_CANDIDATE_BRANCH, CUSTOMER_CANDIDATE_BRANCH, ROOM_REFRESH_CANDIDATE_BRANCH, RSC_PATCH_CANDIDATE_BRANCH) and event == "workflow_dispatch")
 
 
 def verify_combined_parallel_scope(candidate, expected, source):
@@ -4537,6 +4597,14 @@ def verify_room_refresh_parallel_scope(candidate, expected, source, candidate_mo
         require(candidate.get("head_branch") == ROOM_REFRESH_CANDIDATE_BRANCH, "Room refresh candidate branch differs.")
         require(candidate.get("event") == "workflow_dispatch", "Room refresh candidate must be manually dispatched.")
         reviewed_room_refresh_application_blobs(expected, source)
+
+
+def verify_rsc_patch_parallel_scope(candidate, expected, source, candidate_mode="parallel-v1"):
+    if expected == RSC_PATCH_LIVE or candidate.get("head_branch") == RSC_PATCH_CANDIDATE_BRANCH:
+        require(candidate_mode == "parallel-v1", "RSC security patch release requires parallel-v1 candidate evidence.")
+        require(candidate.get("head_branch") == RSC_PATCH_CANDIDATE_BRANCH, "RSC security patch candidate branch differs.")
+        require(candidate.get("event") == "workflow_dispatch", "RSC security patch candidate must be manually dispatched.")
+        reviewed_rsc_patch_application_blobs(expected, source)
 
 
 def verify_parallel_run(run, jobs, *, repository):
@@ -4849,6 +4917,7 @@ def verify_ci(args):
     verify_run(runtime, workflow="vps-runtime.yml", source=args.source, repository=args.repository)
     candidate_mode = getattr(args, "candidate_mode", "legacy")
     require(candidate_mode in ("legacy", "parallel-v1", "parallel-retry-v3"), "Unknown candidate verification mode.")
+    verify_rsc_patch_parallel_scope(candidate, args.expected, args.source, candidate_mode)
     verify_room_refresh_parallel_scope(candidate, args.expected, args.source, candidate_mode)
     verify_customer_parallel_scope(candidate, args.expected, args.source, candidate_mode)
     if candidate_mode == "parallel-retry-v3":
@@ -5850,6 +5919,13 @@ class Deployment:
         changes = self.proof.get("changedFiles", [])
         require(isinstance(changes, list) and all(isinstance(name, str) for name in changes),
                 "Release changed-file manifest is invalid.")
+        if self.expected == RSC_PATCH_LIVE:
+            require(not self.enable_crypto and not self.enable_first_host,
+                    "RSC security patch must preserve runtime configuration.")
+            require(len(changes) == len(set(changes))
+                    and set(changes) == RSC_PATCH_CONTROLS | RSC_PATCH_DEPENDENCIES
+                    and not migration_plan(changes),
+                    "RSC security patch requires exact dependency/control manifest and no migrations.")
         if self.expected == SECURITY_LIVE_BASELINE:
             require(not self.enable_crypto and not self.enable_first_host,
                     "Yorke Way security release must preserve runtime configuration.")

@@ -3870,7 +3870,66 @@ def room_refresh_source_family(root):
     return {name: blob for name, (_, blob) in manifest.items()}
 
 
+RSC_PATCH_TEST_FILE = Path(__file__).resolve()
+RSC_PATCH_OPERATOR_BLOB = '633ae089b7b8d321a39603c24177686e4698bd70'
+RSC_PATCH_STAGED_PINS = dict(COMBINED_STAGED_PINS)
+
+
+def rsc_patch_source_family(root):
+    root = Path(root)
+    digest = lambda raw: release.hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
+    operator = root/'ops/vps/code-release.py'
+    selected = (root/'ops/vps/test_code_release.py').resolve() == RSC_PATCH_TEST_FILE
+    marked = operator.is_file() and not operator.is_symlink() and digest(operator.read_bytes()) == RSC_PATCH_OPERATOR_BLOB
+    if not selected and not marked:
+        return None
+    controls = {'ops/vps/code-release.py': ('100644', RSC_PATCH_OPERATOR_BLOB),
+                'ops/vps/test_code_release.py': ('100644', digest(RSC_PATCH_TEST_FILE.read_bytes()))}
+    full = os.path.lexists(root/'package.json') or os.path.lexists(root/'app')
+    if full:
+        choices = []
+        for revision, tree in ((release.RSC_PATCH_BASE, release.RSC_PATCH_BASE_TREE),
+                               (release.RSC_PATCH_SNAPSHOT, release.RSC_PATCH_SNAPSHOT_TREE)):
+            if checkout_git(root, 'rev-parse', revision+'^{tree}').decode().strip() != tree:
+                raise AssertionError('RSC security patch reviewed tree differs')
+            manifest = {}
+            for record in checkout_git(root, 'ls-tree', '-rz', '--full-tree', revision).split(b'\0'):
+                if record:
+                    meta, name = record.split(b'\t', 1); mode, kind, blob = meta.decode().split()
+                    if kind != 'blob' or mode not in ('100644', '100755'):
+                        raise AssertionError('RSC security patch unsupported file mode')
+                    manifest[os.fsdecode(name)] = (mode, blob)
+            manifest.update(controls); choices.append(manifest)
+        index = {}
+        for record in checkout_git(root, 'ls-files', '--stage', '-z').split(b'\0'):
+            if record:
+                meta, name = record.split(b'\t', 1); mode, blob, stage = meta.decode().split()
+                if stage != '0': raise AssertionError('RSC security patch unmerged index')
+                index[os.fsdecode(name)] = (mode, blob)
+        if checkout_git(root, 'ls-files', '--others', '--exclude-standard', '-z') or index not in choices:
+            raise AssertionError('RSC security patch complete index inventory differs')
+        manifest = index
+    else:
+        manifest = dict(RSC_PATCH_STAGED_PINS, **controls)
+        validate_staged_inventory(root, manifest)
+    for name, (mode, blob) in manifest.items():
+        path = root/name
+        try:
+            metadata = path.lstat()
+            if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1 or bool(metadata.st_mode & 0o111) != (mode == '100755') or any(parent.is_symlink() for parent in (path, *path.parents)):
+                raise AssertionError('RSC security patch source requires regular files and exact modes')
+            raw = path.read_bytes()
+            if name == 'mobile/android/gradlew.bat': raw = raw.replace(b'\r\n', b'\n')
+            if digest(raw) != blob: raise AssertionError('RSC security patch source bytes differ: '+name)
+        except OSError as error:
+            raise AssertionError('RSC security patch source incomplete') from error
+    return {name: blob for name, (_, blob) in manifest.items()}
+
+
 def checkout_source_family(root):
+    rsc_patch = rsc_patch_source_family(root)
+    if rsc_patch is not None:
+        return rsc_patch
     room_refresh = room_refresh_source_family(root)
     if room_refresh is not None:
         return room_refresh
@@ -14250,7 +14309,7 @@ class FirstHostConfigurationTests(unittest.TestCase):
 
     def test_workflow_activation_is_default_off_step_local_stdin_only(self):
         family = checkout_source_family(Path(__file__).resolve().parents[2])
-        if family.get('ops/vps/code-release.py') in (ROOM_REFRESH_OPERATOR_BLOB, CUSTOMER_OPERATOR_BLOB, COMBINED_OPERATOR_BLOB, SCANNER_DEPS_CONTROL_PINS['ops/vps/code-release.py'][1], SCANNER_CONTROL_PINS['ops/vps/code-release.py'][1], STAFF_APP_CONTROL_PINS['ops/vps/code-release.py'][1], AUDIT_CONTROL_PINS['ops/vps/code-release.py'][1], STAFF_CONTROL_PINS['ops/vps/code-release.py'][1], ROOM_MAIL_VPS_OPERATOR_BLOB, YORKEWAY_OPERATOR_BLOB, OWNER_PUSH_OPERATOR_BLOB, SECURITY_OPERATOR_BLOB, PARALLEL_GATE_OUTPUTS['ops/vps/code-release.py'][1], DOWNLOAD_RETRY_OUTPUTS['ops/vps/code-release.py'][1]):
+        if family.get('ops/vps/code-release.py') in (RSC_PATCH_OPERATOR_BLOB, ROOM_REFRESH_OPERATOR_BLOB, CUSTOMER_OPERATOR_BLOB, COMBINED_OPERATOR_BLOB, SCANNER_DEPS_CONTROL_PINS['ops/vps/code-release.py'][1], SCANNER_CONTROL_PINS['ops/vps/code-release.py'][1], STAFF_APP_CONTROL_PINS['ops/vps/code-release.py'][1], AUDIT_CONTROL_PINS['ops/vps/code-release.py'][1], STAFF_CONTROL_PINS['ops/vps/code-release.py'][1], ROOM_MAIL_VPS_OPERATOR_BLOB, YORKEWAY_OPERATOR_BLOB, OWNER_PUSH_OPERATOR_BLOB, SECURITY_OPERATOR_BLOB, PARALLEL_GATE_OUTPUTS['ops/vps/code-release.py'][1], DOWNLOAD_RETRY_OUTPUTS['ops/vps/code-release.py'][1]):
             # Only the exact new family may add this public archive dependency.
             # Reconstruct the original bytes before keeping its historical pin.
             name = '.github/workflows/tickets-code-release.yml'
@@ -17138,6 +17197,213 @@ class RoomRefreshParallelIdentityTests(unittest.TestCase):
         from test_parallel_retry_admission import retry_proof
         proof = retry_proof()
         proof.update(head_branch=release.ROOM_REFRESH_CANDIDATE_BRANCH, event='workflow_dispatch')
+        with self.assertRaises(release.ReleaseError):
+            release.validate_parallel_proof(proof, repository='bechirobob/tickets',
+                candidate='b'*40, tree='d'*40, run_id='456', attempt=2, baseline='c'*40)
+
+
+class RscPatchAdmissionTests(unittest.TestCase):
+    git = ScannerDependencyAdmissionTests.git
+    write = ScannerDependencyAdmissionTests.write
+    commit = ScannerDependencyAdmissionTests.commit
+    patch = ScannerDependencyAdmissionTests.patch
+
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory(); self.addCleanup(self.directory.cleanup)
+        self.root = Path(self.directory.name)
+        self.git('init', '-q'); self.git('config', 'user.email', 'fixture@example.invalid'); self.git('config', 'user.name', 'Fixture')
+        self.controls = set(release.RSC_PATCH_CONTROLS)
+        for name in self.controls | {'package.json', 'app/page.tsx', 'stable.txt'}: self.write(name, 'live\n')
+        self.corrections = tuple(release.RSC_PATCH_DEPENDENCIES)
+        for name in self.corrections: self.write(name, 'before correction\n')
+        self.live = self.commit()
+        self.base = self.live
+        for name in self.corrections: self.write(name, 'reviewed correction\n')
+        self.snapshot = self.commit()
+        self.git('checkout', '-q', self.base)
+        for name in self.controls: self.write(name, 'independent controls\n')
+        self.control = self.commit(); self.git('update-ref', 'refs/remotes/origin/main', self.control)
+        self.git('merge', '-q', '--no-ff', '-m', 'rsc_patch', self.snapshot); self.source = self.git('rev-parse', 'HEAD')
+        for name,value in {'RSC_PATCH_LIVE':self.live, 'RSC_PATCH_BASE':self.base, 'RSC_PATCH_BASE_TREE':self.git('rev-parse', self.base+'^{tree}'), 'RSC_PATCH_SNAPSHOT':self.snapshot, 'RSC_PATCH_SNAPSHOT_TREE':self.git('rev-parse', self.snapshot+'^{tree}'), '__file__':str(self.root/'ops/vps/code-release.py')}.items(): self.patch(release,name,value)
+        environment=patch.dict(os.environ,BECORE_TRUSTED_BASE=self.control);environment.start();self.addCleanup(environment.stop)
+        previous=os.getcwd();os.chdir(self.root);self.addCleanup(os.chdir,previous)
+
+    def verify(self): return release.reviewed_rsc_patch_application_blobs(self.live,self.git('rev-parse','HEAD'))
+
+    def test_release_branch_requires_complete_reviewed_inventory(self):
+        candidate = {'head_branch': release.RSC_PATCH_CANDIDATE_BRANCH, 'event': 'workflow_dispatch'}
+        release.verify_rsc_patch_parallel_scope(candidate, self.live, self.source)
+        for branch in ('main', 'release/other', release.RSC_PATCH_CANDIDATE_BRANCH + '-extra', 'improve/release-evidence-parallel-20261013'):
+            with self.subTest(branch=branch), self.assertRaises(release.ReleaseError):
+                release.verify_rsc_patch_parallel_scope(dict(candidate, head_branch=branch), self.live, self.source)
+        with self.assertRaises(release.ReleaseError):
+            release.verify_rsc_patch_parallel_scope(dict(candidate, event='push'), self.live, self.source)
+        with self.assertRaises(release.ReleaseError):
+            release.verify_rsc_patch_parallel_scope(candidate, 'f'*40, self.source)
+        for name in ('app/page.tsx', 'unreviewed.txt', 'ops/vps/code-release.py'):
+            with self.subTest(name=name):
+                self.git('reset', '--hard', self.source)
+                self.write(name, 'unreviewed change\n'); changed = self.commit()
+                with self.assertRaises(release.ReleaseError):
+                    release.verify_rsc_patch_parallel_scope(candidate, self.live, changed)
+
+    def test_exact_rsc_patch_tree_with_independent_controls_passes(self):
+        pins=self.verify();self.assertEqual(pins['package.json'],self.git('rev-parse',self.snapshot+':package.json'))
+        self.assertEqual(release.reviewed_application_blobs(self.live,self.source),pins)
+
+    def test_every_path_including_unchanged_and_control_bytes_rejects_mutation(self):
+        for name in self.verify():
+            with self.subTest(name=name):
+                self.git('reset','--hard',self.source);self.write(name,'unreviewed\n');self.commit()
+                with self.assertRaises(release.ReleaseError):self.verify()
+
+    def test_partial_or_reverted_corrections_reject(self):
+        for name in self.corrections:
+            with self.subTest(name=name):
+                self.git('reset', '--hard', self.source)
+                self.write(name, self.git('show', self.live + ':' + name) + '\n'); self.commit()
+                with self.assertRaises(release.ReleaseError): self.verify()
+
+    def test_extra_missing_executable_and_symlink_paths_reject(self):
+        for kind in ('extra','missing','executable','symlink'):
+            with self.subTest(kind=kind):
+                self.git('reset','--hard',self.source);target=self.root/'app/page.tsx'
+                if kind=='extra':self.write('app/boardui-trial/page.tsx','demo\n')
+                elif kind=='missing':target.unlink()
+                elif kind=='executable':target.chmod(0o755)
+                else:target.unlink();target.symlink_to('../stable.txt')
+                self.commit()
+                with self.assertRaises(release.ReleaseError):self.verify()
+                self.git('reset','--hard',self.source)
+
+    def test_tree_pins_and_wrong_live_reject(self):
+        for name in ('RSC_PATCH_BASE_TREE','RSC_PATCH_SNAPSHOT_TREE'):
+            with self.subTest(name=name),patch.object(release,name,'f'*40):
+                with self.assertRaises(release.ReleaseError):self.verify()
+        with self.assertRaises(release.ReleaseError):release.reviewed_rsc_patch_application_blobs('f'*40,self.source)
+
+    def test_unmerged_self_trusted_or_missing_snapshot_ancestry_reject(self):
+        for trusted in (self.base,self.snapshot,self.source):
+            with self.subTest(trusted=trusted),patch.dict(os.environ,BECORE_TRUSTED=trusted,BECORE_TRUSTED_BASE=trusted):
+                with self.assertRaises((release.ReleaseError,subprocess.CalledProcessError)):self.verify()
+        self.git('update-ref','refs/remotes/origin/main',self.live)
+        with self.assertRaises(subprocess.CalledProcessError):self.verify()
+        self.git('update-ref','refs/remotes/origin/main',self.control)
+        self.git('checkout','-q',self.control)
+        with self.assertRaises(subprocess.CalledProcessError):self.verify()
+
+    def test_trusted_branch_cannot_smuggle_noncontrol_change(self):
+        self.git('checkout','-q',self.control);self.write('stable.txt','smuggled\n');bad=self.commit()
+        self.git('update-ref','refs/remotes/origin/main',bad)
+        self.git('merge','-q','--no-ff','-m','bad rsc_patch',self.snapshot)
+        with patch.dict(os.environ,BECORE_TRUSTED_BASE=bad):
+            with self.assertRaisesRegex(release.ReleaseError,'outside'):self.verify()
+
+
+
+    def test_complete_checkout_rejects_index_worktree_and_untracked_changes(self):
+        module=sys.modules[__name__]
+        with patch.object(module,'RSC_PATCH_TEST_FILE',self.root/'ops/vps/test_code_release.py'), patch.object(module,'RSC_PATCH_OPERATOR_BLOB',self.git('rev-parse',self.control+':ops/vps/code-release.py')):
+            self.assertIsNotNone(rsc_patch_source_family(self.root))
+            for mutation in ('worktree','index','untracked','symlink','hardlink'):
+                with self.subTest(mutation=mutation):
+                    self.git('reset','--hard',self.source);self.git('clean','-fd')
+                    target=self.root/'app/page.tsx';outside=self.root.parent/(self.root.name+'-link')
+                    try:
+                        if mutation=='untracked':self.write('extra.txt','unreviewed')
+                        elif mutation=='symlink':target.unlink();target.symlink_to('../stable.txt')
+                        elif mutation=='hardlink':os.link(target,outside)
+                        else:
+                            self.write('app/page.tsx','changed')
+                            if mutation=='index':self.git('add','app/page.tsx')
+                        with self.assertRaises(AssertionError):rsc_patch_source_family(self.root)
+                    finally:
+                        if outside.exists():outside.unlink()
+
+    def test_staged_control_inventory_rejects_extra_missing_and_modified_bytes(self):
+        stage=self.root/'stage';stage.mkdir()
+        for name in self.controls:
+            target=stage/name;target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes((self.root/name).read_bytes())
+        module=sys.modules[__name__]
+        with patch.object(module,'RSC_PATCH_TEST_FILE',stage/'ops/vps/test_code_release.py'), patch.object(module,'RSC_PATCH_OPERATOR_BLOB',self.git('rev-parse',self.control+':ops/vps/code-release.py')), patch.object(module,'RSC_PATCH_STAGED_PINS',{}):
+            self.assertIsNotNone(rsc_patch_source_family(stage))
+            target=stage/'ops/vps/code-release.py';raw=target.read_bytes()
+            for mutation in ('extra','missing','bytes','mode'):
+                with self.subTest(mutation=mutation):
+                    if mutation=='extra':(stage/'extra').write_text('extra')
+                    elif mutation=='missing':target.unlink()
+                    elif mutation=='bytes':target.write_bytes(raw+b'changed')
+                    else:target.chmod(0o755)
+                    with self.assertRaises(AssertionError):rsc_patch_source_family(stage)
+                    if (stage/'extra').exists():(stage/'extra').unlink()
+                    target.write_bytes(raw);target.chmod(0o644)
+
+
+    def test_executing_operator_must_match_independent_trusted_bytes(self):
+        self.write('ops/vps/code-release.py', 'different executing operator\n')
+        with self.assertRaisesRegex(release.ReleaseError, 'Operator bytes'):
+            self.verify()
+
+    def test_unrelated_changes_reject_even_if_repinning_snapshot(self):
+        for name in ('drizzle/9999_unreviewed.sql', 'app/page.tsx', 'extra.json'):
+            with self.subTest(name=name):
+                self.git('checkout', '-q', self.snapshot)
+                self.write(name, 'unreviewed dependency or migration\n'); snapshot = self.commit()
+                self.git('checkout', '-q', self.control)
+                self.git('merge', '-q', '--no-ff', '-m', 'candidate', snapshot)
+                with patch.object(release, 'RSC_PATCH_SNAPSHOT', snapshot), patch.object(release, 'RSC_PATCH_SNAPSHOT_TREE', self.git('rev-parse', snapshot+'^{tree}')):
+                    with self.assertRaisesRegex(release.ReleaseError, 'migrations|dependency|five'):
+                        self.verify()
+
+
+class RscPatchParallelIdentityTests(unittest.TestCase):
+    def test_verify_ci_rejects_legacy_and_retry_before_candidate_admission(self):
+        for mode in ('legacy', 'parallel-retry-v3'):
+            for expected, branch in ((release.RSC_PATCH_LIVE, 'main'), ('a'*40, release.RSC_PATCH_CANDIDATE_BRANCH)):
+                with self.subTest(mode=mode, expected=expected), tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory)
+                    (root/'runtime.json').write_text('{}')
+                    (root/'candidate.json').write_text(json.dumps({'head_branch': branch, 'event': 'workflow_dispatch'}))
+                    args = argparse.Namespace(source='b'*40, expected=expected, metadata=directory,
+                                              repository='bechirobob/tickets', candidate_mode=mode)
+                    with patch.dict(os.environ, GITHUB_REF='refs/heads/main'), \
+                         patch.object(release, 'git', side_effect=lambda *args: 'b'*40 if args == ('rev-parse', 'HEAD') else ''), \
+                         patch.object(release, 'verify_trusted_operator'), \
+                         patch.object(release.subprocess, 'run'), patch.object(release, 'verify_run'):
+                        with self.assertRaisesRegex(release.ReleaseError, 'requires parallel-v1'):
+                            release.verify_ci(args)
+
+    def test_exact_manual_branch_binds_run_and_proof(self):
+        from test_parallel_admission import ParallelSelectionTests, proof_fixture
+        run, jobs = ParallelSelectionTests().fixture()
+        proof = proof_fixture()
+        for value in (run, proof):
+            value.update(head_branch=release.RSC_PATCH_CANDIDATE_BRANCH, event='workflow_dispatch')
+        def validate(value):
+            return release.validate_parallel_proof(value, repository='bechirobob/tickets',
+                candidate='b'*40, tree='d'*40, run_id='456', attempt=2, baseline='c'*40)
+        release.verify_parallel_run(run, jobs, repository='bechirobob/tickets')
+        self.assertIs(validate(proof), proof)
+        for key, value in (('head_branch', 'main'), ('head_branch', 'release/other'),
+                           ('head_branch', release.RSC_PATCH_CANDIDATE_BRANCH + '-extra'),
+                           ('event', 'push'), ('event', 'pull_request'),
+                           ('head_branch', 'refs/heads/' + release.RSC_PATCH_CANDIDATE_BRANCH)):
+            with self.subTest(key=key, value=value):
+                with self.assertRaises(release.ReleaseError):
+                    release.verify_parallel_run(dict(run, **{key:value}), jobs, repository='bechirobob/tickets')
+                with self.assertRaises(release.ReleaseError): validate(dict(proof, **{key:value}))
+        for key, value in (('source_sha', 'f'*40), ('source_tree', 'f'*40),
+                           ('audit_trusted_base', 'f'*40), ('workflow_sha', 'f'*40),
+                           ('run_id', 999), ('repository', 'fork/tickets')):
+            with self.subTest(key=key), self.assertRaises(release.ReleaseError):
+                validate(dict(proof, **{key:value}))
+
+    def test_historical_ref_and_retry_admission_remain_unchanged(self):
+        for event in ('push', 'workflow_dispatch'):
+            self.assertTrue(release.admitted_parallel_ref(event, 'improve/release-evidence-parallel-20261013'))
+        from test_parallel_retry_admission import retry_proof
+        proof = retry_proof()
+        proof.update(head_branch=release.RSC_PATCH_CANDIDATE_BRANCH, event='workflow_dispatch')
         with self.assertRaises(release.ReleaseError):
             release.validate_parallel_proof(proof, repository='bechirobob/tickets',
                 candidate='b'*40, tree='d'*40, run_id='456', attempt=2, baseline='c'*40)
