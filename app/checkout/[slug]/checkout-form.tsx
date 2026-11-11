@@ -261,7 +261,7 @@ export default function CheckoutForm({ installmentStepMinor, slug, event, feeBas
             {seevEnabled && seevCryptoEnabled ? <section className={`payment-option${paymentMethod === "crypto" ? " selected" : ""}`}>
               <label className="payment-method-choice">
                 <input type="radio" name="paymentMethod" value="crypto" checked={paymentMethod === "crypto"} onChange={() => { setPaymentMethod("crypto"); setMessage(""); setInvalidField(null); }} />
-                <Wallet size={20} aria-hidden="true" /><span>Crypto<small>USDC through SeevCash</small></span>
+                <Wallet size={20} aria-hidden="true" /><span>Crypto<small>USDC through SeevPlus</small></span>
               </label>
               {paymentMethod === "crypto" ? <div className="payment-method-detail"><p className="secure-note">Continue to SeevCash and review the USDC amount. Use only the asset and network shown there, then follow the payment instructions. Your tickets appear once payment is confirmed.</p></div> : null}
             </section> : null}
