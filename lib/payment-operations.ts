@@ -123,6 +123,7 @@ function issuedTicketStatements(db: D1Database, order: OrderRecord, issuedAt: st
 export async function fulfillVerifiedPayment(db: D1Database, verification: PaystackVerification) {
   const order = await readOrder(db, verification.reference);
   if (!order) return { result: "unknown_order" as const };
+  if (await db.prepare("SELECT 1 FROM installment_plans WHERE order_id=?").bind(order.id).first()) return { result: "not_fulfilled" as const, order };
   if (order.paymentProvider !== (verification.provider ?? "paystack") || (order.paymentProvider === "seevplus" && (!order.providerReference || verification.providerReference !== order.providerReference))) return { result: "mismatch" as const, order };
   if (order.paymentProvider==='paystack' && order.paymentEnvironment && order.paymentEnvironment!==verification.environment) return {result:'mismatch' as const,order};
   const statusColumn = order.paymentProvider === "seevplus" ? "provider_status" : "paystack_status";
@@ -161,7 +162,7 @@ export async function fulfillVerifiedPayment(db: D1Database, verification: Payst
       WHERE order_id = ? AND status IN ('held', 'expired', 'released')
         AND EXISTS (SELECT 1 FROM orders current WHERE current.id = inventory_reservations.order_id AND current.status IN ('payment_pending', 'expired', 'failed')
           AND (current.coupon_id IS NULL OR EXISTS (SELECT 1 FROM event_coupons c WHERE c.id=current.coupon_id AND
-            (SELECT COUNT(*) FROM orders used WHERE used.coupon_id=c.id AND used.id<>current.id AND (used.status IN ('paid','refund_pending','refunded','disputed') OR (used.status='payment_pending' AND used.reservation_expires_at>?)))<c.max_uses)))
+            (SELECT COUNT(*) FROM orders used WHERE used.coupon_id=c.id AND used.id<>current.id AND (used.status IN ('paid','part_paid','refund_pending','refunded','disputed') OR (used.status='payment_pending' AND used.reservation_expires_at>?)))<c.max_uses)))
         AND EXISTS (
           SELECT 1 FROM event_ticket_tiers tier
           WHERE tier.id = inventory_reservations.ticket_tier_id

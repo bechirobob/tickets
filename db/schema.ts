@@ -27,7 +27,7 @@ export const orders = sqliteTable("orders", {
   checkoutAttendeeId: text("checkout_attendee_id"),
   announcementsOptIn: integer("announcements_opt_in").notNull().default(0),
   paymentChannel: text("payment_channel").notNull(),
-  status: text("status", { enum: ["payment_pending", "paid", "failed", "refund_pending", "refunded", "expired", "requires_refund", "disputed"] }).notNull(),
+  status: text("status", { enum: ["payment_pending", "part_paid", "paid", "failed", "refund_pending", "refunded", "expired", "requires_refund", "disputed"] }).notNull(),
   paystackReference: text("paystack_reference"),
   paystackTransactionId: text("paystack_transaction_id"),
   paystackStatus: text("paystack_status"),
@@ -1355,4 +1355,50 @@ export const yorkewayEarlyAccess = sqliteTable("yorkeway_early_access", {
   status: text("status").notNull().default("subscribed"),
   consentVersion: text("consent_version").notNull(), consentText: text("consent_text").notNull(),
   consentedAt: text("consented_at").notNull(), withdrawalHash: text("withdrawal_hash").notNull().unique(), withdrawnAt: text("withdrawn_at"),
+});
+
+// Dormant additive installment ledger; payment runtime integration is gated.
+export const installmentPlans = sqliteTable('installment_plans', {
+  orderId: text('order_id').primaryKey().references(() => orders.id),
+  buyerEmail: text('buyer_email').notNull(),
+  provider: text('provider').notNull(),
+  environment: text('environment').notNull(),
+  settlementSnapshotJson: text('settlement_snapshot_json').notNull(),
+  currency: text('currency').notNull(),
+  totalMinor: integer('total_minor').notNull(),
+  stepMinor: integer('step_minor').notNull(),
+  createdAt: text('created_at').notNull(),
+});
+export const installmentCharges = sqliteTable('installment_charges', {
+  id: text('id').primaryKey(),
+  orderId: text('order_id').notNull().references(() => installmentPlans.orderId),
+  idempotencyHash: text('idempotency_hash').notNull().unique(),
+  requestHash: text('request_hash').notNull(),
+  amountMinor: integer('amount_minor').notNull(),
+  providerReference: text('provider_reference'),
+  providerTransactionId: text('provider_transaction_id'),
+  state: text('state',{enum:['pending','confirmed','closed_unpaid','review']}).notNull(),
+  createdAt: text('created_at').notNull(),
+  confirmedAt: text('confirmed_at'),
+}, (table) => [
+  uniqueIndex('installment_one_unresolved').on(table.orderId).where(sql`${table.state} IN ('pending','review')`),
+  uniqueIndex('installment_provider_reference').on(table.providerReference).where(sql`${table.providerReference} IS NOT NULL`),
+  uniqueIndex('installment_provider_transaction').on(table.providerTransactionId).where(sql`${table.providerTransactionId} IS NOT NULL`),
+]);
+export const installmentCheckoutSessions = sqliteTable('installment_checkout_sessions', {
+  chargeId:text('charge_id').primaryKey().references(()=>installmentCharges.id),
+  requestJson:text('request_json').notNull(),
+  checkoutUrl:text('checkout_url'),
+  createdAt:text('created_at').notNull(),
+  checkedAt:text('checked_at'),
+  leaseUntil:text('lease_until'),
+  lastError:text('last_error'),
+});
+
+export const eventInstallmentSettings = sqliteTable('event_installment_settings', {
+  eventSlug: text('event_slug').primaryKey().references(() => curatedEventRecords.slug),
+  enabled: integer('enabled').notNull().default(0),
+  stepMinor: integer('step_minor').notNull(),
+  provider: text('provider').notNull().default('seevplus'),
+  updatedAt: text('updated_at').notNull(),
 });

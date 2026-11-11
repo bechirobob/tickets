@@ -507,3 +507,43 @@ it.each(['cancelled','postponed'])('never lets an existing waitlist offer bypass
   expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM orders WHERE waitlist_entry_id=?').bind(offer.id).first()).toEqual({n:0});
   expect(fetchMock).not.toHaveBeenCalled();
 });
+
+describe('opt-in SeevCash payment plans',()=>{
+ async function enablePlan(){
+  await env.DB.prepare(`INSERT INTO event_installment_settings(event_slug,enabled,step_minor,provider,updated_at) VALUES(?,1,100000,'seevplus',?)`).bind(slug,new Date().toISOString()).run();
+  await env.DB.prepare(`UPDATE event_ticket_tiers SET price_minor=320000 WHERE event_slug=?`).bind(slug).run();
+ }
+ it('charges the first installment, not the full immutable booking total',async()=>{
+  await enablePlan();const response=await initialize(request({quantity:1,paymentChoice:'installment'}));
+  expect(response.status).toBe(200);expect(createBody.amount).toBe(100000);
+  const payload=await response.json() as {reference:string};
+  const plan=await env.DB.prepare(`SELECT p.total_minor AS totalMinor,o.total_amount_minor AS orderTotal,p.buyer_email AS buyerEmail FROM installment_plans p JOIN orders o ON o.id=p.order_id WHERE o.reference=?`).bind(payload.reference).first<{totalMinor:number;orderTotal:number;buyerEmail:string}>();
+  expect(plan?.totalMinor).toBe(plan?.orderTotal);expect(plan!.totalMinor).toBeGreaterThan(100000);expect(plan?.buyerEmail).toBe('seev@example.com');
+  expect(await env.DB.prepare(`SELECT s.order_id FROM seev_checkout_sessions s JOIN orders o ON o.id=s.order_id WHERE o.reference=?`).bind(payload.reference).first()).toBeNull();
+ });
+ it('routes full payment through the same SeevCash booking ledger',async()=>{
+  await enablePlan();const response=await initialize(request({quantity:1,paymentChoice:'balance'}));expect(response.status).toBe(200);
+  const payload=await response.json() as {reference:string};const plan=await env.DB.prepare(`SELECT p.total_minor AS totalMinor FROM installment_plans p JOIN orders o ON o.id=p.order_id WHERE o.reference=?`).bind(payload.reference).first<{totalMinor:number}>();expect(createBody.amount).toBe(plan?.totalMinor);
+ });
+ it('rejects other provider/method and does not enable other events implicitly',async()=>{
+  expect((await initialize(request({paymentChoice:'installment'}))).status).toBe(400);
+  await enablePlan();expect((await initialize(request({paymentProvider:'paystack'}))).status).toBe(400);
+  expect((await initialize(request({paymentMethod:'crypto'}))).status).toBe(400);
+ });
+});
+
+it('disabled SeevCash cannot start a new continuation charge',async()=>{
+ await env.DB.prepare(`INSERT INTO event_installment_settings(event_slug,enabled,step_minor,provider,updated_at) VALUES(?,1,10000,'seevplus',?)`).bind(slug,new Date().toISOString()).run();
+ const email=`disabled-${crypto.randomUUID()}@example.test`;
+ const created=await initialize(request({email,paymentChoice:'installment'}));expect(created.status).toBe(200);
+ const payload=await created.json() as {reference:string};
+ const order=await env.DB.prepare(`SELECT id FROM orders WHERE reference=?`).bind(payload.reference).first<{id:string}>();
+ const id=crypto.randomUUID(),token=crypto.randomUUID(),now=new Date().toISOString();
+ await env.DB.prepare(`INSERT INTO attendee_profiles(id,normalized_email,display_name,email_verified_at,status,created_at,updated_at) VALUES(?,?,'Guest',?,'active',?,?)`).bind(id,email,now,now,now).run();
+ await env.DB.prepare(`INSERT INTO attendee_sessions(id,attendee_id,token_hash,expires_at,created_at,last_seen_at) VALUES(?,?,?,?,?,?)`).bind(id,id,await hashToken(token),new Date(Date.now()+86400000).toISOString(),now,now).run();
+ runtime.SEEV_ENABLED='false';
+ const {POST:continuePayment}=await import('../app/api/payments/installments/route');
+ const result=await continuePayment(new Request(`${origin}/api/payments/installments`,{method:'POST',headers:{origin,'content-type':'application/json',cookie:`bct_attendee=${token}`,'idempotency-key':crypto.randomUUID()},body:JSON.stringify({orderId:order!.id,choice:'balance'})}));
+ expect(result.status).toBe(503);
+ const count=await env.DB.prepare(`SELECT COUNT(*) AS n FROM installment_charges WHERE order_id=?`).bind(order!.id).first<{n:number}>();expect(count?.n).toBe(1);
+});

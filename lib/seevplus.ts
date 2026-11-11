@@ -118,6 +118,12 @@ export async function verifySeevPayment(db: D1Database, reference: string, confi
 }
 
 export async function verifyOrderPayment(env: Cloudflare.Env, reference: string) {
+  const installment = await env.DB.prepare(`SELECT c.id FROM orders o JOIN installment_plans p ON p.order_id=o.id
+    JOIN installment_charges c ON c.order_id=o.id WHERE o.reference=? ORDER BY c.created_at DESC,c.id DESC LIMIT 1`).bind(reference).first<{id:string}>();
+  if (installment) {
+    const { verifyInstallmentPayment } = await import('./seev-installments');
+    return verifyInstallmentPayment(env.DB, installment.id, env);
+  }
   const order = await env.DB.prepare("SELECT payment_provider AS provider FROM orders WHERE reference = ?").bind(reference).first<{ provider: string }>();
   if (!order) return { result: "unknown_order" as const };
   if (order.provider === "seevplus") return verifySeevPayment(env.DB, reference, env);
@@ -167,5 +173,7 @@ export async function recoverSeevPayments(env: Cloudflare.Env, origin: string, l
   }
   await env.DB.prepare("UPDATE seev_checkout_sessions SET request_json = NULL WHERE request_json IS NOT NULL AND created_at <= ?")
     .bind(new Date(Date.now() - 86_400_000).toISOString()).run();
-  return { checked: sessions.results.length, failed };
+  const { recoverInstallmentPayments } = await import('./seev-installments');
+  const installments = await recoverInstallmentPayments(env, limit);
+  return { checked: sessions.results.length + installments.checked, failed: failed + installments.failed };
 }

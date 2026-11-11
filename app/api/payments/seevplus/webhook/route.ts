@@ -27,20 +27,25 @@ export async function POST(request: Request) {
   if (typeof tx.reference !== "string" || !/^PAY-[A-Za-z0-9-]{1,160}$/u.test(tx.reference)) return new Response("Invalid reference", { status: 400 });
   const order = await env.DB.prepare(`SELECT reference FROM orders WHERE payment_provider = 'seevplus' AND provider_reference = ? AND payment_environment = ?`)
     .bind(tx.reference, payload.env).first<{ reference: string }>();
-  if (!order) return new Response("OK");
+  const installment = !order ? await env.DB.prepare(`SELECT c.id FROM installment_charges c JOIN installment_plans p ON p.order_id=c.order_id
+    WHERE c.provider_reference=? AND p.environment=?`).bind(tx.reference,payload.env).first<{id:string}>() : null;
+  if (!order && !installment) return new Response("OK");
 
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw));
   const hash = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
   const replayKey = eventId ? `seevplus:${eventId}` : `seevplus:sha256:${hash}`;
   const recorded = await env.DB.prepare(`INSERT OR IGNORE INTO payment_events (id, event_type, reference, received_at, payload_hash) VALUES (?, ?, ?, ?, ?)`)
-    .bind(replayKey, `seevplus.${payload.event}`, order.reference, new Date().toISOString(), hash).run();
+    .bind(replayKey, `seevplus.${payload.event}`, order?.reference ?? installment!.id, new Date().toISOString(), hash).run();
   if (!recorded.meta.changes) return new Response("OK");
 
   try {
     // Re-read current status from Seev. A replay or out-of-order failure cannot
     // override a newer successful payment, and webhook major units are never
     // mistaken for the API's minor units.
-    await recoverSeevPayment(env, order.reference, new URL(request.url).origin);
+    if (installment) {
+      const { recoverInstallmentPayment } = await import('../../../../../lib/seev-installments');
+      await recoverInstallmentPayment(env, installment.id);
+    } else await recoverSeevPayment(env, order!.reference, new URL(request.url).origin);
     return new Response("OK");
   } catch {
     // The five-minute recovery task also checks this recorded order.

@@ -112,7 +112,7 @@ export async function POST(request: Request) {
       if (!order) return Response.json({ error: "Order not found." }, { status: 404 });
       if (order.provider === "rsvp") return Response.json({ error: "This is a free RSVP. Manage it under Events & inventory." }, { status: 400 });
       const result = await verifyOrderPayment(env, order.reference);
-      if (result.result === "paid") await deliverConfirmedOrder(env.DB, result.order, new URL(request.url).origin);
+      if (result.result === "paid" && "order" in result) await deliverConfirmedOrder(env.DB, result.order, new URL(request.url).origin);
       await recordAudit(env.DB, { session, action: "payments.verify", targetType: "order", targetId: order.id, outcome: "success", detail: result.result, requestId: requestMetadata(request).requestId });
       return Response.json({ result: result.result, providerStatus: "providerStatus" in result ? result.providerStatus : undefined });
     }
