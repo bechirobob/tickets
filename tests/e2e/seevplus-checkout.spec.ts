@@ -62,9 +62,9 @@ test("SeevPlus stays compact and sends the selected provider without exposing cr
   await page.getByRole("radio", { name: "Mobile Money", exact: false }).check();
   const chooser = page.getByRole("group", { name: "Pay through" });
   await expect(chooser).toBeVisible();
-  await chooser.getByRole("radio", { name: "SeevPlus", exact: true }).check();
+  await chooser.getByRole("radio", { name: "SeevCash", exact: true }).check();
   await expect(page.getByRole("radiogroup", { name: "Choose mobile money service" })).toHaveCount(0);
-  await expect(page.getByText("Choose your network and approve payment on SeevPlus.")).toBeVisible();
+  await expect(page.getByText("Choose your network and approve payment on SeevCash.")).toBeVisible();
   await page.getByRole("button", { name: /Pay with MoMo/ }).click();
   await expect(page.locator("#checkout-payment-message")).toHaveText("Tick the ticket terms, refund rules and privacy checkbox to continue.");
   await expect(page.getByRole("checkbox", { name: /I accept the ticket terms/ })).toBeFocused();
