@@ -44,11 +44,11 @@ export async function recordProviderCase(db: D1Database, session: AdminSession, 
     throw new ProviderCaseError("Enter the completed date shown in the provider record.");
   if (status !== "completed" && evidenceAt != null && evidenceAt !== "") throw new ProviderCaseError("Only completed cases can have a completed date.");
   const normalizedEvidence = evidence ? new Date(evidence).toISOString() : null;
-  const order = await db.prepare(`SELECT payment_provider AS provider, currency, total_amount_minor AS total,
+  const order = await db.prepare(`SELECT payment_provider AS provider, currency, CASE WHEN EXISTS(SELECT 1 FROM installment_plans p WHERE p.order_id=orders.id) THEN COALESCE((SELECT SUM(c.amount_minor) FROM installment_charges c WHERE c.order_id=orders.id AND c.state='confirmed'),0) ELSE total_amount_minor END AS total,
     refunded_amount_minor AS refunded, payment_verified_at AS verifiedAt, created_at AS createdAt, status FROM orders WHERE id=?`)
     .bind(orderId).first<{ provider: string; currency: string; total: number; refunded: number; verifiedAt: string | null; createdAt: string; status: string }>();
   if (!order) throw new ProviderCaseError("Order not found.", 404);
-  if (!["paystack", "seevplus"].includes(order.provider) || !order.verifiedAt || !["paid", "requires_refund", "refund_pending", "refunded", "disputed"].includes(order.status))
+  if (!["paystack", "seevplus"].includes(order.provider) || !order.verifiedAt || !["paid", "part_paid", "requires_refund", "refund_pending", "refunded", "disputed"].includes(order.status))
     throw new ProviderCaseError("Only verified paid-provider orders can have a provider case.");
   if (normalizedEvidence && normalizedEvidence < order.createdAt) throw new ProviderCaseError("The completed date is before this order.");
   // A case records external evidence only. It never changes payment totals, ticket
@@ -84,11 +84,18 @@ export async function recordProviderCase(db: D1Database, session: AdminSession, 
         WHERE id=? AND payment_provider=? AND payment_verified_at IS NOT NULL
           AND (?=(SELECT COALESCE(MAX(version),0) FROM provider_operation_records WHERE order_id=orders.id AND kind=?))
           AND (?<>'refund' OR (
-            ?<=total_amount_minor-refunded_amount_minor
+            ?<=CASE WHEN EXISTS(SELECT 1 FROM installment_plans p WHERE p.order_id=orders.id) THEN COALESCE((SELECT SUM(c.amount_minor) FROM installment_charges c WHERE c.order_id=orders.id AND c.state='confirmed'),0) ELSE total_amount_minor END-refunded_amount_minor
             AND NOT EXISTS (SELECT 1 FROM payment_refunds WHERE order_id=orders.id AND status IN ('pending','processing'))))
           ${transitionGuard} ${closureGuard}`)
         .bind(operationId,kind,status,version,reference,amount,normalizedEvidence,session.accountId ?? session.email,now,
           orderId,order.provider,expectedVersion,kind,kind,amount,...(status === "closed_unpaid" ? [expectedVersion,reference,amount] : [])),
+      db.prepare(`UPDATE orders SET status='requires_refund',failure_reason='Installment refund evidence requires payment reconciliation.',payment_updated_at=?
+        WHERE id=? AND EXISTS(SELECT 1 FROM installment_plans p WHERE p.order_id=orders.id)
+        AND EXISTS(SELECT 1 FROM provider_operation_records r WHERE r.id=? AND r.kind='refund' AND r.status IN ('pending','completed'))`)
+        .bind(now,orderId,operationId),
+      db.prepare(`UPDATE tickets SET status='voided' WHERE order_id=? AND status='issued'
+        AND EXISTS(SELECT 1 FROM installment_plans p JOIN orders o ON o.id=p.order_id WHERE o.id=tickets.order_id AND o.status='requires_refund')`)
+        .bind(orderId),
       db.prepare(`INSERT INTO operational_audit_events
         (id,actor_account_id,actor_email,actor_role,action,target_type,target_id,outcome,detail,request_id,created_at)
         SELECT ?,?,?,?,'payments.provider_case_recorded','order',order_id,'success',?,?,?

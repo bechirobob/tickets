@@ -40,13 +40,13 @@ export async function GET(request: Request) {
       LIMIT 1
     ), owned AS MATERIALIZED (
       SELECT ticket.event_slug, COUNT(*) AS ticketCount,
-        MAX(CASE WHEN orders.status='paid' AND ticket.status IN ('issued','checked_in') THEN 1 ELSE 0 END) AS activeAdmission
+        MAX(CASE WHEN orders.status IN ('paid','part_paid') AND ticket.status IN ('issued','checked_in') THEN 1 ELSE 0 END) AS activeAdmission
       FROM ticket_assignments assignment
       JOIN tickets ticket ON ticket.id = assignment.ticket_id
       JOIN orders orders ON orders.id = ticket.order_id
       WHERE assignment.attendee_id = (SELECT attendeeId FROM identity) AND assignment.status = 'active'
         AND ticket.status IN ('issued', 'checked_in', 'voided', 'refunded')
-        AND orders.status IN ('paid', 'refund_pending', 'refunded', 'requires_refund', 'disputed')
+        AND orders.status IN ('paid', 'part_paid', 'refund_pending', 'refunded', 'requires_refund', 'disputed')
       GROUP BY ticket.event_slug
     ), nights AS (
     SELECT event.slug AS eventSlug, event.title, event.starts_at AS sortStartsAt,

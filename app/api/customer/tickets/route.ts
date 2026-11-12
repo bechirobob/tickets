@@ -1,3 +1,5 @@
+import { canManageInstallmentOrder } from "../../../../lib/installment-access";
+import { readInstallmentBalance } from "../../../../lib/installment-ledger";
 import { readAttendeeIdentity } from "../../../../lib/attendee-auth";
 import { createGateToken, formatGateCode, gateQrPayload, hashGateToken } from "../../../../lib/gate-pass";
 import { mutationHasValidOrigin } from "../../../../lib/admin-session";
@@ -67,7 +69,7 @@ export async function POST(request: Request) {
     LEFT JOIN event_ticket_tiers tier ON tier.id = o.ticket_tier_id
     LEFT JOIN ticket_gate_credentials credential ON credential.ticket_id = t.id
     WHERE a.attendee_id = ? AND a.status = 'active' AND event.removed_at IS NULL
-      AND o.status IN ('paid', 'refund_pending', 'refunded', 'requires_refund', 'disputed')
+      AND o.status IN ('paid', 'part_paid', 'refund_pending', 'refunded', 'requires_refund', 'disputed')
       AND t.status IN ('issued', 'checked_in', 'voided', 'refunded')
     ORDER BY o.paid_at DESC, t.issued_at, t.id
     LIMIT 100
@@ -99,12 +101,15 @@ export async function POST(request: Request) {
     bookingFeeMinor: number; totalAmountMinor: number; currency: string; quantity: number;
     paidAt: string | null; event: { title: string; date: string; venue: string; state: string } | null; tickets: Array<Record<string, unknown>>;
     bookedFor: string | null; canViewPurchase: boolean; roomAccess: boolean;
+    installment: {collectedMinor:number;balanceMinor:number;stepMinor:number}|null;
     tierName: string | null; tierDescription: string | null; roomBadge: "VIP" | null;
   }>();
   for (const ticket of rows.results) {
     const canViewPurchase = ticket.customerEmail === identity.normalizedEmail;
-    const canEnterRoom = ticket.orderStatus === "paid" && ["issued", "checked_in"].includes(ticket.ticketStatus) && ["on_sale", "sold_out", "rescheduled"].includes(ticket.eventState ?? "") && Boolean(ticket.roomAccess);
+    const canEnterRoom = ["paid", "part_paid"].includes(ticket.orderStatus) && ["issued", "checked_in"].includes(ticket.ticketStatus) && ["on_sale", "sold_out", "rescheduled"].includes(ticket.eventState ?? "") && Boolean(ticket.roomAccess);
+    const balance = canViewPurchase && await canManageInstallmentOrder(env.DB,{orderId:ticket.orderId,identity,cookieHeader:request.headers.get("cookie")}) ? await readInstallmentBalance(env.DB,ticket.orderId) : null;
     const order = orderMap.get(ticket.orderId) ?? {
+      installment: balance && balance.buyerEmail===identity.normalizedEmail ? {collectedMinor:balance.collectedMinor,balanceMinor:balance.balanceMinor,stepMinor:balance.stepMinor} : null,
       orderId: ticket.orderId,
       reference: canViewPurchase ? ticket.reference : "Transferred ticket",
       eventSlug: ticket.eventSlug,
@@ -133,7 +138,7 @@ export async function POST(request: Request) {
     order.tickets.push({
       id: ticket.ticketId,
       ticketType: ticket.ticketType,
-      status: token ? "issued" : ticket.orderStatus !== "paid" || ["cancelled", "postponed"].includes(ticket.eventState ?? "") ? "unavailable" : ticket.ticketStatus,
+      status: token ? "issued" : ticket.orderStatus === "part_paid" ? "balance_due" : ticket.orderStatus !== "paid" || ["cancelled", "postponed"].includes(ticket.eventState ?? "") ? "unavailable" : ticket.ticketStatus,
       checkedInAt: ticket.checkedInAt,
       gateCode: token ? formatGateCode(token) : null,
       qrPayload: token ? gateQrPayload(token) : null,

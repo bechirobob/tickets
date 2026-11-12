@@ -3,7 +3,7 @@ export const recoverableTickets = `
   FROM tickets t JOIN orders o ON o.id = t.order_id
   LEFT JOIN ticket_assignments a ON a.ticket_id = t.id
   LEFT JOIN attendee_profiles holder ON holder.id = a.attendee_id
-  WHERE o.status = 'paid' AND t.status IN ('issued','checked_in','voided')
+  WHERE o.status IN ('paid','part_paid') AND t.status IN ('issued','checked_in','voided')
     AND NOT EXISTS (SELECT 1 FROM curated_event_records e WHERE e.slug = t.event_slug AND e.removed_at IS NOT NULL)
     AND ((a.status = 'active' AND holder.normalized_email = ? AND holder.status = 'active')
       OR (a.ticket_id IS NULL AND LOWER(o.customer_email) = ?))

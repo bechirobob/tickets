@@ -55,7 +55,7 @@ export async function POST(request: Request) {
     env.DB.prepare(`INSERT OR IGNORE INTO attendee_notifications (id,attendee_id,event_slug,kind,title,body,url,source_id,created_at)
       SELECT lower(hex(randomblob(16))),?,o.event_slug,'purchase_confirmation','Your ticket is confirmed',
         'Your QR ticket and receipt are ready in My Nights.','/my-nights/'||o.event_slug||'?view=passes','payment-confirmation/'||o.id,?
-      FROM orders o WHERE o.payment_provider<>'rsvp' AND o.status='paid' AND ${owns}
+      FROM orders o WHERE o.payment_provider<>'rsvp' AND o.status IN ('paid','part_paid') AND ${owns}
         AND EXISTS (SELECT 1 FROM tickets t JOIN ticket_assignments a ON a.ticket_id=t.id WHERE t.order_id=o.id AND a.attendee_id=? AND a.status='active')`)
       .bind(attendeeId,now,grant.id,sessionId,attendeeId),
     env.DB.prepare(`INSERT OR IGNORE INTO attendee_notifications (id,attendee_id,event_slug,kind,title,body,url,source_id,created_at)

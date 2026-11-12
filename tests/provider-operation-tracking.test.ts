@@ -141,3 +141,17 @@ describe("provider-aware manual operation evidence", () => {
     expect(result.status).toBe(200); expect(result.headers.get("cache-control")).toBe("no-store");
   });
 });
+
+it('finance sees collected money, balance and child references without treating booking total as received',async()=>{
+ const {cookie}=await staff(),id=await order();
+ await env.DB.prepare(`UPDATE orders SET status='payment_pending',payment_environment='sandbox' WHERE id=?`).bind(id).run();
+ await env.DB.prepare(`INSERT INTO installment_plans VALUES(?,'guest@example.com','seevplus','sandbox','{}','GHS',10000,5000,?)`).bind(id,now()).run();
+ await env.DB.prepare(`INSERT INTO installment_charges(id,order_id,idempotency_hash,request_hash,amount_minor,state,created_at) VALUES(?,?,?,'hash',4000,'pending',?)`).bind(id,id,id,now()).run();
+ await env.DB.prepare(`UPDATE installment_charges SET provider_reference=?,provider_transaction_id=?,confirmed_at=?,state='confirmed' WHERE id=?`).bind('PAY-'+id,'TX-'+id,now(),id).run();
+ await env.DB.prepare(`UPDATE orders SET status='part_paid' WHERE id=?`).bind(id).run();
+ const response=await GET(new Request(`${origin}/api/admin/orders?q=${encodeURIComponent('BCT-'+id)}`,{headers:{cookie}}));
+ expect(response.status).toBe(200);
+ const payload=await response.json() as {orders:Array<{totalAmountMinor:number;installment:unknown}>};
+ expect(payload.orders[0].totalAmountMinor).toBe(10000);
+ expect(payload.orders[0].installment).toEqual({collectedMinor:4000,balanceMinor:6000,charges:[{id,amountMinor:4000,state:'confirmed',providerReference:'PAY-'+id}]});
+});

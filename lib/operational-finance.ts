@@ -73,11 +73,11 @@ export async function createApprovalRequest(db: D1Database, session: AdminSessio
 
 export async function requestMassRefund(db: D1Database, session: AdminSession, eventSlug: string, reason: string) {
   if (!/^[a-z0-9-]{1,80}$/u.test(eventSlug) || reason.trim().length < 8) throw new Error("Choose an event and add a clear refund reason.");
-  const otherProvider = await db.prepare("SELECT 1 AS found FROM orders WHERE event_slug = ? AND payment_provider NOT IN ('paystack', 'rsvp') AND total_amount_minor > refunded_amount_minor AND status IN ('paid', 'requires_refund') LIMIT 1").bind(eventSlug).first();
+  const otherProvider = await db.prepare("SELECT 1 AS found FROM orders WHERE event_slug = ? AND payment_provider NOT IN ('paystack', 'rsvp') AND total_amount_minor > refunded_amount_minor AND status IN ('paid', 'part_paid', 'requires_refund') LIMIT 1").bind(eventSlug).first();
   if (otherProvider) throw new Error("This event includes SeevPlus payments. Arrange those refunds with SeevPlus before starting a Paystack refund batch.");
   const batchId = crypto.randomUUID();
   const now = new Date().toISOString();
-  const count = await db.prepare("SELECT COUNT(*) AS count FROM orders WHERE event_slug = ? AND status IN ('paid', 'requires_refund') AND refunded_amount_minor < total_amount_minor")
+  const count = await db.prepare("SELECT COUNT(*) AS count FROM orders WHERE event_slug = ? AND status IN ('paid', 'part_paid', 'requires_refund') AND refunded_amount_minor < total_amount_minor")
     .bind(eventSlug).first<{ count: number }>();
   if (!(count?.count ?? 0)) throw new Error("This event has no refundable paid orders.");
   const approval = await createApprovalRequest(db, session, { kind: "mass_refund", eventSlug, targetId: batchId, payload: { batchId, reason: reason.trim().slice(0, 500) } });
@@ -183,14 +183,14 @@ export async function processRefundBatches(env: Cloudflare.Env, limit = 5) {
   const batch = await env.DB.prepare("SELECT id, event_slug AS eventSlug, reason, total_orders AS totalOrders, processed_orders AS processedOrders, failed_orders AS failedOrders FROM refund_batches WHERE status IN ('queued', 'processing') ORDER BY created_at LIMIT 1")
     .first<{ id: string; eventSlug: string; reason: string; totalOrders: number; processedOrders: number; failedOrders: number }>();
   if (!batch) return { processed: 0 };
-  const otherProvider = await env.DB.prepare("SELECT 1 AS found FROM orders WHERE event_slug = ? AND payment_provider NOT IN ('paystack', 'rsvp') AND total_amount_minor > refunded_amount_minor AND status IN ('paid', 'requires_refund') LIMIT 1").bind(batch.eventSlug).first();
+  const otherProvider = await env.DB.prepare("SELECT 1 AS found FROM orders WHERE event_slug = ? AND payment_provider NOT IN ('paystack', 'rsvp') AND total_amount_minor > refunded_amount_minor AND status IN ('paid', 'part_paid', 'requires_refund') LIMIT 1").bind(batch.eventSlug).first();
   if (otherProvider) {
     await env.DB.prepare("UPDATE refund_batches SET status = 'failed', updated_at = ? WHERE id = ?").bind(new Date().toISOString(), batch.id).run();
     throw new Error("Refund batch includes SeevPlus payments and needs finance review.");
   }
   await env.DB.prepare("UPDATE refund_batches SET status = 'processing', updated_at = ? WHERE id = ?").bind(new Date().toISOString(), batch.id).run();
   const orders = await env.DB.prepare(`
-    SELECT id FROM orders WHERE event_slug = ? AND status IN ('paid', 'requires_refund')
+    SELECT id FROM orders WHERE event_slug = ? AND status IN ('paid', 'part_paid', 'requires_refund')
       AND refunded_amount_minor < total_amount_minor
       AND NOT EXISTS (SELECT 1 FROM payment_refunds WHERE batch_id = ? AND payment_refunds.order_id = orders.id)
     ORDER BY paid_at LIMIT ?
@@ -208,7 +208,7 @@ export async function processRefundBatches(env: Cloudflare.Env, limit = 5) {
     }
   }
   const counts=await env.DB.prepare(`SELECT SUM(status='processed') AS processed,SUM(status='failed') AS failed,SUM(status IN ('pending','processing')) AS pending FROM payment_refunds WHERE batch_id=?`).bind(batch.id).first<{processed:number;failed:number;pending:number}>();
-  const remaining=await env.DB.prepare(`SELECT COUNT(*) AS count FROM orders WHERE event_slug=? AND status IN ('paid','requires_refund') AND refunded_amount_minor<total_amount_minor
+  const remaining=await env.DB.prepare(`SELECT COUNT(*) AS count FROM orders WHERE event_slug=? AND status IN ('paid','part_paid','requires_refund') AND refunded_amount_minor<total_amount_minor
     AND NOT EXISTS (SELECT 1 FROM payment_refunds WHERE order_id=orders.id AND batch_id=?)`).bind(batch.eventSlug,batch.id).first<{count:number}>();
   const processed=counts?.processed??0,failed=counts?.failed??0,completed=!(remaining?.count??0)&&!(counts?.pending??0),now=new Date().toISOString();
   await env.DB.prepare("UPDATE refund_batches SET processed_orders=?,failed_orders=?,status=?,updated_at=?,completed_at=? WHERE id=?")
