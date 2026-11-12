@@ -1,3 +1,6 @@
+import { installmentSettings } from "../../../../lib/installment-settings";
+import { nextInstallmentMinor } from "../../../../lib/installment-policy";
+import { createInstallmentCheckout } from "../../../../lib/seev-installments";
 import { preparePlatformAnnouncementChoice } from "../../../../lib/platform-announcements";
 import { limitRequestBody } from '../../../../lib/request-body';
 import { couponQuote, couponUsage } from '../../../../lib/organizer-promotions';
@@ -23,7 +26,7 @@ export async function POST(request: Request) {
   request = bounded;
 
   if (!mutationHasValidOrigin(request)) return Response.json({ error: "This payment request was not accepted." }, { status: 403 });
-  type PaymentBody = { couponCode?: string; paymentProvider?: string; eventSlug?: string; ticketTierId?: string; quantity?: number; email?: string; phone?: string; paymentMethod?: string; network?: string; fullName?: string; acceptedPolicies?: boolean; announcementsOptIn?: boolean; platformAnnouncementsOptIn?: boolean; offer?: string | null; promoterCode?: string | null; expectedTotalMinor?: number };
+  type PaymentBody = { paymentChoice?: "installment" | "balance"; couponCode?: string; paymentProvider?: string; eventSlug?: string; ticketTierId?: string; quantity?: number; email?: string; phone?: string; paymentMethod?: string; network?: string; fullName?: string; acceptedPolicies?: boolean; announcementsOptIn?: boolean; platformAnnouncementsOptIn?: boolean; offer?: string | null; promoterCode?: string | null; expectedTotalMinor?: number };
   let body: PaymentBody;
   try {
     const value: unknown = await request.json();
@@ -57,7 +60,7 @@ export async function POST(request: Request) {
   const attemptKey = request.headers.get("idempotency-key");
   if (attemptKey && !/^[a-f0-9-]{36,80}$/iu.test(attemptKey)) return Response.json({ error: "Invalid payment attempt." }, { status: 400 });
   const attemptHash = attemptKey ? await hashToken(attemptKey) : null;
-  const requestHash = await hashToken(JSON.stringify([eventSlug, body.ticketTierId ?? "general", body.quantity, body.email?.trim().toLowerCase(), body.phone?.replace(/[^\d+]/gu, ""), body.paymentMethod ?? "mobile_money", body.network, body.fullName?.trim(), body.offer, body.promoterCode, body.acceptedPolicies, body.expectedTotalMinor, body.paymentProvider ?? "paystack", body.announcementsOptIn === true, body.couponCode?.trim().toUpperCase() ?? "", ...(body.platformAnnouncementsOptIn === true ? ["becore-platform-announcements:v1:true"] : [])]));
+  const requestHash = await hashToken(JSON.stringify([eventSlug, body.ticketTierId ?? "general", body.quantity, body.email?.trim().toLowerCase(), body.phone?.replace(/[^\d+]/gu, ""), body.paymentMethod ?? "mobile_money", body.network, body.fullName?.trim(), body.offer, body.promoterCode, body.acceptedPolicies, body.expectedTotalMinor, body.paymentProvider ?? "paystack", body.announcementsOptIn === true, body.couponCode?.trim().toUpperCase() ?? "", ...(body.platformAnnouncementsOptIn === true ? ["becore-platform-announcements:v1:true"] : []), ...(body.paymentChoice ? [`payment-choice:v1:${body.paymentChoice}`] : [])]));
   if (attemptHash) {
     const replay = await replayPaymentAttempt(env.DB, attemptHash, requestHash);
     if (replay) return replay;
@@ -75,6 +78,10 @@ export async function POST(request: Request) {
   if (!event || !selection) return Response.json({ error: "That ticket tier is unavailable. Refresh the page and choose an available ticket." }, { status: 400 });
   const registration = await registrationSettings(env.DB, eventSlug);
   if (!registration || registration.mode !== "paid" || !registrationsOpen(registration)) return Response.json({ error: "This event uses registration. Return to the event page to continue." }, { status: 409 });
+  const installment = await installmentSettings(env.DB,eventSlug);
+  if (body.paymentChoice !== undefined && !["installment","balance"].includes(body.paymentChoice)) return Response.json({error:"Choose a payment option."},{status:400});
+  if (body.paymentChoice === "installment" && !installment) return Response.json({error:"Part payment is not available for this event."},{status:400});
+  if (installment && (body.paymentProvider !== "seevplus" || (body.paymentMethod ?? "mobile_money") !== "mobile_money")) return Response.json({error:"Use SeevCash MoMo for this event."},{status:400});
   const paymentProvider = body.paymentProvider ?? "paystack";
   if (!["paystack", "seevplus"].includes(paymentProvider)) return Response.json({ error: "Choose an available payment provider." }, { status: 400 });
   if (paymentProvider === "seevplus" && !seevAvailable(env, event.isTestEvent)) return Response.json({ error: "SeevPlus is not available for this event yet." }, { status: 503 });
@@ -121,6 +128,10 @@ export async function POST(request: Request) {
   const origin = new URL(request.url).origin;
   const claimToken = createSecureToken();
   const claimTokenHash = await hashToken(claimToken);
+  const installmentChargeId=installment ? crypto.randomUUID() : null;
+  const installmentAmount=installment ? nextInstallmentMinor(totalAmountMinor,0,installment.stepMinor,body.paymentChoice ?? 'balance') : null;
+  const installmentReturnPath=`/payment/return?reference=${encodeURIComponent(reference)}&claim=${encodeURIComponent(claimToken)}`;
+
   const identity = await readAttendeeIdentity(env.DB, request.headers.get('cookie'));
   const checkoutAttendeeId = identity?.normalizedEmail === email ? identity.attendeeId : null;
 
@@ -177,6 +188,17 @@ export async function POST(request: Request) {
       paymentMethod === "card" ? "card" : paymentProvider === "seevplus" ? paymentMethod : `mobile_money:${body.network}`, paymentProvider, paymentProvider === "seevplus" ? seevEnvironment(env) : paystackEnvironment(env.PAYSTACK_SECRET_KEY), expiresAt, createdAt, promoter?.code ?? null, offer?.id ?? null, createdAt, couponId, discountMinor, promoter?.commissionBps ?? 0, id,
     ),
     env.DB.prepare("UPDATE orders SET announcements_opt_in=?,checkout_attendee_id=? WHERE id=?").bind(body.announcementsOptIn === true ? 1 : 0,checkoutAttendeeId,id),
+    ...(installment ? [
+      env.DB.prepare(`INSERT INTO installment_plans(order_id,buyer_email,provider,environment,settlement_snapshot_json,currency,total_minor,step_minor,created_at)
+        SELECT id,customer_email,'seevplus',payment_environment,?,'GHS',total_amount_minor,?,? FROM orders WHERE id=?`)
+        .bind(JSON.stringify({provider:'seevplus',environment:seevEnvironment(env),faceAmountMinor,bookingFeeMinor,totalAmountMinor}),installment.stepMinor,createdAt,id),
+      env.DB.prepare(`INSERT INTO installment_charges(id,order_id,idempotency_hash,request_hash,amount_minor,state,created_at)
+        SELECT ?,order_id,?,?,?,'pending',? FROM installment_plans WHERE order_id=?`)
+        .bind(installmentChargeId,await hashToken(`initial:${id}`),requestHash,installmentAmount,createdAt,id),
+      env.DB.prepare(`INSERT INTO installment_checkout_sessions(charge_id,request_json,created_at)
+        SELECT id,?,? FROM installment_charges WHERE id=?`)
+        .bind(JSON.stringify({type:'checkout',amount:installmentAmount,currency:'GHS',channels:['mobile_money'],recipient:{name:body.fullName!.trim().slice(0,120),email,phone},redirect_url:`${origin}${installmentReturnPath}`,meta:{orderId:id,installmentChargeId,reference}}),createdAt,installmentChargeId),
+    ] : []),
     ...preparePlatformAnnouncementChoice(env.DB, { email, source: "checkout", sourceId: id, optedIn: body.platformAnnouncementsOptIn === true, verifiedEmail: identity?.emailVerified === true && identity.normalizedEmail === email }),
     env.DB.prepare(`
       INSERT INTO order_access_grants (order_id, token_hash, expires_at, created_at)
@@ -216,6 +238,15 @@ export async function POST(request: Request) {
     bookingFeeMinor,
     reservationExpiresAt: expiresAt,
   };
+
+  if (installment && installmentChargeId) {
+    try {
+      const authorizationUrl=await createInstallmentCheckout(env.DB,installmentChargeId,env);
+      return finish({authorizationUrl,reference,reservationExpiresAt:expiresAt,amountDueMinor:installmentAmount,totalAmountMinor});
+    } catch {
+      return finish({nextUrl:`${installmentReturnPath}&pending=1`,reference,pending:true,reservationExpiresAt:expiresAt},202);
+    }
+  }
 
   if (paymentProvider === "seevplus") {
     const nextUrl = `/payment/return?reference=${encodeURIComponent(reference)}&claim=${encodeURIComponent(claimToken)}&pending=1`;

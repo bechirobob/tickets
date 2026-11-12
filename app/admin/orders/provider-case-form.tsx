@@ -5,7 +5,7 @@ import { operationsFetch } from "../../../lib/operations-client";
 import type { ProviderCase } from "../../../lib/provider-operation-tracking";
 import "./provider-tracking.css";
 
-type CaseOrder = { id: string; reference: string; paymentProvider: string; currency: string; totalAmountMinor: number; refundedAmountMinor: number; providerCases: ProviderCase[] };
+type CaseOrder = { installment?:{collectedMinor:number}|null; id: string; reference: string; paymentProvider: string; currency: string; totalAmountMinor: number; refundedAmountMinor: number; providerCases: ProviderCase[] };
 
 function localDateTime(value: string | null | undefined) {
   if (!value || !Number.isFinite(Date.parse(value))) return "";
@@ -59,7 +59,7 @@ export default function ProviderCaseForm({ order, onClose, onSaved }: { order: C
           setAmount(saved?.amountMinor != null ? (saved.amountMinor / 100).toFixed(2) : ""); setCompletedAt(localDateTime(saved?.evidenceAt)); setConfirmed(false); setMessage(""); }}><option value="refund">External refund</option><option value="settlement">Settlement evidence</option></select></label>
         <label>Provider case status<select value={status} onChange={event => { setStatus(event.target.value as typeof status); setConfirmed(false); }}><option value="pending" disabled={kind === "refund" && current?.status === "completed"}>Pending at provider</option><option value="completed">Completed at provider</option>{kind === "refund" && current && current.status !== "completed" ? <option value="closed_unpaid">Closed without refund</option> : null}</select></label>
         <label>Provider case or receipt reference<input required disabled={status === "closed_unpaid"} maxLength={120} value={reference} onChange={event => setReference(event.target.value)} autoComplete="off" /></label>
-        {kind === "refund" ? <label>External refund amount ({order.currency})<input required disabled={status === "closed_unpaid"} inputMode="decimal" value={amount} onChange={event => setAmount(event.target.value)} placeholder={((order.totalAmountMinor - order.refundedAmountMinor) / 100).toFixed(2)} /></label> : <p>Use a reference that links this order to the provider settlement. Checkout totals are not proof of a payout amount or currency.</p>}
+        {kind === "refund" ? <label>External refund amount ({order.currency})<input required disabled={status === "closed_unpaid"} inputMode="decimal" value={amount} onChange={event => setAmount(event.target.value)} placeholder={(((order.installment?.collectedMinor ?? order.totalAmountMinor) - order.refundedAmountMinor) / 100).toFixed(2)} /></label> : <p>Use a reference that links this order to the provider settlement. Checkout totals are not proof of a payout amount or currency.</p>}
         {status === "completed" ? <label>Completed at (your local time)<input required type="datetime-local" value={completedAt} onChange={event => setCompletedAt(event.target.value)} /></label> : null}
         <label className="provider-tracking-confirm"><input required type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} /> {status === "closed_unpaid" ? `I checked ${provider} and confirmed no refund was made for this case` : `I checked this case and its status in ${provider}`}</label>
         <p>Use only a case reference. Do not enter bank details, wallet addresses, credentials or customer messages.</p>

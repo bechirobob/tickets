@@ -1,3 +1,4 @@
+import { recoverInstallmentPayment } from "../../../../lib/seev-installments";
 import { limitRequestBody } from '../../../../lib/request-body';
 import { recoverSeevPayment, validSeevCheckoutUrl, verifyOrderPayment } from "../../../../lib/seevplus";
 import {
@@ -40,7 +41,7 @@ async function claimedPayment(db: D1Database, request: Request, reference?: stri
     SELECT o.event_slug AS eventSlug FROM attendee_sessions s
     JOIN attendee_profiles p ON p.id=s.attendee_id AND p.status='active'
     JOIN order_access_grants g ON g.claimed_session_id=s.id
-    JOIN orders o ON o.id=g.order_id AND o.status='paid'
+    JOIN orders o ON o.id=g.order_id AND o.status IN ('paid','part_paid')
     WHERE s.token_hash=? AND s.revoked_at IS NULL AND s.expires_at>?
       AND (? IS NULL OR o.reference=?)
       AND EXISTS (SELECT 1 FROM tickets t JOIN ticket_assignments a ON a.ticket_id=t.id
@@ -92,15 +93,18 @@ export async function POST(request: Request) {
     const { env } = await import("cloudflare:workers");
     if (record.paymentProvider === "seevplus" || env.PAYSTACK_SECRET_KEY) {
       try {
-        const verified = record.paymentProvider === "seevplus"
+        const installment = await db.prepare(`SELECT c.id FROM installment_charges c WHERE c.order_id=? ORDER BY CASE WHEN c.state IN ('pending','review') THEN 0 ELSE 1 END,c.created_at DESC,c.id DESC LIMIT 1`).bind(record.orderId).first<{id:string}>();
+        const verified = installment ? await recoverInstallmentPayment(env,installment.id) : record.paymentProvider === "seevplus"
           ? await recoverSeevPayment(env, reference, new URL(request.url).origin)
           : await verifyOrderPayment(env, reference);
         if (verified.result === "checkout") return Response.json({ pending: true, authorizationUrl: verified.authorizationUrl }, { status: 202, headers: { "cache-control": "no-store" } });
         if (verified.result === "paid") {
-          if (record.paymentProvider !== "seevplus") await deliverConfirmedOrder(db, verified.order, new URL(request.url).origin);
+          if (record.paymentProvider !== "seevplus" && "order" in verified) await deliverConfirmedOrder(db, verified.order, new URL(request.url).origin);
         }
         if (record.paymentProvider === "seevplus" && body.resumeCheckout === true && verified.result === "pending") {
-          const session = await db.prepare("SELECT checkout_url AS url FROM seev_checkout_sessions WHERE order_id = ?").bind(record.orderId).first<{ url: string | null }>();
+          const session = installment
+            ? await db.prepare(`SELECT s.checkout_url AS url FROM installment_checkout_sessions s JOIN installment_charges c ON c.id=s.charge_id WHERE c.id=? AND c.order_id=? AND c.state='pending'`).bind(installment.id,record.orderId).first<{url:string|null}>()
+            : await db.prepare("SELECT checkout_url AS url FROM seev_checkout_sessions WHERE order_id = ?").bind(record.orderId).first<{ url: string | null }>();
           if (validSeevCheckoutUrl(session?.url)) return Response.json({ pending: true, authorizationUrl: session.url }, { status: 202, headers: { "cache-control": "no-store" } });
         }
         record = await findClaimRecord();
@@ -112,8 +116,8 @@ export async function POST(request: Request) {
       return Response.json({ pending: true }, { status: 202, headers: { "cache-control": "no-store" } });
     }
   }
-  if (record.orderStatus !== "paid") {
-    return Response.json({ error: "This order does not have an active paid ticket." }, { status: 409 });
+  if (!["paid", "part_paid"].includes(record.orderStatus)) {
+    return Response.json({ error: "This order does not have an active ticket." }, { status: 409 });
   }
 
   const issued = await db.prepare(`

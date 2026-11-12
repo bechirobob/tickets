@@ -4,7 +4,7 @@ import { dateInput, integerInput, OrganizerError, requireOrganizerEvent, textInp
 
 // A redeemed coupon stays consumed after refunds. Pending attempts hold a slot for 15 minutes.
 export const couponUsage = `(SELECT COUNT(*) FROM orders used WHERE used.coupon_id=c.id AND
-  (used.status IN ('paid','refund_pending','refunded','disputed') OR (used.status='payment_pending' AND used.reservation_expires_at>?)))`;
+  (used.status IN ('paid','part_paid','refund_pending','refunded','disputed') OR (used.status='payment_pending' AND used.reservation_expires_at>?)))`;
 export async function couponQuote(db:D1Database,slug:string,tierId:string,code:string,faceMinor:number,feeBps:number) {
   if (!code) return { couponId:null as string|null,discountMinor:0,faceAmountMinor:faceMinor,bookingFeeMinor:Math.round(faceMinor*feeBps/10000),totalAmountMinor:faceMinor+Math.round(faceMinor*feeBps/10000) };
   const now=new Date().toISOString();

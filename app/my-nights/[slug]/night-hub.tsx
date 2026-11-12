@@ -1,4 +1,5 @@
 "use client";
+import InstallmentBalance from "./installment-balance";
 /* eslint-disable @next/next/no-img-element -- event artwork is already governed by the platform image source */
 
 import SegmentedControl from "../../segmented-control";
@@ -97,6 +98,7 @@ type GateTicket = {
   qrPayload: string | null;
 };
 type TicketOrder = {
+  installment?: {collectedMinor:number;balanceMinor:number;stepMinor:number}|null;
   roomAccess?: boolean;
   orderId: string;
   reference: string;
@@ -477,7 +479,7 @@ export default function NightHub({ event }: { event: EventSummary }) {
                         <dd>{money(order.bookingFeeMinor, order.currency)}</dd>
                       </div>
                       <div>
-                        <dt>Total paid</dt>
+                        <dt>{order.installment ? "Booking total" : "Total paid"}</dt>
                         <dd>{money(order.totalAmountMinor, order.currency)}</dd>
                       </div>
                       <div>
@@ -493,6 +495,7 @@ export default function NightHub({ event }: { event: EventSummary }) {
                         </dd>
                       </div>
                     </dl>
+                    {order.installment ? <InstallmentBalance canPay={order.tickets.some(ticket=>ticket.status === "balance_due")} orderId={order.orderId} currency={order.currency} {...order.installment}/> : null}
                   </article>
                 ))
             ) : (

@@ -1,3 +1,4 @@
+import { installmentSettings } from "../../../lib/installment-settings";
 import { paystackAvailable } from "../../../lib/paystack-environment";
 import { registrationSettings, registrationsOpen } from "../../../lib/registrations";
 import { seevAvailable, seevCryptoAvailable } from "../../../lib/seevplus";
@@ -15,5 +16,6 @@ export default async function CheckoutPage({ params }: { params: Promise<{ slug:
   if (!registration || registration.mode !== "paid" || !registrationsOpen(registration)) redirect(`/event/${slug}`);
   if (!event.ticketTiers.some((tier) => tier.status === "available")) redirect(`/event/${slug}`);
   const { env } = await import("cloudflare:workers");
-  return <CheckoutForm paystackEnabled={paystackAvailable(env,event.isTestEvent)} seevEnabled={seevAvailable(env, event.isTestEvent)} seevCryptoEnabled={seevCryptoAvailable(env, event.isTestEvent)} slug={slug} event={event} feeBasisPoints={await resolveBookingFee(slug)} />;
+  const installment=await installmentSettings(env.DB,slug);
+  return <CheckoutForm installmentStepMinor={installment?.stepMinor} paystackEnabled={!installment && paystackAvailable(env,event.isTestEvent)} seevEnabled={seevAvailable(env, event.isTestEvent)} seevCryptoEnabled={!installment && seevCryptoAvailable(env, event.isTestEvent)} slug={slug} event={event} feeBasisPoints={await resolveBookingFee(slug)} />;
 }
