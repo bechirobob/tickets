@@ -1035,6 +1035,9 @@ HOST_WRITER_GUARDS = {
 }
 HOST_WRITER_CONTROL_SCHEMA = "612caa86b3f0bf636dab09beb9c9bdd8b3fa042cc7ed5917dce0fef9c849f591"
 REVIEWED_MIGRATIONS = {
+    'drizzle/0072_installment_ledger.sql': {'blob': 'd71c4dd8be6d91118fd2d7cdb50d49d6bff603e8', 'sha256': '165497e7d4f697831fded76931844db59881b3d7af1ef7a89b93888eb0610fbb', 'schemaSha256': '10108367eb200fb039923c674ecea2c0dfed2749ddcfd8cce28fd4a30bcb7da1', 'tables': ['installment_charges', 'installment_checkout_sessions', 'installment_plans']},
+    'drizzle/0073_event_installment_settings.sql': {'blob': '446bbe08564d413c848e86c746f60bfcc4fcebd6', 'sha256': '696090871f23aa6ce05cb4dc3878e9da06f0517c9cb0fad22b4699c8420238b9', 'schemaSha256': 'a18608ba532fcc99c04d49e186f3591adbaab1689d907bebabfe08e79c734039', 'tables': ['event_installment_settings']},
+
     'drizzle/0071_yorkeway_owner_push.sql': {'blob': 'bcf9b06657a8c546e59cc87de51c63204cdca920', 'sha256': '532c87fb7dfc9112f00be309aafa9238c3991e7ab002c7d648b309b6d6175803', 'schemaSha256': '82a5a374798a76a283d4b47a7579f937df57c969f753cc590d2f6cc2aaf71ab5', 'tables': ['yorkeway_owner_push_deliveries']},
     'drizzle/0070_yorkeway_early_access.sql': {'blob': '812f1a2ad2f8e58f725d32757c6a0aba524972f5', 'sha256': 'd2342cf62ce76df40c3750c9ecc10041b93f6c9b24d8f9861708fc306c954e04', 'schemaSha256': '1d8bb11bbb8e0eb2eb0b9807632b12db6ac82a92a90a4f4c30bf2015e4c786a0', 'tables': ['yorkeway_early_access']},
     'drizzle/0069_event_host_pass_invitations.sql': {'blob': '49994f90d3c9bf3bafaf7ba0f510e95323803885', 'sha256': '483bd1fe3d8966272469012c73cab6dbf06acfb335ac34cb0feee6dbeda71bda', 'schemaSha256': 'a2a2adbe30c602029fe2135c486046b706dacc57815f1f837f3bca860d26be3e', 'tables': ['event_host_pass_invitations']},
@@ -4166,8 +4169,51 @@ def reviewed_rsc_patch_application_blobs(expected, source):
     return {name: blob for name, (_, blob) in candidate.items()}
 
 
+# Dormant installment release: exact application and additive schema only.
+INSTALLMENT_LIVE = '47c7fe43f44f7cd7eb8a767703aaae061398fe6c'
+INSTALLMENT_BASE = '47c7fe43f44f7cd7eb8a767703aaae061398fe6c'
+INSTALLMENT_BASE_TREE = '0a696129014085fc9af9885f5b924a6ead2994b7'
+INSTALLMENT_SNAPSHOT = 'c37197044d688f339d0a77468e69cc2dc16f7424'
+INSTALLMENT_SNAPSHOT_TREE = '5879c0a3fc44cc733c2e04e80fcb20796644851d'
+INSTALLMENT_CANDIDATE_BRANCH = 'release/tickets-installments-20261112'
+INSTALLMENT_CONTROLS = RSC_PATCH_CONTROLS
+INSTALLMENT_PATHS = frozenset(['app/admin/orders/order-operations.tsx', 'app/admin/orders/provider-case-form.tsx', 'app/api/admin/orders/route.ts', 'app/api/customer/my-nights/route.ts', 'app/api/customer/recovery/claim/route.ts', 'app/api/customer/session/route.ts', 'app/api/customer/tickets/route.ts', 'app/api/payments/initialize/route.ts', 'app/api/payments/installments/route.ts', 'app/api/payments/seevplus/webhook/route.ts', 'app/checkout/[slug]/checkout-form.tsx', 'app/checkout/[slug]/page.tsx', 'app/my-nights/[slug]/installment-balance.tsx', 'app/my-nights/[slug]/night-hub.tsx', 'db/schema.ts', 'docs/installments/implementation-status.md', 'drizzle/0072_installment_ledger.sql', 'drizzle/0073_event_installment_settings.sql', 'lib/attendee-auth.ts', 'lib/email-delivery.ts', 'lib/installment-access.ts', 'lib/installment-entitlements.ts', 'lib/installment-ledger.ts', 'lib/installment-policy.ts', 'lib/installment-receipts.ts', 'lib/installment-settings.ts', 'lib/operational-finance.ts', 'lib/organizer-promotions.ts', 'lib/payment-operations.ts', 'lib/provider-operation-tracking.ts', 'lib/seev-installments.ts', 'lib/seevplus.ts', 'lib/ticket-recovery.ts', 'lib/transactional-email.ts', 'tests/e2e/seevplus-checkout.spec.ts', 'tests/installment-continuation.test.ts', 'tests/installment-entitlements.test.ts', 'tests/installment-ledger-worker.test.ts', 'tests/installment-ledger.test.mjs', 'tests/installment-policy.test.ts', 'tests/installment-receipts.test.ts', 'tests/provider-operation-tracking.test.ts', 'tests/seev-installments.test.ts', 'tests/seevplus.test.ts'])
+INSTALLMENT_MIGRATIONS = frozenset(['drizzle/0072_installment_ledger.sql', 'drizzle/0073_event_installment_settings.sql'])
+
+
+def reviewed_installment_application_blobs(expected, source):
+    require(expected == INSTALLMENT_LIVE, 'Installment live baseline differs.')
+    for revision, tree in ((INSTALLMENT_BASE, INSTALLMENT_BASE_TREE), (INSTALLMENT_SNAPSHOT, INSTALLMENT_SNAPSHOT_TREE)):
+        require(git('rev-parse', revision + '^{tree}') == tree, 'Installment reviewed tree differs.')
+    verify_trusted_operator(source)
+    trusted = os.environ['BECORE_TRUSTED_BASE']
+    require(trusted not in (expected, INSTALLMENT_SNAPSHOT, source), 'Installments require independently merged controls.')
+    for before, after in ((INSTALLMENT_BASE, trusted), (INSTALLMENT_BASE, source), (INSTALLMENT_SNAPSHOT, source)):
+        subprocess.run(['git', '--no-replace-objects', 'merge-base', '--is-ancestor', before, after],
+                       check=True, env=git_environment(), timeout=60)
+    require(set(git('diff', '--name-only', INSTALLMENT_BASE, trusted).splitlines()) == INSTALLMENT_CONTROLS,
+            'Installment controls changed outside reviewed scope.')
+    base, snapshot = rsc_patch_tree_entries(INSTALLMENT_BASE), rsc_patch_tree_entries(INSTALLMENT_SNAPSHOT)
+    control, candidate = rsc_patch_tree_entries(trusted), rsc_patch_tree_entries(source)
+    without_controls = lambda entries: {name: entry for name, entry in entries.items() if name not in INSTALLMENT_CONTROLS}
+    require(without_controls(control) == without_controls(base), 'Installment trusted inventory differs.')
+    require(without_controls(candidate) == without_controls(snapshot), 'Installment complete source inventory differs.')
+    for name in INSTALLMENT_CONTROLS:
+        require(control.get(name) == candidate.get(name) and control.get(name, (None,))[0] == '100644',
+                'Installment control bytes or mode differ: ' + name)
+    require(set(git('diff', '--name-only', expected, source).splitlines()) == INSTALLMENT_PATHS | INSTALLMENT_CONTROLS,
+            'Installment release changed-file inventory differs.')
+    require({name for name in INSTALLMENT_PATHS if name.startswith('drizzle/')} == INSTALLMENT_MIGRATIONS,
+            'Installment migration inventory differs.')
+    require(not any(Path(name).name in ('package.json', 'package-lock.json', 'npm-shrinkwrap.json', 'pnpm-lock.yaml', 'yarn.lock')
+                    for name in INSTALLMENT_PATHS), 'Installments must preserve patched dependencies.')
+    return {name: blob for name, (_, blob) in candidate.items()}
+
+
 def reviewed_application_blobs(expected, source):
     """Select each exact application tree only from its approved live baseline."""
+    if expected == INSTALLMENT_LIVE:
+        return reviewed_installment_application_blobs(expected, source)
     if expected == RSC_PATCH_LIVE:
         return reviewed_rsc_patch_application_blobs(expected, source)
     if expected == ROOM_REFRESH_LIVE:
@@ -4265,6 +4311,8 @@ def vetted_changes(expected, source):
             "Yorkeway signup migration requires its exact release family.")
     require(OWNER_PUSH_SCHEMA_PATH not in changed or expected == OWNER_PUSH_RELEASE_BASELINE,
             "Owner push migration requires its exact release family.")
+    require(not INSTALLMENT_MIGRATIONS.intersection(changed) or expected == INSTALLMENT_LIVE,
+            "Installment migrations require their exact release family.")
     application_pins = reviewed_application_blobs(expected, source)
     for name in changed:
         if name == "ops/vps/code-release.py":
@@ -4292,6 +4340,10 @@ def vetted_changes(expected, source):
             "Only the vetted crypto configuration-name addition is permitted.")
     # Security-response changes require their exact entry in the reviewed blob
     # manifest above; there is no broad header-policy or path-pattern exception.
+    if expected == INSTALLMENT_LIVE:
+        require(migration_plan(changed) == migration_plan(INSTALLMENT_MIGRATIONS),
+                "Installments require both exact migrations.")
+        return changed
     if expected == RSC_PATCH_LIVE:
         require(not migration_plan(changed), "RSC security patch cannot introduce migrations.")
         return changed
@@ -4574,7 +4626,7 @@ def admitted_parallel_ref(event, branch):
     # Preserve historical admission; only this reviewed release gains a manual ref.
     return (branch == "improve/release-evidence-parallel-20261013"
             and event in ("push", "workflow_dispatch")) or (
-                branch in (COMBINED_CANDIDATE_BRANCH, CUSTOMER_CANDIDATE_BRANCH, ROOM_REFRESH_CANDIDATE_BRANCH, RSC_PATCH_CANDIDATE_BRANCH) and event == "workflow_dispatch")
+                branch in (COMBINED_CANDIDATE_BRANCH, CUSTOMER_CANDIDATE_BRANCH, ROOM_REFRESH_CANDIDATE_BRANCH, RSC_PATCH_CANDIDATE_BRANCH, INSTALLMENT_CANDIDATE_BRANCH) and event == "workflow_dispatch")
 
 
 def verify_combined_parallel_scope(candidate, expected, source):
@@ -4605,6 +4657,13 @@ def verify_rsc_patch_parallel_scope(candidate, expected, source, candidate_mode=
         require(candidate.get("head_branch") == RSC_PATCH_CANDIDATE_BRANCH, "RSC security patch candidate branch differs.")
         require(candidate.get("event") == "workflow_dispatch", "RSC security patch candidate must be manually dispatched.")
         reviewed_rsc_patch_application_blobs(expected, source)
+
+
+def verify_installment_parallel_scope(candidate, expected, source, candidate_mode="parallel-v1"):
+    if expected == INSTALLMENT_LIVE or candidate.get("head_branch") == INSTALLMENT_CANDIDATE_BRANCH:
+        require(candidate_mode == "parallel-v1" and candidate.get("head_branch") == INSTALLMENT_CANDIDATE_BRANCH
+                and candidate.get("event") == "workflow_dispatch", "Installments require their exact parallel candidate.")
+        reviewed_installment_application_blobs(expected, source)
 
 
 def verify_parallel_run(run, jobs, *, repository):
@@ -4918,6 +4977,7 @@ def verify_ci(args):
     candidate_mode = getattr(args, "candidate_mode", "legacy")
     require(candidate_mode in ("legacy", "parallel-v1", "parallel-retry-v3"), "Unknown candidate verification mode.")
     verify_rsc_patch_parallel_scope(candidate, args.expected, args.source, candidate_mode)
+    verify_installment_parallel_scope(candidate, args.expected, args.source, candidate_mode)
     verify_room_refresh_parallel_scope(candidate, args.expected, args.source, candidate_mode)
     verify_customer_parallel_scope(candidate, args.expected, args.source, candidate_mode)
     if candidate_mode == "parallel-retry-v3":
@@ -5038,6 +5098,27 @@ def migration_plan(changes):
 
 
 def reviewed_migration(raw, specification):
+    if specification.get("path") in INSTALLMENT_MIGRATIONS:
+        expected = dict(path=specification["path"], **REVIEWED_MIGRATIONS[specification["path"]])
+        require(specification == expected and hashlib.sha256(raw).hexdigest() == expected["sha256"]
+                and hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest() == expected["blob"],
+                "Installment migration differs from exact reviewed bytes.")
+        # Exact immutable additive SQL only; generic trigger grammar is unchanged.
+        statements, pending = [], ""
+        for character in raw.decode("utf-8"):
+            pending += character
+            if character == ";" and sqlite3.complete_statement(pending):
+                statements.append(pending); pending = ""
+        require(not pending.strip() and statements, "Incomplete installment migration.")
+        with closing(sqlite3.connect(":memory:")) as temporary:
+            for statement in statements:
+                temporary.execute(statement)
+            rows = schema_rows(temporary)
+        require(schema_digest(rows) == expected["schemaSha256"]
+                and sorted(row[1] for row in rows if row[0] == "table") == sorted(expected["tables"]),
+                "Installment additive schema differs.")
+        return statements, rows
+
     if specification.get("path") == HOST_BRAND_IDENTITY_PATH:
         # A single byte-pinned ALTER/UPDATE exception, not a new SQL grammar.
         expected = dict(path=HOST_BRAND_IDENTITY_PATH, **REVIEWED_MIGRATIONS[HOST_BRAND_IDENTITY_PATH])
@@ -5919,6 +6000,12 @@ class Deployment:
         changes = self.proof.get("changedFiles", [])
         require(isinstance(changes, list) and all(isinstance(name, str) for name in changes),
                 "Release changed-file manifest is invalid.")
+        if self.expected == INSTALLMENT_LIVE:
+            require(not self.enable_crypto and not self.enable_first_host,
+                    "Installments must preserve runtime configuration.")
+            require(len(changes) == len(set(changes)) and set(changes) == INSTALLMENT_PATHS | INSTALLMENT_CONTROLS
+                    and migration_plan(changes) == migration_plan(INSTALLMENT_MIGRATIONS),
+                    "Installments require exact source/schema inventory.")
         if self.expected == RSC_PATCH_LIVE:
             require(not self.enable_crypto and not self.enable_first_host,
                     "RSC security patch must preserve runtime configuration.")

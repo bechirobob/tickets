@@ -3926,7 +3926,66 @@ def rsc_patch_source_family(root):
     return {name: blob for name, (_, blob) in manifest.items()}
 
 
+INSTALLMENT_TEST_FILE = Path(__file__).resolve()
+INSTALLMENT_OPERATOR_BLOB = '9383ff426d03708e0b0b5d18bdd0aba2a2d9fe1a'
+INSTALLMENT_STAGED_PINS = dict(COMBINED_STAGED_PINS)
+
+
+def installment_source_family(root):
+    root = Path(root)
+    digest = lambda raw: release.hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
+    operator = root/'ops/vps/code-release.py'
+    selected = (root/'ops/vps/test_code_release.py').resolve() == INSTALLMENT_TEST_FILE
+    marked = operator.is_file() and not operator.is_symlink() and digest(operator.read_bytes()) == INSTALLMENT_OPERATOR_BLOB
+    if not selected and not marked:
+        return None
+    controls = {'ops/vps/code-release.py': ('100644', INSTALLMENT_OPERATOR_BLOB),
+                'ops/vps/test_code_release.py': ('100644', digest(INSTALLMENT_TEST_FILE.read_bytes()))}
+    full = os.path.lexists(root/'package.json') or os.path.lexists(root/'app')
+    if full:
+        choices = []
+        for revision, tree in ((release.INSTALLMENT_BASE, release.INSTALLMENT_BASE_TREE),
+                               (release.INSTALLMENT_SNAPSHOT, release.INSTALLMENT_SNAPSHOT_TREE)):
+            if checkout_git(root, 'rev-parse', revision+'^{tree}').decode().strip() != tree:
+                raise AssertionError('Installment reviewed tree differs')
+            manifest = {}
+            for record in checkout_git(root, 'ls-tree', '-rz', '--full-tree', revision).split(b'\0'):
+                if record:
+                    meta, name = record.split(b'\t', 1); mode, kind, blob = meta.decode().split()
+                    if kind != 'blob' or mode not in ('100644', '100755'):
+                        raise AssertionError('Installment unsupported file mode')
+                    manifest[os.fsdecode(name)] = (mode, blob)
+            manifest.update(controls); choices.append(manifest)
+        index = {}
+        for record in checkout_git(root, 'ls-files', '--stage', '-z').split(b'\0'):
+            if record:
+                meta, name = record.split(b'\t', 1); mode, blob, stage = meta.decode().split()
+                if stage != '0': raise AssertionError('Installment unmerged index')
+                index[os.fsdecode(name)] = (mode, blob)
+        if checkout_git(root, 'ls-files', '--others', '--exclude-standard', '-z') or index not in choices:
+            raise AssertionError('Installment complete index inventory differs')
+        manifest = index
+    else:
+        manifest = dict(INSTALLMENT_STAGED_PINS, **controls)
+        validate_staged_inventory(root, manifest)
+    for name, (mode, blob) in manifest.items():
+        path = root/name
+        try:
+            metadata = path.lstat()
+            if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1 or bool(metadata.st_mode & 0o111) != (mode == '100755') or any(parent.is_symlink() for parent in (path, *path.parents)):
+                raise AssertionError('Installment source requires regular files and exact modes')
+            raw = path.read_bytes()
+            if name == 'mobile/android/gradlew.bat': raw = raw.replace(b'\r\n', b'\n')
+            if digest(raw) != blob: raise AssertionError('Installment source bytes differ: '+name)
+        except OSError as error:
+            raise AssertionError('Installment source incomplete') from error
+    return {name: blob for name, (_, blob) in manifest.items()}
+
+
 def checkout_source_family(root):
+    installment = installment_source_family(root)
+    if installment is not None:
+        return installment
     rsc_patch = rsc_patch_source_family(root)
     if rsc_patch is not None:
         return rsc_patch
@@ -6211,8 +6270,9 @@ class VerifierTests(unittest.TestCase):
             for blob in (specification["blob"], "f" * 40):
                 with patch.object(release, "git", side_effect=[name, blob]), patch.object(release.subprocess, "run"):
                     if name in ("drizzle/0068_room_host_first_posts.sql", "drizzle/0069_event_host_pass_invitations.sql",
-                                "drizzle/0070_yorkeway_early_access.sql", "drizzle/0071_yorkeway_owner_push.sql"):
-                        with self.assertRaisesRegex(release.ReleaseError, "requires its exact release family"):
+                                "drizzle/0070_yorkeway_early_access.sql", "drizzle/0071_yorkeway_owner_push.sql",
+                                "drizzle/0072_installment_ledger.sql", "drizzle/0073_event_installment_settings.sql"):
+                        with self.assertRaisesRegex(release.ReleaseError, "requires? (?:its|their) exact release family"):
                             release.vetted_changes(OLD, NEW)
                     elif blob == specification["blob"]:
                         self.assertEqual(release.vetted_changes(OLD, NEW), [name])
@@ -14309,7 +14369,7 @@ class FirstHostConfigurationTests(unittest.TestCase):
 
     def test_workflow_activation_is_default_off_step_local_stdin_only(self):
         family = checkout_source_family(Path(__file__).resolve().parents[2])
-        if family.get('ops/vps/code-release.py') in (RSC_PATCH_OPERATOR_BLOB, ROOM_REFRESH_OPERATOR_BLOB, CUSTOMER_OPERATOR_BLOB, COMBINED_OPERATOR_BLOB, SCANNER_DEPS_CONTROL_PINS['ops/vps/code-release.py'][1], SCANNER_CONTROL_PINS['ops/vps/code-release.py'][1], STAFF_APP_CONTROL_PINS['ops/vps/code-release.py'][1], AUDIT_CONTROL_PINS['ops/vps/code-release.py'][1], STAFF_CONTROL_PINS['ops/vps/code-release.py'][1], ROOM_MAIL_VPS_OPERATOR_BLOB, YORKEWAY_OPERATOR_BLOB, OWNER_PUSH_OPERATOR_BLOB, SECURITY_OPERATOR_BLOB, PARALLEL_GATE_OUTPUTS['ops/vps/code-release.py'][1], DOWNLOAD_RETRY_OUTPUTS['ops/vps/code-release.py'][1]):
+        if family.get('ops/vps/code-release.py') in (INSTALLMENT_OPERATOR_BLOB, RSC_PATCH_OPERATOR_BLOB, ROOM_REFRESH_OPERATOR_BLOB, CUSTOMER_OPERATOR_BLOB, COMBINED_OPERATOR_BLOB, SCANNER_DEPS_CONTROL_PINS['ops/vps/code-release.py'][1], SCANNER_CONTROL_PINS['ops/vps/code-release.py'][1], STAFF_APP_CONTROL_PINS['ops/vps/code-release.py'][1], AUDIT_CONTROL_PINS['ops/vps/code-release.py'][1], STAFF_CONTROL_PINS['ops/vps/code-release.py'][1], ROOM_MAIL_VPS_OPERATOR_BLOB, YORKEWAY_OPERATOR_BLOB, OWNER_PUSH_OPERATOR_BLOB, SECURITY_OPERATOR_BLOB, PARALLEL_GATE_OUTPUTS['ops/vps/code-release.py'][1], DOWNLOAD_RETRY_OUTPUTS['ops/vps/code-release.py'][1]):
             # Only the exact new family may add this public archive dependency.
             # Reconstruct the original bytes before keeping its historical pin.
             name = '.github/workflows/tickets-code-release.yml'
@@ -17407,6 +17467,157 @@ class RscPatchParallelIdentityTests(unittest.TestCase):
         with self.assertRaises(release.ReleaseError):
             release.validate_parallel_proof(proof, repository='bechirobob/tickets',
                 candidate='b'*40, tree='d'*40, run_id='456', attempt=2, baseline='c'*40)
+
+
+class InstallmentAdmissionTests(unittest.TestCase):
+    git = ScannerDependencyAdmissionTests.git
+    write = ScannerDependencyAdmissionTests.write
+    commit = ScannerDependencyAdmissionTests.commit
+    patch = ScannerDependencyAdmissionTests.patch
+
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory(); self.addCleanup(self.directory.cleanup)
+        self.root = Path(self.directory.name)
+        self.git('init', '-q'); self.git('config', 'user.email', 'fixture@example.invalid'); self.git('config', 'user.name', 'Fixture')
+        self.controls = set(release.INSTALLMENT_CONTROLS)
+        for name in self.controls | {'package.json', 'app/page.tsx', 'stable.txt'}: self.write(name, 'live\n')
+        self.corrections = ('app/payment.ts',)
+        self.patch(release, 'INSTALLMENT_PATHS', frozenset(self.corrections))
+        self.patch(release, 'INSTALLMENT_MIGRATIONS', frozenset())
+        for name in self.corrections: self.write(name, 'before correction\n')
+        self.live = self.commit()
+        self.base = self.live
+        for name in self.corrections: self.write(name, 'reviewed correction\n')
+        self.snapshot = self.commit()
+        self.git('checkout', '-q', self.base)
+        for name in self.controls: self.write(name, 'independent controls\n')
+        self.control = self.commit(); self.git('update-ref', 'refs/remotes/origin/main', self.control)
+        self.git('merge', '-q', '--no-ff', '-m', 'installment', self.snapshot); self.source = self.git('rev-parse', 'HEAD')
+        for name,value in {'INSTALLMENT_LIVE':self.live, 'INSTALLMENT_BASE':self.base, 'INSTALLMENT_BASE_TREE':self.git('rev-parse', self.base+'^{tree}'), 'INSTALLMENT_SNAPSHOT':self.snapshot, 'INSTALLMENT_SNAPSHOT_TREE':self.git('rev-parse', self.snapshot+'^{tree}'), '__file__':str(self.root/'ops/vps/code-release.py')}.items(): self.patch(release,name,value)
+        environment=patch.dict(os.environ,BECORE_TRUSTED_BASE=self.control);environment.start();self.addCleanup(environment.stop)
+        previous=os.getcwd();os.chdir(self.root);self.addCleanup(os.chdir,previous)
+
+    def verify(self): return release.reviewed_installment_application_blobs(self.live,self.git('rev-parse','HEAD'))
+
+    def test_release_branch_requires_complete_reviewed_inventory(self):
+        candidate = {'head_branch': release.INSTALLMENT_CANDIDATE_BRANCH, 'event': 'workflow_dispatch'}
+        release.verify_installment_parallel_scope(candidate, self.live, self.source)
+        for branch in ('main', 'release/other', release.INSTALLMENT_CANDIDATE_BRANCH + '-extra', 'improve/release-evidence-parallel-20261013'):
+            with self.subTest(branch=branch), self.assertRaises(release.ReleaseError):
+                release.verify_installment_parallel_scope(dict(candidate, head_branch=branch), self.live, self.source)
+        with self.assertRaises(release.ReleaseError):
+            release.verify_installment_parallel_scope(dict(candidate, event='push'), self.live, self.source)
+        with self.assertRaises(release.ReleaseError):
+            release.verify_installment_parallel_scope(candidate, 'f'*40, self.source)
+        for name in ('app/page.tsx', 'unreviewed.txt', 'ops/vps/code-release.py'):
+            with self.subTest(name=name):
+                self.git('reset', '--hard', self.source)
+                self.write(name, 'unreviewed change\n'); changed = self.commit()
+                with self.assertRaises(release.ReleaseError):
+                    release.verify_installment_parallel_scope(candidate, self.live, changed)
+
+    def test_exact_installment_tree_with_independent_controls_passes(self):
+        pins=self.verify();self.assertEqual(pins['app/payment.ts'],self.git('rev-parse',self.snapshot+':app/payment.ts'))
+        self.assertEqual(release.reviewed_application_blobs(self.live,self.source),pins)
+
+    def test_every_path_including_unchanged_and_control_bytes_rejects_mutation(self):
+        for name in self.verify():
+            with self.subTest(name=name):
+                self.git('reset','--hard',self.source);self.write(name,'unreviewed\n');self.commit()
+                with self.assertRaises(release.ReleaseError):self.verify()
+
+    def test_partial_or_reverted_corrections_reject(self):
+        for name in self.corrections:
+            with self.subTest(name=name):
+                self.git('reset', '--hard', self.source)
+                self.write(name, self.git('show', self.live + ':' + name) + '\n'); self.commit()
+                with self.assertRaises(release.ReleaseError): self.verify()
+
+    def test_extra_missing_executable_and_symlink_paths_reject(self):
+        for kind in ('extra','missing','executable','symlink'):
+            with self.subTest(kind=kind):
+                self.git('reset','--hard',self.source);target=self.root/'app/page.tsx'
+                if kind=='extra':self.write('app/boardui-trial/page.tsx','demo\n')
+                elif kind=='missing':target.unlink()
+                elif kind=='executable':target.chmod(0o755)
+                else:target.unlink();target.symlink_to('../stable.txt')
+                self.commit()
+                with self.assertRaises(release.ReleaseError):self.verify()
+                self.git('reset','--hard',self.source)
+
+    def test_tree_pins_and_wrong_live_reject(self):
+        for name in ('INSTALLMENT_BASE_TREE','INSTALLMENT_SNAPSHOT_TREE'):
+            with self.subTest(name=name),patch.object(release,name,'f'*40):
+                with self.assertRaises(release.ReleaseError):self.verify()
+        with self.assertRaises(release.ReleaseError):release.reviewed_installment_application_blobs('f'*40,self.source)
+
+
+
+    def test_unmerged_or_self_trusted_controls_reject(self):
+        for trusted in (self.base, self.snapshot, self.source):
+            with self.subTest(trusted=trusted), patch.dict(os.environ, BECORE_TRUSTED_BASE=trusted):
+                with self.assertRaises((release.ReleaseError, subprocess.CalledProcessError)):
+                    self.verify()
+        self.git('update-ref', 'refs/remotes/origin/main', self.live)
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.verify()
+
+    def test_source_cannot_be_replaced_by_unrelated_tree_identical_commit(self):
+        tree = self.git('rev-parse', self.source + '^{tree}')
+        unrelated = self.git('commit-tree', tree, '-m', 'unrelated source')
+        with self.assertRaises((release.ReleaseError, subprocess.CalledProcessError)):
+            release.reviewed_installment_application_blobs(self.live, unrelated)
+
+
+class InstallmentMigrationTests(unittest.TestCase):
+    raw = {
+        'drizzle/0072_installment_ledger.sql': b"-- Additive, dormant foundation. No live order/event configuration is changed.\n-- Amounts are gross booking credits in pesewas, never provider settlement net.\nCREATE TABLE installment_plans (\n  order_id TEXT PRIMARY KEY NOT NULL REFERENCES orders(id),\n  buyer_email TEXT NOT NULL,\n  provider TEXT NOT NULL CHECK(provider='seevplus'),\n  environment TEXT NOT NULL CHECK(environment IN ('sandbox','production')),\n  settlement_snapshot_json TEXT NOT NULL,\n  currency TEXT NOT NULL CHECK(currency='GHS'),\n  total_minor INTEGER NOT NULL CHECK(typeof(total_minor)='integer' AND total_minor>0),\n  step_minor INTEGER NOT NULL CHECK(typeof(step_minor)='integer' AND step_minor>0),\n  created_at TEXT NOT NULL\n);\nCREATE TRIGGER installment_plan_matches_order BEFORE INSERT ON installment_plans BEGIN\n SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM orders o WHERE o.id=NEW.order_id\n   AND o.customer_email=NEW.buyer_email AND o.total_amount_minor=NEW.total_minor\n   AND o.currency=NEW.currency AND o.payment_provider=NEW.provider\n   AND o.payment_environment=NEW.environment AND o.status='payment_pending')\n THEN RAISE(ABORT,'installment plan must match its booking') END;\nEND;\nCREATE TRIGGER installment_plan_immutable BEFORE UPDATE ON installment_plans BEGIN\n SELECT RAISE(ABORT,'installment plan is immutable');\nEND;\nCREATE TABLE installment_charges (\n  id TEXT PRIMARY KEY NOT NULL,\n  order_id TEXT NOT NULL REFERENCES installment_plans(order_id),\n  idempotency_hash TEXT NOT NULL UNIQUE,\n  request_hash TEXT NOT NULL,\n  amount_minor INTEGER NOT NULL CHECK(typeof(amount_minor)='integer' AND amount_minor>0),\n  provider_reference TEXT,\n  provider_transaction_id TEXT,\n  state TEXT NOT NULL CHECK(state IN ('pending','confirmed','closed_unpaid','review')),\n  created_at TEXT NOT NULL,\n  confirmed_at TEXT\n);\n-- A timeout does NOT close a charge: its provider outcome must be reconciled.\nCREATE INDEX installment_booking_history ON installment_charges(order_id,state,created_at);\nCREATE UNIQUE INDEX installment_one_unresolved ON installment_charges(order_id) WHERE state IN ('pending','review');\nCREATE UNIQUE INDEX installment_provider_reference ON installment_charges(provider_reference) WHERE provider_reference IS NOT NULL;\nCREATE UNIQUE INDEX installment_provider_transaction ON installment_charges(provider_transaction_id) WHERE provider_transaction_id IS NOT NULL;\nCREATE TRIGGER installment_charge_insert BEFORE INSERT ON installment_charges BEGIN\n SELECT CASE WHEN NEW.state<>'pending' OR NEW.provider_transaction_id IS NOT NULL OR NEW.confirmed_at IS NOT NULL\n THEN RAISE(ABORT,'charges must start pending') END;\n SELECT CASE WHEN NEW.amount_minor>COALESCE((SELECT p.total_minor-COALESCE((SELECT SUM(c.amount_minor) FROM installment_charges c WHERE c.order_id=p.order_id AND c.state='confirmed'),0) FROM installment_plans p WHERE p.order_id=NEW.order_id),0)\n THEN RAISE(ABORT,'charge exceeds remaining balance') END;\nEND;\nCREATE TRIGGER installment_charge_update BEFORE UPDATE ON installment_charges BEGIN\n SELECT CASE WHEN NEW.id<>OLD.id OR NEW.order_id<>OLD.order_id OR NEW.amount_minor<>OLD.amount_minor\n OR NEW.idempotency_hash<>OLD.idempotency_hash OR NEW.request_hash<>OLD.request_hash OR NEW.created_at<>OLD.created_at\n OR (OLD.provider_reference IS NOT NULL AND NEW.provider_reference IS NOT OLD.provider_reference)\n OR (OLD.provider_transaction_id IS NOT NULL AND NEW.provider_transaction_id IS NOT OLD.provider_transaction_id)\n THEN RAISE(ABORT,'charge identity is immutable') END;\n SELECT CASE WHEN OLD.state IN ('confirmed','closed_unpaid') AND (NEW.state<>OLD.state OR NEW.confirmed_at IS NOT OLD.confirmed_at)\n THEN RAISE(ABORT,'terminal charge needs reconciliation') END;\n SELECT CASE WHEN NEW.state='confirmed' AND (NEW.provider_reference IS NULL OR NEW.provider_transaction_id IS NULL OR NEW.confirmed_at IS NULL)\n THEN RAISE(ABORT,'verified provider identity required') END;\n SELECT CASE WHEN NEW.state='confirmed' AND NEW.amount_minor>COALESCE((SELECT p.total_minor-COALESCE((SELECT SUM(c.amount_minor) FROM installment_charges c WHERE c.order_id=p.order_id AND c.id<>NEW.id AND c.state='confirmed'),0) FROM installment_plans p WHERE p.order_id=NEW.order_id),0)\n THEN RAISE(ABORT,'confirmed amount exceeds balance') END;\nEND;\nCREATE TRIGGER installment_charge_no_delete BEFORE DELETE ON installment_charges BEGIN\n SELECT RAISE(ABORT,'payment history cannot be deleted');\nEND;\nCREATE TABLE installment_checkout_sessions (\n charge_id TEXT PRIMARY KEY NOT NULL REFERENCES installment_charges(id),\n request_json TEXT NOT NULL,\n checkout_url TEXT,\n created_at TEXT NOT NULL,\n checked_at TEXT,\n lease_until TEXT,\n last_error TEXT\n);\nCREATE TRIGGER installment_session_request_immutable BEFORE UPDATE ON installment_checkout_sessions\nWHEN NEW.charge_id<>OLD.charge_id OR NEW.request_json<>OLD.request_json OR NEW.created_at<>OLD.created_at BEGIN\n SELECT RAISE(ABORT,'checkout identity is immutable');\nEND;\n",
+        'drizzle/0073_event_installment_settings.sql': b"-- Opt-in only: no event is enabled by this migration.\nCREATE TABLE event_installment_settings (\n event_slug TEXT PRIMARY KEY NOT NULL REFERENCES curated_event_records(slug),\n enabled INTEGER NOT NULL DEFAULT 0 CHECK(enabled IN (0,1)),\n step_minor INTEGER NOT NULL CHECK(typeof(step_minor)='integer' AND step_minor>0 AND step_minor<=9007199254740991),\n provider TEXT NOT NULL DEFAULT 'seevplus' CHECK(provider='seevplus'),\n updated_at TEXT NOT NULL\n);\n",
+    }
+
+    def migrations(self):
+        return [(dict(path=name, **release.REVIEWED_MIGRATIONS[name]), raw) for name, raw in self.raw.items()]
+
+    def test_exact_schema_and_mutations(self):
+        for specification, raw in self.migrations():
+            statements, rows = release.reviewed_migration(raw, specification)
+            self.assertTrue(statements)
+            self.assertEqual(release.schema_digest(rows), specification['schemaSha256'])
+            for changed in (raw+b'\n', raw.replace(b'CREATE TABLE', b'DROP TABLE', 1)):
+                with self.assertRaises(release.ReleaseError):
+                    release.reviewed_migration(changed, specification)
+            with self.assertRaises(release.ReleaseError):
+                release.reviewed_migration(raw, dict(specification, tables=['orders']))
+
+    def database(self, root):
+        path = root/'database.sqlite'
+        connection = release.sqlite3.connect(path)
+        connection.executescript("CREATE TABLE orders (id TEXT PRIMARY KEY, customer_email TEXT, total_amount_minor INTEGER, currency TEXT, payment_provider TEXT, payment_environment TEXT, status TEXT); CREATE TABLE curated_event_records (slug TEXT PRIMARY KEY); INSERT INTO orders VALUES ('keep','customer@example.invalid',320000,'GHS','seevplus','production','payment_pending'); INSERT INTO curated_event_records VALUES ('keep-event');")
+        connection.close(); path.chmod(0o600)
+        return path
+
+    def test_atomic_additive_migration_preserves_records_and_stays_disabled(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory); database=self.database(root)
+            result=release.migrate_database(database,root/'backup',self.migrations())
+            self.assertTrue(result['created'])
+            with release.sqlite3.connect(database) as connection:
+                self.assertEqual(connection.execute('SELECT id FROM orders').fetchall(), [('keep',)])
+                self.assertEqual(connection.execute('SELECT slug FROM curated_event_records').fetchall(), [('keep-event',)])
+                for table in ('installment_plans','installment_charges','installment_checkout_sessions','event_installment_settings'):
+                    self.assertEqual(connection.execute('SELECT count(*) FROM '+table).fetchone(), (0,))
+            self.assertFalse(release.migrate_database(database,root/'again',self.migrations())['created'])
+
+    def test_partial_schema_is_rejected_without_changing_existing_records(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory); database=self.database(root)
+            with release.sqlite3.connect(database) as connection:
+                connection.execute('CREATE TABLE installment_plans (wrong TEXT)')
+            with self.assertRaises(release.ReleaseError):
+                release.migrate_database(database,root/'backup',self.migrations())
+            with release.sqlite3.connect(database) as connection:
+                self.assertEqual(connection.execute('SELECT id FROM orders').fetchall(), [('keep',)])
+                self.assertFalse(connection.execute("SELECT 1 FROM sqlite_schema WHERE name='event_installment_settings'").fetchall())
 
 
 if __name__ == "__main__":
