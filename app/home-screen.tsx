@@ -8,7 +8,6 @@ import ActiveNightExperience from "./active-night-experience";
 import type { CustomerEvent } from "../lib/customer-screen";
 import ScrollReveal from "./scroll-reveal";
 import PublicNavigation from "./mobile-navigation";
-import "./box-office-home.css";
 
 export default function HomeScreen({ events }: { events: CustomerEvent[] }) {
   return <main className="night-home compact-home discovery-home" id="main-content">

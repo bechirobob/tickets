@@ -1,4 +1,3 @@
-import "../supporting-box-office.css";
 import BrandLogo from "../brand-logo";
 import type { Metadata } from "next";
 import Link from "next/link";

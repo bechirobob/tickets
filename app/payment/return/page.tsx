@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import "../../payment-outcome.css";
 import { CheckCircle2, Clock3, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";

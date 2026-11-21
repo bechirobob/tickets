@@ -1,5 +1,4 @@
 'use client';
-import "../../supporting-box-office.css";
 
 import Link from 'next/link';
 import { ticketAccessRedirect } from '../../../lib/ticket-access-redirect';

@@ -1,6 +1,5 @@
 "use client";
 
-import "../payment-outcome.css";
 
 import BrandLogo from "../brand-logo";
 import Link from "next/link";

@@ -1,4 +1,3 @@
-import "../supporting-box-office.css";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { readAdminSession } from "../../lib/admin-session";

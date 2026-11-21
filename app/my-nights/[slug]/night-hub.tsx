@@ -1,5 +1,4 @@
 "use client";
-import "../../payment-outcome.css";
 import InstallmentBalance from "./installment-balance";
 /* eslint-disable @next/next/no-img-element -- event artwork is already governed by the platform image source */
 
