@@ -4225,6 +4225,7 @@ BOX_OFFICE_CONTROLS = frozenset({
     'ops/vps/test_audit_readiness.py',
     'ops/vps/test_code_release.py',
     'tests/browser-environment.test.mjs',
+    'tests/d1-recovery-privacy.test.mjs',
 })
 BOX_OFFICE_DEPENDENCY_PAIR = {
     'package.json': 'ad29f6051b61653524c425957f52a557483a278d',

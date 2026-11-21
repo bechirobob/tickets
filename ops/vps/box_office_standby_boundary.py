@@ -17,6 +17,7 @@ CONTROLS = frozenset({
     'ops/vps/test_audit_readiness.py',
     'ops/vps/test_code_release.py',
     'tests/browser-environment.test.mjs',
+    'tests/d1-recovery-privacy.test.mjs',
 })
 SHA = re.compile(r'[a-f0-9]{40}\Z')
 
