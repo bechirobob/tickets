@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import "../../payment-outcome.css";
 import { CheckCircle2, Clock3, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -77,11 +78,11 @@ export default function PaymentReturn() {
   }, [reference, claim, resumeCheckout]);
 
   return (
-    <main className="payment-return"><div>
+    <main className="payment-return payment-return--box-office"><div>
       {state === "ready" ? <CheckCircle2 size={45} /> : <Clock3 size={45} />}
-      <p className="eyebrow">{state === "ready" ? "Payment confirmed" : "Checking your payment"}</p>
+      <p className="eyebrow">{state === "ready" ? "Payment confirmed" : state === "failed" ? "Payment not confirmed" : "Checking your payment"}</p>
       <h1>{state === "ready" ? "You’re going out." : state === "failed" ? "A small hold-up." : "One last money check."}</h1>
-      <p>{message}</p>
+      <p role="status" aria-atomic="true">{message}</p>
       {state === "ready" && eventSlug ? <Link href={`/my-nights/${eventSlug}?welcome=1`}>Open My Night</Link> : <Link href="/my-nights">Open My Nights</Link>}
       <span><ShieldCheck size={15} /> Once payment clears, your ticket is right here.</span>
     </div></main>

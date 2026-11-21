@@ -6,11 +6,12 @@ import { useEffect, useLayoutEffect, useRef, useSyncExternalStore, type PointerE
 import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
 import { useHeaderPanel } from "./use-header-panel";
+import VelvetRope from "./hosts/velvet-rope";
 
 const links = [
   { href: "/", label: "Home", icon: House },
   { href: "/events", label: "The Drop", icon: CalendarDays },
-  { href: "/hosts", label: "Discover hosts", icon: UsersRound },
+  { href: "/hosts", label: "Discover hosts", icon: VelvetRope },
   { href: "/my-nights", label: "My Nights", icon: Ticket },
   { href: "/organizer/submit", label: "List your event", icon: CalendarPlus },
   { href: "/about", label: "About us", icon: Info },

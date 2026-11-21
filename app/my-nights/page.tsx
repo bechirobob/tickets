@@ -1,3 +1,4 @@
+import "../supporting-box-office.css";
 import MyNightsClient from "./my-nights-client";
 
 export default function MyNightsPage() {

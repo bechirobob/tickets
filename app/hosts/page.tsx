@@ -2,9 +2,10 @@ import "./hosts.css";
 import HostPortrait from "../host-portrait";
 import BrandLogo from "../brand-logo";
 import Link from "next/link";
-import { ArrowLeft, BadgeCheck } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { ActionLink } from "../action";
 import PublicNavigation from "../mobile-navigation";
+import VelvetRope from "./velvet-rope";
 
 type HostRow = { slug: string; name: string; brandName: string | null; brandLogoUrl: string | null; bio: string; city: string; profileImageUrl: string | null; verificationStatus: string; eventCount: number; nextEventAt: string | null };
 
@@ -22,5 +23,36 @@ export default async function HostsPage() {
     WHERE host.id != 'host:becore-preview-desk'
     GROUP BY host.id ORDER BY nextEventAt IS NULL, nextEventAt, host.name
   `).all<HostRow>();
-  return <main className="hosts-page"><header className="directory-header"><Link href="/" aria-label="Back to home"><ArrowLeft size={16} /><span className="directory-header__back-label">Home</span></Link><Link href="/" className="brand-mark"><BrandLogo /></Link><PublicNavigation /></header><section className="directory-intro"><p className="eyebrow">Hosts</p><h1>Meet the usual instigators.</h1><p>The people giving Accra somewhere to be. Meet the hosts, find your night and follow your favourites once you’ve got a ticket.</p></section><section className="hosts-list">{!hosts.results.length ? <div><p>Host profiles are coming soon.</p><ActionLink href="/events" variant="text">Explore nights</ActionLink></div> : null}{hosts.results.map((host) => <article key={host.slug}><Link href={`/hosts/${host.slug}`} className="host-directory-portrait" aria-label={`Meet ${host.name}`}><HostPortrait host={host} variant="directory" /></Link><div><p className="host-directory-verification">{host.verificationStatus === "verified" ? <><BadgeCheck size={13} /> Verified host</> : "Reviewed Host"}</p><h2>{host.name}</h2><span>{host.city}{host.eventCount > 0 ? ` · ${host.eventCount} ${Number(host.eventCount) === 1 ? "night" : "nights"}` : ""}</span>{host.brandName?.trim() ? <span className="host-directory-brand">{host.brandName}</span> : null}<p>{host.bio}</p><ActionLink href={`/hosts/${host.slug}`} variant="text">View Host</ActionLink></div></article>)}</section></main>;
+  return <main className="hosts-page hosts-box-office">
+    <header className="directory-header">
+      <Link href="/" aria-label="Back to home"><ArrowLeft size={16} aria-hidden="true" /><span className="directory-header__back-label">Home</span></Link>
+      <Link href="/" className="brand-mark"><BrandLogo /></Link><PublicNavigation />
+    </header>
+    <div className="hosts-box-office__content">
+      <section className="hosts-box-office__intro" aria-labelledby="hosts-heading">
+        <p className="hosts-box-office__label">Hosts / Accra</p>
+        <h1 id="hosts-heading">Meet the usual instigators.</h1>
+        <p>The people giving Accra somewhere to be.</p>
+      </section>
+      <section className="hosts-box-office__list" aria-label="Host directory">
+        {!hosts.results.length ? <div><p>Host profiles are coming soon.</p><ActionLink href="/events" variant="text">Explore nights</ActionLink></div> : null}
+        {hosts.results.map((host) => <article key={host.slug} className="host-ticket host-ticket--directory">
+          <div className="host-ticket__copy">
+            <p className="hosts-box-office__label host-ticket__verification">
+              {host.verificationStatus === "verified" ? "Verified host" : "Reviewed host"} · {host.city}
+            </p>
+            <h2>{host.name}</h2>
+            {host.brandName?.trim() ? <p className="host-ticket__brand">{host.brandName}</p> : null}
+            {host.eventCount > 0 ? <p className="host-ticket__night-count">{host.eventCount} {Number(host.eventCount) === 1 ? "night" : "nights"}</p> : null}
+            <ActionLink href={`/hosts/${host.slug}`} className="host-ticket__cta" icon={<VelvetRope />} aria-label={`View host: ${host.name}`}>View host</ActionLink>
+          </div>
+          <div className="host-ticket__stub">
+            <Link href={`/hosts/${host.slug}`} className="host-directory-portrait" aria-label={`Meet ${host.name}`} tabIndex={-1}>
+              <HostPortrait host={host} variant="directory" />
+            </Link>
+          </div>
+        </article>)}
+      </section>
+    </div>
+  </main>;
 }

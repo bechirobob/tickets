@@ -1,5 +1,7 @@
 "use client";
 
+import "../payment-outcome.css";
+
 import BrandLogo from "../brand-logo";
 import Link from "next/link";
 import { ArrowLeft, BadgeCheck, CalendarDays, CheckCircle2, Download, Loader2, LogOut, Mail, MapPin, MessageCircle, ReceiptText, Ticket } from "lucide-react";
@@ -132,12 +134,12 @@ export default function TicketWallet() {
         return <article className="wallet-order" key={order.orderId}>
           <header><div><small><BadgeCheck size={12} /> Paid and verified · {order.quantity} {order.quantity === 1 ? "admission" : "admissions"}</small><h2>{detail.title}</h2>{order.bookedFor ? <p>Booked for {order.bookedFor}</p> : null}<p><CalendarDays size={15} /> {detail.date}</p><p><MapPin size={15} /> {detail.venue}</p></div>{order.roomAccess ? <Link href={`/room/${order.eventSlug}`}><MessageCircle size={16} /> Enter The Room</Link> : null}</header>
           <div className="wallet-passes">
-            {order.tickets.map((ticketItem, index) => <section className={`wallet-pass wallet-pass--${ticketItem.status}`} key={ticketItem.id}>
+            {order.tickets.map((ticketItem, index) => <section className={`wallet-pass wallet-pass--${ticketItem.status}${ticketItem.status === "issued" && ticketItem.qrPayload && ticketItem.gateCode ? " wallet-pass--box-office" : ""}`} key={ticketItem.id}>
               <div><span>Pass {index + 1} of {order.tickets.length}</span><b>{ticketItem.ticketType.replaceAll("-", " ")}</b></div>
               {ticketItem.qrPayload && ticketItem.gateCode ? <><QrPass payload={ticketItem.qrPayload} label={`Entry QR code for pass ${index + 1}`} /><code>{ticketItem.gateCode}</code><p>Brightness up. Screenshot confidence down. Opening the wallet refreshes this moving pass.</p><WalletProviderActions ticketId={ticketItem.id} /></> : ticketItem.status === "checked_in" ? <div className="wallet-admitted"><CheckCircle2 size={34} /><b>You&apos;re in</b><span>{ticketItem.checkedInAt ? paidDate(ticketItem.checkedInAt) : "Entry recorded. Go enjoy yourself."}</span></div> : ticketItem.status === "unavailable" ? <p className="wallet-pass-error">This pass is paused because the event is {detail.state}. Watch your email; the Host owes you the next move.</p> : <p className="wallet-pass-error">This pass is being dramatic. Reload before arriving at the gate.</p>}
             </section>)}
           </div>
-          <section className="wallet-receipt">
+          <section className="wallet-receipt wallet-receipt--box-office">
             <header><div><ReceiptText size={18} /><span><b>Payment receipt</b><small>{order.reference}</small></span></div><button type="button" onClick={() => window.print()}><Download size={14} /> Print / save</button></header>
             <dl><div><dt>Ticket subtotal</dt><dd>{money(order.faceAmountMinor, order.currency)}</dd></div><div><dt>Booking fee</dt><dd>{money(order.bookingFeeMinor, order.currency)}</dd></div><div><dt>Total paid</dt><dd>{money(order.totalAmountMinor, order.currency)}</dd></div><div><dt>Confirmed</dt><dd>{paidDate(order.paidAt)}</dd></div></dl>
           </section>

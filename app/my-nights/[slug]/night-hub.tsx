@@ -1,4 +1,5 @@
 "use client";
+import "../../payment-outcome.css";
 import InstallmentBalance from "./installment-balance";
 /* eslint-disable @next/next/no-img-element -- event artwork is already governed by the platform image source */
 
@@ -360,7 +361,7 @@ export default function NightHub({ event }: { event: EventSummary }) {
             <div className="night-passes__tickets">
               {!tickets.length ? <p className="night-passes__empty">No entry passes here yet. Your booking details are below.</p> : null}
               {tickets.map((ticket, index) => (
-                <article key={ticket.id} hidden={index !== selectedTicket} className="night-entry-pass">
+                <article key={ticket.id} hidden={index !== selectedTicket} className={`night-entry-pass${ticket.status === "issued" && ticket.qrPayload && ticket.gateCode ? " night-entry-pass--issued" : ""}`}>
                   <header className="night-entry-pass__head"><span>Ticket {index + 1}</span><span className="night-entry-pass__state">{ticket.status === "issued" ? <><Check size={13} /> Ready for entry</> : humanTicket(ticket.status)}</span></header>
                   <b>{humanTicket(ticket.ticketType)}</b>
                   {ticket.status === "issued" && ticket.qrPayload && ticket.gateCode ? (
