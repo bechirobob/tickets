@@ -114,9 +114,32 @@ test('privacy follow-up rejects a changed production identity and records both s
 
 
 test('ordinary deployment excludes only the finite reviewed tooling paths without changing its guards', () => {
-  const currentWorkflow = readFileSync(new URL('../.github/workflows/deploy.yml', import.meta.url), 'utf8');
-  // Pin the complete reviewed maintenance overlay before reconstructing history.
-  assert.equal(createHash('sha1').update(`blob ${Buffer.byteLength(currentWorkflow)}\0`).update(currentWorkflow).digest('hex'), '268260bd7642ee1430568aaeeff0a788389535e8');
+  let currentWorkflow = readFileSync(new URL('../.github/workflows/deploy.yml', import.meta.url), 'utf8');
+  const gitBlob = bytes => createHash('sha1').update(`blob ${Buffer.byteLength(bytes)}\0`).update(bytes).digest('hex');
+  const previousOverlay = '268260bd7642ee1430568aaeeff0a788389535e8';
+  const standbyPaths = ['ops/vps/box_office_standby_boundary.py', 'ops/vps/test_box_office_standby_boundary.py', 'ops/vps/recovery_maintenance_test_support.py', 'ops/vps/test_audit_readiness.py'];
+  const standby = gitBlob(currentWorkflow) !== previousOverlay;
+  if (standby) {
+    assert.equal(gitBlob(currentWorkflow), 'eaf8c2a60008607e13329ae6dd6235211c23b020');
+    const parsed = load(currentWorkflow);
+    assert.deepEqual(parsed.permissions, { contents: 'read' });
+    const gate = parsed.jobs.box_office_standby_boundary;
+    assert.deepEqual(parsed.jobs.deploy.needs, ['box_office_standby_boundary']);
+    assert.equal(parsed.jobs.deploy.if, "needs.box_office_standby_boundary.outputs.allow_cloudflare == 'true'");
+    assert.equal(gate.steps[0].with['persist-credentials'], false);
+    assert.equal(gate.steps[0].with['fetch-depth'], 0);
+    assert.equal(gate.steps[1].env.BECORE_BOX_SNAPSHOT, '768181e508dff5ec56dc9cfe5efec4cde6bca2bb');
+    assert.match(gate.steps[1].run, /git show "\$BECORE_PUSH_BEFORE:ops\/vps\/box_office_standby_boundary\.py"/);
+    assert.doesNotMatch(JSON.stringify(gate), /secrets\.|CLOUDFLARE_API_TOKEN|wrangler/);
+    assert.deepEqual(standbyPaths.filter(path => parsed.on.push['paths-ignore'].includes(path)), standbyPaths);
+    const exactStandby = standbyPaths.map(path => `      - '${path}'\n`).join('');
+    assert.equal(currentWorkflow.split(exactStandby).length, 2);
+    currentWorkflow = currentWorkflow.replace(exactStandby, '')
+      .replace(/  box_office_standby_boundary:\n[\s\S]*?(?=  deploy:\n)/, '')
+      .replace("    needs: [box_office_standby_boundary]\n    if: needs.box_office_standby_boundary.outputs.allow_cloudflare == 'true'\n", '');
+  }
+  // Recover the exact historical maintenance overlay before the unchanged reconstruction below.
+  assert.equal(gitBlob(currentWorkflow), previousOverlay);
   const maintenance = ['.github/workflows/d1-recovery-rehearsal.yml', 'scripts/check-d1-recovery-runtime.mjs', 'tests/d1-recovery-privacy.test.mjs', 'docs/runbooks/d1-recovery.md'];
   const maintenanceAddition = '      # Recovery maintenance is not an application release.\n' + maintenance.map(path => `      - '${path}'\n`).join('');
   const workflow = currentWorkflow.replace(maintenanceAddition, '').replace(/      - name: Classify exact recovery maintenance\n[\s\S]*?(?=      - name: Verify exact source ancestry)/, '').replaceAll("        if: steps.recovery_maintenance.outputs.matches != 'true'\n", '');
@@ -156,8 +179,8 @@ test('ordinary deployment excludes only the finite reviewed tooling paths withou
   assert.equal(digest, 'b18eb81d65fd5a93fabebe7ae98c6cf99067076e');
   // These reviewed entries are literal files, not directories/globs. GitHub skips
   // paths-ignore only if every changed path matches; mixed changes still run.
-  const passesNewFilter = paths => paths.some(path => ![...added, ...hygiene, ...evidence, ...maintenance].includes(path));
-  for (const path of maintenance) {
+  const passesNewFilter = paths => paths.some(path => ![...added, ...hygiene, ...evidence, ...maintenance, ...(standby ? standbyPaths : [])].includes(path));
+  for (const path of [...maintenance, ...(standby ? standbyPaths : [])]) {
     assert.equal(passesNewFilter([path]), false);
     assert.equal(passesNewFilter([`${path}/extra`]), true);
     assert.equal(passesNewFilter([path, 'app/page.tsx']), true);

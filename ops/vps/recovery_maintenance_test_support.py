@@ -11,8 +11,13 @@ PATHS = ('.github/workflows/d1-recovery-rehearsal.yml', 'scripts/check-d1-recove
          'ops/vps/test_recovery_maintenance.py', 'ops/vps/test_code_release.py',
          'ops/vps/test_operator_evidence.py', 'ops/vps/test_runtime_workflow_contract.py',
          'ops/vps/test_yorkeway_release.py')
-ADDITIONS = {'ops/vps/recovery_maintenance.py', 'ops/vps/recovery_maintenance_test_support.py',
-             'ops/vps/test_recovery_maintenance.py'}
+RECOVERY_ADDITIONS = {'ops/vps/recovery_maintenance.py', 'ops/vps/recovery_maintenance_test_support.py',
+                      'ops/vps/test_recovery_maintenance.py'}
+# Existing staged-archive fixture builders consume ADDITIONS for the current
+# checked-out archive. Historical recovery overlay allowance stays separate.
+ADDITIONS = RECOVERY_ADDITIONS | {
+    'ops/vps/box_office_standby_boundary.py', 'ops/vps/test_box_office_standby_boundary.py',
+}
 
 def digest(raw):
     return hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
@@ -24,6 +29,35 @@ BASE_WORKFLOWS = {'.github/workflows/deploy.yml': '0bf4539141356389a96f768ac8305
                   '.github/workflows/vps-runtime.yml': '06bdc48477eb0977ed471e549630bd6070758a95'}
 
 
+BOX_OFFICE_DEPLOY_BLOB = 'eaf8c2a60008607e13329ae6dd6235211c23b020'
+PRE_BOX_OFFICE_DEPLOY_BLOB = '268260bd7642ee1430568aaeeff0a788389535e8'
+
+
+def restore_box_office_deploy(raw):
+    """Only the exact checked-in overlay may restore the earlier reviewed byte shape."""
+    if digest(raw) != BOX_OFFICE_DEPLOY_BLOB:
+        return raw
+    paths = (
+        b"      - 'ops/vps/box_office_standby_boundary.py'\n"
+        b"      - 'ops/vps/test_box_office_standby_boundary.py'\n"
+        b"      - 'ops/vps/recovery_maintenance_test_support.py'\n"
+        b"      - 'ops/vps/test_audit_readiness.py'\n"
+    )
+    needs = (b"    needs: [box_office_standby_boundary]\n"
+             b"    if: needs.box_office_standby_boundary.outputs.allow_cloudflare == 'true'\n")
+    start = b'  box_office_standby_boundary:\n'
+    end = b'  deploy:\n'
+    if any(raw.count(block) != 1 for block in (paths, needs, start, end)):
+        raise AssertionError('Box Office workflow overlay is ambiguous or incomplete')
+    left, right = raw.index(start), raw.index(end)
+    if left >= right:
+        raise AssertionError('Box Office workflow overlay ordering differs')
+    raw = (raw[:left] + raw[right:]).replace(paths, b'', 1).replace(needs, b'', 1)
+    if digest(raw) != PRE_BOX_OFFICE_DEPLOY_BLOB:
+        raise AssertionError('Box Office changed unrelated historical deployment controls')
+    return raw
+
+
 def restore_workflow(name, raw):
     if name not in BASE_WORKFLOWS or b'Classify exact recovery maintenance' not in raw:
         return raw
@@ -31,6 +65,8 @@ def restore_workflow(name, raw):
     # pin tests still check the reconstructed original bytes below.
     if digest(raw) != OVERLAY[name][1]:
         return raw
+    if name == '.github/workflows/deploy.yml':
+        raw = restore_box_office_deploy(raw)
     start = raw.index(b'      - name: Classify exact recovery maintenance\n')
     end = raw.index(b'      - name: Verify exact source ancestry', start)
     raw = raw[:start] + raw[end:]
@@ -56,4 +92,4 @@ def overlay_manifest(root, manifest, *, staged):
     for name in BASE_WORKFLOWS:
         restore_workflow(name, (Path(root) / name).read_bytes())
     manifest.update({name: value for name, value in OVERLAY.items()
-                     if not staged or name in manifest or name in ADDITIONS})
+                     if not staged or name in manifest or name in RECOVERY_ADDITIONS})

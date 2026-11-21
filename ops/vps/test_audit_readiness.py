@@ -552,19 +552,21 @@ class RetentionPolicyAttestationTests(unittest.TestCase):
         # Only ancestors outside the fixture model the production secure path;
         # hosted runners normally put the fixture beneath world-writable /tmp.
         self.owner_overrides = {}
-        real_stat, real_fstat = os.stat, os.fstat
+        real_stat, real_lstat, real_fstat = os.stat, os.lstat, os.fstat
         ancestor_ids = {(p.stat().st_dev, p.stat().st_ino) for p in Path(folder.name).parents}
         self.ancestor_modes = {}
         def metadata(value):
-            fields = ('st_dev', 'st_ino', 'st_mode', 'st_gid', 'st_size', 'st_mtime_ns', 'st_ctime_ns', 'st_nlink')
-            modeled = {key: getattr(value, key) for key in fields}
+            modeled = list(value)
             key = (value.st_dev, value.st_ino)
             if key in ancestor_ids:
-                modeled['st_mode'] = self.ancestor_modes.get(key, value.st_mode) & ~0o7022
-            return SimpleNamespace(**modeled,
-                                   st_uid=self.owner_overrides.get(value.st_ino, 0))
+                modeled[audit.stat.ST_MODE] = self.ancestor_modes.get(key, value.st_mode) & ~0o7022
+            modeled[audit.stat.ST_UID] = self.owner_overrides.get(value.st_ino, 0)
+            # Keep full metadata, including float and nanosecond timestamps,
+            # because traceback/linecache shares the OS module during this test.
+            return os.stat_result(modeled, value.__reduce__()[1][1])
         self.ancestor_ids = ancestor_ids
-        for key, real in (('stat', real_stat), ('fstat', real_fstat)):
+        # Current pathlib can call os.lstat directly for Path.lstat().
+        for key, real in (('stat', real_stat), ('lstat', real_lstat), ('fstat', real_fstat)):
             patcher = patch.object(audit.os, key, side_effect=lambda *args, _real=real, **kwargs: metadata(_real(*args, **kwargs)))
             patcher.start(); self.addCleanup(patcher.stop)
         self.properties = {}
