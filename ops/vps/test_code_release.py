@@ -3985,15 +3985,16 @@ def installment_source_family(root):
 # Independently reviewed control files. The test's self-blob is normalized from
 # this explicitly selected test file, as in the historical fixture families.
 BOX_OFFICE_TEST_FILE = Path(__file__).resolve()
-BOX_OFFICE_OPERATOR_BLOB = 'f3ddda89336cfb9d6c2b5dbb257a2426da30e693'
+BOX_OFFICE_OPERATOR_BLOB = 'e7ed4908f4e78e7b16a38cbec402932bbb2bf7fa'
 BOX_OFFICE_TEST_CONTROLS = {
     'ops/vps/code-release.py': ('100644', BOX_OFFICE_OPERATOR_BLOB),
     '.github/workflows/deploy.yml': ('100644', 'eaf8c2a60008607e13329ae6dd6235211c23b020'),
-    'ops/vps/box_office_standby_boundary.py': ('100644', '608d7f8326b84e215eb57252563045890202acdc'),
+    'ops/vps/box_office_standby_boundary.py': ('100644', '993538144be098e812fb88abe88ecc02edb44f63'),
     'ops/vps/test_box_office_standby_boundary.py': ('100644', '44db27df7a122ed6078b4de884b37168c6efa14b'),
     'ops/vps/test_audit_readiness.py': ('100644', 'c2073226f401a3e7840823c744511782fd4a0068'),
     'ops/vps/recovery_maintenance_test_support.py': ('100644', '7d61237cd5cdcf6a81dc526e22a8fec6dc203199'),
     'tests/browser-environment.test.mjs': ('100644', 'a2f99d8de32e089118561fab1062ad1d927de97a'),
+    'tests/d1-recovery-privacy.test.mjs': ('100644', '6af59ae60ba63ae9799d91f4a5926abf02d541ac'),
 }
 
 
@@ -4045,9 +4046,10 @@ def box_office_source_family(root):
     else:
         # Exact 8c77 archive inventory equals these historical pins except the two
         # preexisting release controls, both replaced by the exact overlays above.
-        # Browser tooling tests are deliberately not archived with the operator.
+        # The JS contract tests do not run in the archived operator layout.
+        outside_archive = {'tests/browser-environment.test.mjs', 'tests/d1-recovery-privacy.test.mjs'}
         manifest = {**INSTALLMENT_STAGED_PINS,
-                    **{name: pin for name, pin in controls.items() if name != 'tests/browser-environment.test.mjs'}}
+                    **{name: pin for name, pin in controls.items() if name not in outside_archive}}
         validate_staged_inventory(root, manifest)
     for name, (mode, blob) in manifest.items():
         path = root/name

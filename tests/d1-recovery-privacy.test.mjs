@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -239,8 +240,43 @@ const recoveryMaintenancePaths = [
   'tests/d1-recovery-privacy.test.mjs',
   'docs/runbooks/d1-recovery.md',
 ];
-const releaseWorkflows = await Promise.all(['deploy', 'vps-runtime'].map(async name => [name,
-  load(await readFile(new URL(`../.github/workflows/${name}.yml`, import.meta.url), 'utf8'))]));
+const reviewedStandbyBlob = 'eaf8c2a60008607e13329ae6dd6235211c23b020';
+const priorRecoveryBlob = '268260bd7642ee1430568aaeeff0a788389535e8';
+const gitBlob = raw => createHash('sha1').update(`blob ${Buffer.byteLength(raw)}\0`).update(raw).digest('hex');
+
+function restoreReviewedStandbyOverlay(raw) {
+  if (gitBlob(raw) === priorRecoveryBlob) return raw;
+  assert.equal(gitBlob(raw), reviewedStandbyBlob, 'Cloudflare standby overlay must match its entire reviewed blob');
+  const paths = [
+    'ops/vps/box_office_standby_boundary.py',
+    'ops/vps/test_box_office_standby_boundary.py',
+    'ops/vps/recovery_maintenance_test_support.py',
+    'ops/vps/test_audit_readiness.py',
+  ].map(path => `      - '${path}'\n`).join('');
+  const gate = raw.match(/^  box_office_standby_boundary:\n[\s\S]*?(?=^  deploy:\n)/m)?.[0];
+  const condition = "    needs: [box_office_standby_boundary]\n"
+    + "    if: needs.box_office_standby_boundary.outputs.allow_cloudflare == 'true'\n";
+  for (const block of [paths, gate, condition]) {
+    assert.ok(block);
+    assert.equal(raw.split(block).length, 2, 'Only the exact one-release overlay may be removed');
+  }
+  const recovered = raw.replace(paths, '').replace(gate, '').replace(condition, '');
+  assert.equal(gitBlob(recovered), priorRecoveryBlob, 'Earlier recovery workflow must be recovered byte-for-byte');
+  return recovered;
+}
+
+const releaseWorkflows = await Promise.all(['deploy', 'vps-runtime'].map(async name => {
+  const raw = await readFile(new URL(`../.github/workflows/${name}.yml`, import.meta.url), 'utf8');
+  return [name, load(raw), load(name === 'deploy' ? restoreReviewedStandbyOverlay(raw) : raw), raw];
+}));
+
+test('recovery history will not normalize a changed standby workflow', () => {
+  const raw = releaseWorkflows.find(([name]) => name === 'deploy')[3];
+  for (const changed of [raw + '\n# unreviewed', raw.replace('contents: read', 'contents: write')]) {
+    assert.notEqual(changed, raw);
+    assert.throws(() => restoreReviewedStandbyOverlay(changed));
+  }
+});
 
 // These existing filters use only literals, * and **; fail rather than silently
 // approximating any future unsupported pattern syntax.
@@ -263,7 +299,7 @@ function triggersPush(workflow, paths) {
   });
 }
 
-for (const [name, current] of releaseWorkflows) {
+for (const [name, current, history] of releaseWorkflows) {
   test(`${name}: only the four recovery paths are excluded; safety checks stay byte-equivalent`, () => {
     const previous = spawnSync('git', ['show', `63f2ead2fb3eaae03696f408b12e9e18cfcee265:.github/workflows/${name}.yml`], {
       cwd: root, encoding: 'utf8',
@@ -272,7 +308,7 @@ for (const [name, current] of releaseWorkflows) {
     const expected = load(previous.stdout);
     if (name === 'deploy') expected.on.push['paths-ignore'].unshift(...recoveryMaintenancePaths);
     else expected.on.push.paths.push(...recoveryMaintenancePaths.map(path => `!${path}`));
-    const reconstructed = structuredClone(current);
+    const reconstructed = structuredClone(history);
     for (const job of Object.values(reconstructed.jobs)) {
       if (job.steps?.some(step => step.id === 'recovery_maintenance')) {
         job.steps = job.steps.filter(step => step.id !== 'recovery_maintenance');
