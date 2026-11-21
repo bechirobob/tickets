@@ -11,8 +11,13 @@ PATHS = ('.github/workflows/d1-recovery-rehearsal.yml', 'scripts/check-d1-recove
          'ops/vps/test_recovery_maintenance.py', 'ops/vps/test_code_release.py',
          'ops/vps/test_operator_evidence.py', 'ops/vps/test_runtime_workflow_contract.py',
          'ops/vps/test_yorkeway_release.py')
-ADDITIONS = {'ops/vps/recovery_maintenance.py', 'ops/vps/recovery_maintenance_test_support.py',
-             'ops/vps/test_recovery_maintenance.py'}
+RECOVERY_ADDITIONS = {'ops/vps/recovery_maintenance.py', 'ops/vps/recovery_maintenance_test_support.py',
+                      'ops/vps/test_recovery_maintenance.py'}
+# Existing staged-archive fixture builders consume ADDITIONS for the current
+# checked-out archive. Historical recovery overlay allowance stays separate.
+ADDITIONS = RECOVERY_ADDITIONS | {
+    'ops/vps/box_office_standby_boundary.py', 'ops/vps/test_box_office_standby_boundary.py',
+}
 
 def digest(raw):
     return hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
@@ -86,4 +91,4 @@ def overlay_manifest(root, manifest, *, staged):
     for name in BASE_WORKFLOWS:
         restore_workflow(name, (Path(root) / name).read_bytes())
     manifest.update({name: value for name, value in OVERLAY.items()
-                     if not staged or name in manifest or name in ADDITIONS})
+                     if not staged or name in manifest or name in RECOVERY_ADDITIONS})

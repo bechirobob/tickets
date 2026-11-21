@@ -3991,7 +3991,7 @@ BOX_OFFICE_TEST_CONTROLS = {
     '.github/workflows/deploy.yml': ('100644', 'a9dd72488aa169b0fb02b2b6f716ae098c9a404d'),
     'ops/vps/box_office_standby_boundary.py': ('100644', '972541a39ea44c1d4d0b3ae279c9f17bab698214'),
     'ops/vps/test_box_office_standby_boundary.py': ('100644', '44db27df7a122ed6078b4de884b37168c6efa14b'),
-    'ops/vps/recovery_maintenance_test_support.py': ('100644', '6909c2ae13c972bb93a269ce6ca63ebd252816c9'),
+    'ops/vps/recovery_maintenance_test_support.py': ('100644', '63f01a0c83acb477b98ee6d0d2afd3d15035d81c'),
     'tests/browser-environment.test.mjs': ('100644', '940afb909f8eed3f5e042890845e5773dbf256df'),
 }
 
@@ -4002,7 +4002,9 @@ def box_office_source_family(root):
     operator = root/'ops/vps/code-release.py'
     selected = (root/'ops/vps/test_code_release.py').resolve() == BOX_OFFICE_TEST_FILE
     marked = operator.is_file() and not operator.is_symlink() and digest(operator.read_bytes()) == BOX_OFFICE_OPERATOR_BLOB
-    if not (selected or marked):
+    introduced = any(os.path.lexists(root/name) for name in (
+        'ops/vps/box_office_standby_boundary.py', 'ops/vps/test_box_office_standby_boundary.py'))
+    if not (selected or marked or introduced):
         return None
     controls = {**BOX_OFFICE_TEST_CONTROLS,
                 'ops/vps/test_code_release.py': ('100644', digest(BOX_OFFICE_TEST_FILE.read_bytes()))}
