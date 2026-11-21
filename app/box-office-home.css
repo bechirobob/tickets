@@ -1,0 +1,103 @@
+/* Photo-led ticket composition. Scoped to public discovery, never the guest Room. */
+.discovery-home .compact-hero.box-office-hero{
+ display:grid;grid-template-columns:minmax(0,1.14fr) minmax(0,1fr) minmax(100px,.26fr);
+ gap:0;width:min(1180px,calc(100% - 72px));height:auto;min-height:0;
+ margin:22px auto 0;background:#30232d;border-radius:10px;overflow:clip;color:#fff3e3;
+}
+.discovery-home .box-office-hero > img.compact-hero__image{
+ position:static;display:block;grid-column:1;grid-row:1;object-fit:cover;object-position:center;
+ width:100%;height:100%;min-height:280px;max-height:400px;align-self:stretch;
+ transform:none;animation:none;filter:none;
+}
+.discovery-home .box-office-hero > img[data-portrait-crop]{
+ object-fit:contain;object-position:center;width:100%;background:#251c24;
+}
+.discovery-home .box-office-hero .compact-hero__copy{
+ position:static;grid-column:2;grid-row:1;width:auto;max-width:none;padding:20px 24px;align-self:center
+}
+.discovery-home .box-office-hero .compact-hero__copy > * {animation:none;transform:none}
+.discovery-home .box-office-hero .compact-hero__copy h1{
+ font-size:clamp(2.25rem,4.55vw,4.8rem);line-height:1;overflow-wrap:anywhere;margin:8px 0;color:#fff3e3
+}
+.discovery-home .box-office-hero .compact-hero__copy > .box-office-hero__imprint{
+ display:flex;justify-content:space-between;gap:8px;padding-bottom:8px;margin:0 0 12px;
+ border-bottom:1px solid #796c74;font-size:.75rem;color:#ebd7d1;font-weight:650;letter-spacing:.08em;text-transform:uppercase
+}
+.discovery-home .box-office-hero .compact-hero__copy > .night-kicker{margin-bottom:5px;color:#ffb99d}
+.discovery-home .box-office-hero .compact-hero__copy > p:not(.night-kicker,.box-office-hero__imprint){margin-top:9px}
+.discovery-home .box-office-hero .compact-hero__price{
+ position:static;display:block;margin-top:14px;font-weight:650;color:#e8d9d0
+}
+.discovery-home .box-office-hero__stub{
+ display:flex;flex-direction:column;justify-content:flex-end;gap:9px;grid-column:3;
+ padding:13px 14px 14px 19px;font-size:.75rem;font-weight:750;letter-spacing:.07em;text-transform:uppercase;
+ background:radial-gradient(circle at 2px 4px,#a69299 1.3px,transparent 1.7px) left top/5px 8px repeat-y,#34282d;
+}
+.discovery-home .box-office-hero__stub i{
+ width:46px;height:14px;background:repeating-linear-gradient(90deg,currentColor 0 2px,transparent 2px 4px,currentColor 4px 5px,transparent 5px 8px);
+}
+.discovery-home .box-office-drop-actions{margin-top:14px}
+.discovery-home .box-office-guest-kit{width:min(1180px,calc(100% - 72px));margin:26px auto 34px;color:#fff3e3}
+.discovery-home .box-office-guest-kit>h2{margin:8px 0 14px;font-size:clamp(2rem,5vw,3.3rem)}
+.discovery-home .box-office-guest-kit dl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:0}
+.discovery-home .box-office-guest-kit dt{display:flex;align-items:center;gap:7px;font-weight:650}
+.discovery-home .box-office-guest-kit dd{margin:5px 0 0;color:#d9ccd3}
+.discovery-home .room-product-preview .room-product-phone:nth-child(n){aspect-ratio:732/1485}
+.discovery-home .room-product-phone .room-product-phone__render{
+ inset:0;width:100%;height:100%;max-width:none;object-fit:fill;
+ clip-path:inset(.2% 1.3% .3% 1.3% round 16% / 7.8%);
+}
+.discovery-home .room-product-phone .room-product-phone__display{
+ inset:1.7% 3.4%;border-radius:13.4% / 6.7%;
+}
+@media(max-width:760px){
+ .discovery-home .compact-hero.box-office-hero,
+ .discovery-home .compact-hero.box-office-hero:has(img[data-portrait-crop]){
+  grid-template-columns:1fr;width:calc(100% - 32px);height:auto;min-height:0;margin-top:12px
+ }
+ .discovery-home .box-office-hero > img.compact-hero__image{
+  grid-column:1;grid-row:1;height:clamp(148px,51vw,330px);min-height:0
+ }
+ .discovery-home .box-office-hero .compact-hero__copy{grid-column:1;grid-row:2;padding:13px 14px 15px}
+ .discovery-home .box-office-hero .compact-hero__copy h1{font-size:clamp(2.03rem,8.7vw,3.6rem)}
+ .discovery-home .box-office-hero__stub{
+  grid-column:1;grid-row:3;flex-direction:row;justify-content:space-between;align-items:center;
+  padding:10px 14px;background-position:left top;background-size:8px 5px;background-repeat:repeat-x
+ }
+ .discovery-home .box-office-drop-actions .ticket-action{width:100%;min-height:44px}
+ .discovery-home .box-office-guest-kit{width:calc(100% - 36px)}
+ .discovery-home .box-office-guest-kit dl{grid-template-columns:1fr;gap:9px}
+ .discovery-home .box-office-guest-kit dl>div{padding-block:7px;border-top:1px solid #70636b}
+}
+/* The Drop's approved artwork-plus-details list uses real event records. */
+.drop-explorer--full .discovery-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.drop-explorer--full .discovery-grid .drop-card[data-colour-scheme]{
+ display:grid;grid-template-columns:minmax(0,2fr) minmax(0,3fr);grid-template-rows:auto;grid-row:auto;
+ gap:0;margin:0;overflow:hidden;border:1px solid #71636b;border-radius:10px;
+ background:#30242d;box-shadow:none;color:#fff3e3
+}
+.drop-explorer--full .discovery-grid .drop-card[data-colour-scheme] .drop-card__image{
+ --artwork-inset:0px;width:100%;height:auto;min-height:140px;aspect-ratio:auto;border-radius:0;align-self:stretch
+}
+.drop-explorer--full .drop-card__artwork-wash{display:none}
+.drop-explorer--full .discovery-grid .drop-card[data-colour-scheme] .drop-card__image img{
+ width:100%;height:100%;object-fit:contain;object-position:center;filter:none;transform:none
+}
+.drop-explorer--full .discovery-grid .drop-card .drop-card__body{
+ display:flex;grid-row:auto;flex-direction:column;align-items:flex-start;gap:5px;min-width:0;padding:13px;
+}
+.drop-explorer--full .discovery-grid .drop-card h3{color:#fff3e3;font-size:clamp(1rem,2.1vw,1.4rem);overflow-wrap:anywhere}
+.drop-explorer--full .discovery-grid .drop-card .drop-card__body :is(small,p){color:#dcced4;margin:0}
+.drop-explorer--full .discovery-grid .drop-card .drop-card__body > div{order:-1;color:#dcced4;margin:0}
+.drop-explorer--full .discovery-grid .drop-card .drop-card__schedule{order:1}
+.drop-explorer--full .discovery-grid .drop-card .drop-card__body>a{
+ order:2;margin-top:4px;min-height:44px;padding:8px 11px;border:1px solid #887780;border-radius:7px;
+ color:#fff3e3;text-decoration:none
+}
+@media(max-width:780px){
+ .drop-explorer--full .discovery-grid{grid-template-columns:1fr}
+ /* Keep one flyer size across stacked listings, irrespective of the copy length. */
+ .drop-explorer--full .discovery-grid .drop-card[data-colour-scheme] .drop-card__image{
+  aspect-ratio:4/5;align-self:start
+ }
+}

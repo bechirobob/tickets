@@ -19,7 +19,7 @@ const reasons = [
 ];
 
 export default function AboutPage() {
-  return <main className="about-page">
+  return <main className="about-page supporting-box-office">
     <header className="directory-header">
       <Link href="/" aria-label="Back to home"><ArrowLeft size={16} /><span className="directory-header__back-label">Home</span></Link>
       <Link href="/" className="brand-mark"><BrandLogo /></Link>

@@ -3,6 +3,7 @@
 import BrandLogo from "../../brand-logo";
 import Link from "next/link";
 import Image from "next/image";
+import "./checkout-panels.css";
 import { ArrowLeft, Check, CreditCard, Gem, LockKeyhole, ShieldCheck, Smartphone, Wallet } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useSearchParams } from "next/navigation";
@@ -160,19 +161,19 @@ export default function CheckoutForm({ installmentStepMinor, slug, event, feeBas
   }
 
   return (
-    <main className="checkout-page">
+    <main className="checkout-page checkout-box-office">
       <header className="checkout-header">
         <Link href={`/event/${slug}`} className="checkout-back" aria-label="Back to event"><ArrowLeft size={17} aria-hidden="true" /><span>Back<span className="checkout-back__detail"> to event</span></span></Link>
         <Link href="/" className="brand-mark"><BrandLogo /></Link>
-        <span><LockKeyhole size={15} /> Good plans. Safe payment.</span>
+        <span><LockKeyhole size={15} aria-hidden="true" /> Secure checkout</span>
       </header>
       <div className="checkout-layout">
         <section className="checkout-main">
           {event.isTestEvent ? <div className="preview-checkout-note"><strong>Test checkout</strong><span>No real event is taking place and no real money should be used. For Paystack, test mode accepts MTN number <b>055 123 498 7</b> without a PIN or OTP. {seevEnabled ? "SeevCash offers success and decline actions in its sandbox checkout." : ""}</span></div> : null}
           <div className="checkout-step">
-            <div><small>Your order</small><h1>{event.title}</h1></div>
+            <div><small>Box office</small><h1>Your tickets</h1><p className="checkout-event-name">{event.title}</p></div>
           </div>
-          <div className="ticket-tier-list" role="radiogroup" aria-label="Choose ticket tier">
+          <section className="checkout-box-panel" aria-labelledby="ticket-selection"><h2 id="ticket-selection">Choose tickets</h2><div className="ticket-tier-list" role="radiogroup" aria-label="Choose ticket tier">
             {event.ticketTiers.filter((tier) => tier.status !== "hidden").map((tier) => {
               const selected = tier.id === selectedTier.id;
               const soldOut = tier.status !== "available";
@@ -208,9 +209,12 @@ export default function CheckoutForm({ installmentStepMinor, slug, event, feeBas
             })}
           </div>
 
+          </section>
+
           {!paystackEnabled && !seevEnabled ? <div className="checkout-unavailable" role="status"><h2>Tickets are taking a breather.</h2><p>Checkout will be back soon. Your next move? Keep this night on your radar.</p><Link href={`/event/${slug}`}>Back to the event</Link></div> : <>
-          <div className="checkout-step checkout-step--second">
-            <div><small>Delivery details</small><h2>Where should the good news find you?</h2></div>
+          <section className="checkout-box-panel" aria-labelledby="delivery-title">
+          <div className="checkout-step">
+            <div><h2 id="delivery-title">Where to send your tickets</h2><p>We’ll use these details for your booking and receipt.</p></div>
           </div>
           <div className="form-grid">
             <label><span id="checkout-name-label">Full name</span><input disabled={!ready} ref={nameInput} aria-labelledby="checkout-name-label" aria-invalid={invalidField === "name" || undefined} aria-describedby={invalidField === "name" ? "checkout-name-error" : undefined} type="text" placeholder="Your full name" autoComplete="name" value={fullName} onChange={(event) => { setFullName(event.target.value); setMessage(""); setInvalidField(null); }} />{invalidField === "name" ? <span className="checkout-field-error" id="checkout-name-error">{message}</span> : null}</label>
@@ -218,8 +222,10 @@ export default function CheckoutForm({ installmentStepMinor, slug, event, feeBas
             <label className="full-field"><span id="checkout-email-label">Email address</span><input disabled={!ready} ref={emailInput} aria-labelledby="checkout-email-label" aria-invalid={invalidField === "email" || undefined} aria-describedby={invalidField === "email" ? "checkout-email-error" : undefined} type="email" inputMode="email" autoCapitalize="none" spellCheck={false} placeholder="you@example.com" autoComplete="email" value={email} onChange={(event) => { setEmail(event.target.value); setMessage(""); setInvalidField(null); }} />{invalidField === "email" ? <span className="checkout-field-error" id="checkout-email-error">{message}</span> : null}</label>
           </div>
 
-          <div className="checkout-step checkout-step--second">
-            <div><small>Payment</small><h2>Let’s make it official.</h2></div>
+          </section>
+          <section className="checkout-box-panel" aria-labelledby="payment-title">
+          <div className="checkout-step">
+            <div><h2 id="payment-title">How would you like to pay?</h2></div>
           </div>
           <fieldset className="payment-methods" disabled={!ready || isPaying}>
             <legend className="sr-only">Choose payment method</legend>
@@ -270,12 +276,13 @@ export default function CheckoutForm({ installmentStepMinor, slug, event, feeBas
           <label className="checkout-consent"><input disabled={!ready} type="checkbox" checked={platformAnnouncementsOptIn} onChange={(event) => setPlatformAnnouncementsOptIn(event.target.checked)} /><span>Keep me posted on new nights from BeCore Tickets.</span></label>
           <label className="checkout-consent"><input disabled={!ready} ref={policyChoice} aria-invalid={invalidField === "policies" || undefined} aria-describedby={invalidField === "policies" ? "checkout-payment-message" : undefined} type="checkbox" checked={acceptedPolicies} onChange={(event) => { setAcceptedPolicies(event.target.checked); setMessage(""); setInvalidField(null); }} /><span>I accept the <Link href="/terms#purchase" target="_blank">ticket terms</Link>, <Link href="/terms#refund" target="_blank">refund rules</Link> and <Link href="/privacy" target="_blank">privacy notice</Link>.</span></label>
           </div>
+          </section>
           </>}
         </section>
 
-        <aside className="order-summary">
+        <aside className="order-summary" aria-labelledby="order-summary-title">
           <p className="eyebrow">Order summary</p>
-          <h2>{event.title}</h2>
+          <h2 id="order-summary-title">{event.title}</h2>
           <p>{event.shortDate} · {event.time.split(" — ")[0]}<br />{event.venue}, {event.area}</p>
           <details className="checkout-discount"><summary>{activeCoupon ? `Discount applied · ${activeCoupon.code}` : coupon ? "Reapply your discount code" : "Have a discount code?"}</summary><div className="checkout-coupon"><label htmlFor="checkout-coupon">Discount code</label><div><input id="checkout-coupon" value={couponCode} maxLength={32} disabled={isPaying||quoting} onChange={e=>{setCouponCode(e.target.value);setCoupon(null);setCouponMessage('');}}/><button type="button" disabled={!ready||quoting||isPaying||!couponCode.trim()} onClick={()=>void applyCoupon()}>{quoting?'Checking…':'Apply'}</button>{activeCoupon?<button type="button" disabled={isPaying} onClick={()=>{setCoupon(null);setCouponCode('');setCouponMessage('');}}>Remove</button>:null}</div><p role="status">{coupon&&!activeCoupon?'Your ticket selection changed. Apply the code again.':couponMessage}</p></div></details>
           <div className="summary-lines">
@@ -283,7 +290,7 @@ export default function CheckoutForm({ installmentStepMinor, slug, event, feeBas
             {discountMinor>0?<span>Discount · {activeCoupon?.code}<b>−{formatGhanaCedis(discountMinor)}</b></span>:null}
             {selectedTier.admissionsPerUnit > 1 && <span>Admissions included <b>{admissionCount}</b></span>}
             <span>Booking fee ({feePercent}%) <b>{formatGhanaCedis(feeMinor)}</b></span>
-            <strong>Total <b>{formatGhanaCedis(totalMinor)}</b></strong>
+            <strong className="checkout-final-total">Total <b>{formatGhanaCedis(totalMinor)}</b></strong>
             {installmentStepMinor ? <><label><input type="radio" name="paymentChoice" checked={paymentChoice === "balance"} disabled={isPaying} onChange={()=>setPaymentChoice("balance")}/> Pay in full</label><label><input type="radio" name="paymentChoice" checked={paymentChoice === "installment"} disabled={isPaying} onChange={()=>setPaymentChoice("installment")}/> Pay {formatGhanaCedis(Math.min(totalMinor,installmentStepMinor))} now</label><span>Due today <b>{formatGhanaCedis(dueMinor)}</b></span>{paymentChoice === "installment" ? <><span>Remaining <b>{formatGhanaCedis(totalMinor-dueMinor)}</b></span><p className="secure-note">Ticket and Room access after payment. Pay the balance before entry.</p></> : null}</> : null}
           </div>
           <ActionButton type="button" className="pay-button" aria-busy={!ready || isPaying} aria-describedby={message ? "checkout-payment-message" : undefined} icon={<LockKeyhole size={17} />} onClick={continueToPay} disabled={!ready || quoting || isPaying || (!paystackEnabled && !seevEnabled)}>{!paystackEnabled && !seevEnabled ? "Checkout opens soon" : !ready ? "Preparing checkout…" : isPaying ? "Making it official…" : paymentMethod === "card" ? `Continue to card payment · ${formatGhanaCedis(totalMinor)}` : paymentMethod === "mobile_money" ? `Pay with MoMo · ${formatGhanaCedis(dueMinor)}` : paymentMethod === "crypto" ? `Continue to USDC payment · ${formatGhanaCedis(totalMinor)}` : "Choose a payment method"}</ActionButton>

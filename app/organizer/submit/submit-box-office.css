@@ -1,0 +1,68 @@
+.submission-page.submission-page--box-office {
+  --submit-ink: #fff3e8;
+  --submit-muted: #dbc9d1;
+  --submit-rule: #816f7a;
+  --submit-paper: #33262d;
+  --submit-field: #271e26;
+  --submit-accent: #ffb397;
+  background: #281e26;
+  color: var(--submit-ink);
+  color-scheme: dark;
+}
+
+.submission-box-office { width: min(1080px, calc(100% - 40px)); margin-inline: auto; padding: clamp(24px,4vw,44px) 0 72px; }
+.submission-box-office__intro { padding-bottom: 18px; border-bottom: 4px double var(--submit-rule); }
+.submission-box-office__intro .night-kicker { margin: 0 0 10px; color: var(--submit-accent); }
+.submission-box-office__intro h1 { margin: 0; font-size: clamp(2rem, 5vw, 3.25rem); line-height: 1.04; letter-spacing: -.045em; }
+.submission-box-office__intro > p:last-child { margin: 8px 0 0; max-width: 58ch; color: var(--submit-muted); line-height: 1.55; }
+.submission-page--box-office .submission-box-office .submission-body { grid-template-columns: minmax(0,1.55fr) minmax(0,1fr); align-items:start; gap: 16px; max-width: none; padding: 18px 0 0; }
+.submission-page--box-office .submission-box-office :is(.submission-form,.submission-guide,.submission-success) {
+  min-width: 0; min-height: 0; width: 100%; margin: 0; padding: clamp(14px, 2.4vw, 24px);
+  border: 1px solid var(--submit-rule); border-radius: 12px; background: var(--submit-paper); color: var(--submit-ink);
+}
+.submission-box-office :is(.submission-form,.submission-guide,.submission-success) :is(h2,b) { color: var(--submit-ink); }
+.submission-page--box-office .submission-box-office :is(.submission-form-heading p,.submission-fields label > span,.submission-guide li span,.submission-submit p,.submission-success > p,.poster-upload small,.submission-consent--check) { color: var(--submit-muted); }
+.submission-box-office .submission-form-heading { padding: 14px 0 0; }
+.submission-box-office .submission-form-heading h2 { font-size: clamp(1.35rem,3vw,1.8rem); }
+.submission-page--box-office .submission-box-office .submission-form > section { padding-top: 10px; }
+.submission-box-office .submission-progress { margin: 0; padding: 0; border-color: var(--submit-rule); }
+.submission-box-office .submission-progress button { color: var(--submit-muted); gap: 5px; text-align: start; }
+.submission-box-office .submission-progress button[aria-current="step"] { color: var(--submit-ink); border-bottom: 2px solid var(--submit-accent); }
+.submission-box-office .submission-progress button > span { color: inherit; border-radius: 0; background: transparent; width: 23px; }
+.submission-page--box-office .submission-box-office .submission-fields { gap: 12px; }
+.submission-page--box-office .submission-box-office .submission-fields label { color: var(--submit-ink); }
+.submission-page--box-office .submission-box-office .submission-fields :is(input,select,textarea) { border-color: var(--submit-rule); color: var(--submit-ink); background: var(--submit-field); margin-top: 5px; }
+.submission-box-office .submission-fields :is(input,textarea)::placeholder { color: #c7b6c0; }
+.submission-page--box-office .submission-box-office .poster-upload { min-height: 112px; background: var(--submit-field); border-color: var(--submit-rule); color: var(--submit-accent); }
+.submission-page--box-office .submission-box-office .poster-upload b { color: var(--submit-ink); }
+.submission-page--box-office .submission-box-office .submission-consent--check input { accent-color: var(--submit-accent); }
+.submission-page--box-office .submission-box-office .submission-submit { border-color: var(--submit-rule); margin-top: 18px; padding-top: 12px; }
+.submission-page--box-office .submission-box-office :is(.submission-submit .ticket-action,.submission-success button) { background: var(--submit-accent); color: #291a20; box-shadow: none; }
+.submission-page--box-office .submission-box-office .submission-submit .submission-back { color: var(--submit-ink); }
+.submission-box-office .submission-guide .night-kicker { margin: 0 0 8px; color: var(--submit-accent); }
+.submission-box-office .submission-guide h2 { margin: 0; font-size: 1.45rem; }
+.submission-box-office .submission-guide ol { margin: 14px 0 0; }
+.submission-box-office .submission-guide li { margin: 0; padding: 11px 0; border-top: 1px solid var(--submit-rule); }
+.submission-box-office .submission-guide li::before { color: var(--submit-accent); }
+.submission-box-office .submission-guide :is(summary, a) { min-height: 44px; color: var(--submit-ink); }
+.submission-box-office .submission-guide summary { display: list-item; align-content: center; cursor: pointer; text-underline-offset: 3px; }
+.submission-box-office .submission-guide > a { text-decoration: underline; text-underline-offset: 3px; }
+.submission-box-office .submission-guide__features { list-style: none; padding: 0; margin: 0; }
+.submission-box-office .submission-guide__features li { grid-template-columns: 17px 1fr; }
+.submission-box-office .submission-guide__features li::before { content: none; }
+.submission-box-office .submission-guide__features svg { color: var(--submit-accent); }
+.submission-box-office .submission-success > svg { color: var(--submit-accent); }
+.submission-page--box-office .submission-box-office :is(a, button, input, textarea, select, summary):focus-visible { outline: 2px solid #fff3e8; outline-offset: 3px; box-shadow: none; }
+.submission-page--box-office .submission-box-office .poster-upload:focus-within { outline: 2px solid #fff3e8; outline-offset: 3px; }
+
+@media (max-width: 720px) {
+  .submission-page--box-office .submission-box-office .submission-body { grid-template-columns: minmax(0,1fr); }
+  .submission-page--box-office .submission-box-office .submission-fields { grid-template-columns: minmax(0,1fr); }
+  .submission-page--box-office .submission-box-office .submission-submit { flex-wrap: wrap; }
+  .submission-page--box-office .submission-box-office .submission-submit .ticket-action { min-width: 0; white-space: normal; }
+}
+
+@media (max-width: 360px) {
+  .submission-box-office { width: calc(100% - 28px); }
+  .submission-box-office .submission-progress button > span { display: none; }
+}

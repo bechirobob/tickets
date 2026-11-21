@@ -28,12 +28,17 @@ const publicPages = [
 test("public navigation is usable without horizontal overflow", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-  const menu = page.getByRole("button", { name: "Open navigation" });
+  const menu = page.locator(".night-mobile-menu__trigger");
   await expect(menu).toBeVisible();
+  await expect(menu).toHaveAccessibleName("Open navigation");
   await menu.click();
-  await expect(page.getByRole("link", { name: "My Nights", exact: true }).first()).toBeVisible();
+  await expect(menu).toHaveAttribute("aria-expanded", "true");
+  const panel = page.getByRole("navigation", { name: "Main navigation", exact: true });
+  await expect(panel.getByRole("link", { name: "Discover hosts", exact: true })).toHaveAttribute("href", "/hosts");
+  await expect(panel.getByRole("link", { name: "List your event", exact: true })).toHaveAttribute("href", "/organizer/submit");
   await page.keyboard.press("Escape");
   await expect(menu).toBeFocused();
+  await expect(menu).toHaveAttribute("aria-expanded", "false");
   await page.evaluate(() => window.scrollTo(0, 700));
   await expect.poll(() => page.evaluate(() => Math.round(window.scrollY))).toBe(700);
   if ((page.viewportSize()?.width ?? 1000) <= 760) {
@@ -47,119 +52,95 @@ test("public navigation is usable without horizontal overflow", async ({ page })
   expect(overflow).toBeLessThanOrEqual(1);
 });
 
-test("featured nights keep the hero, Drop and Room synchronized", async ({ page, catalogue }) => {
+test("a single featured night stays synchronized with The Drop and The Room", async ({ page, catalogue }) => {
   const now = process.env.E2E_BASE_URL ? Date.now() : Date.parse("2026-09-19T12:00:00Z");
-  if (!process.env.E2E_BASE_URL) await page.clock.setFixedTime(new Date(now));
-  const scenes = catalogue.screens!.filter(({ event }) => isWebsiteListedEvent(event) && event.eventState !== "cancelled" && event.eventState !== "postponed" && (!event.startsAt || Date.parse(event.endsAt ?? event.startsAt) > now));
-  const multiple = scenes.length > 1;
+  if (!process.env.E2E_BASE_URL) await page.clock.install({ time: new Date(now) });
+  const scenes = (catalogue.screens ?? []).map(({ event }) => event).filter(event => isWebsiteListedEvent(event) && event.eventState !== "cancelled" && event.eventState !== "postponed" && (!event.startsAt || Date.parse(event.endsAt ?? event.startsAt) > now));
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto("/");
   await expectWebsiteDiscovery(page, catalogue);
-  if (!scenes.length) {
-    const fallback = page.getByRole('region', { name: 'Featured nights' });
-    await expect(fallback.getByRole('heading', { level: 1 })).toHaveText('Plans, sorted.');
-    await expect(fallback.getByRole('link', { name: 'Explore The Drop', exact: true })).toHaveAttribute('href', '/events');
-    await expect(fallback.locator('.active-night-autoplay-toggle, .compact-hero__price')).toHaveCount(0);
-    await expect(page.locator('.room-product-phone__header b').first()).toHaveText('After Dark');
-    return;
-  }
+
   const experience = page.locator(".active-night-experience");
-  const hero = page.getByRole("region", { name: "Featured nights" });
-  const firstSlug = await experience.getAttribute("data-active-night");
-
-  await expect(hero.locator(".active-night-controls")).toHaveCount(0);
-  const pause = hero.getByRole("button", { name: "Pause featured nights", exact: true });
-  if (multiple) {
-    await expect(experience).not.toHaveAttribute("data-active-night", firstSlug ?? "waiting", { timeout: 6_500 });
-    await expect(pause).toHaveCSS("clip-path", "inset(50%)");
-    await pause.focus();
-    await expect(pause).toHaveCSS("clip-path", "none");
-    await pause.click();
-    await expect(hero.getByRole("button", { name: "Resume featured nights", exact: true })).toHaveAttribute("aria-pressed", "true");
-  } else {
-    await expect(pause).toHaveCount(0);
-    await expect(experience).toHaveAttribute("data-active-night", scenes[0]?.event.slug ?? "waiting");
-  }
-  await expect(hero).not.toContainText(/Motion on|Motion off/);
-  // Animated images may extend beyond the frame, but focusing the motion
-  // control must never scroll the hero's own content away from its shade.
-  expect(await hero.evaluate((element) => element.scrollTop)).toBe(0);
-
+  const hero = page.getByRole("region", { name: "Featured night", exact: true });
+  const title = hero.getByRole("heading", { level: 1 });
   const activeSlug = await experience.getAttribute("data-active-night");
-  expect(activeSlug).toBeTruthy();
-  const activeEvent = catalogue.events.find(event => event.slug === activeSlug);
-  expect(activeEvent).toBeTruthy();
-  await expect(page.locator('.drop-card[data-featured="true"]')).toHaveAttribute("data-event-slug", activeSlug!);
+  await expect(hero.getByRole("button", { name: /(?:Pause|Resume|Previous|Next) featured night/i })).toHaveCount(0);
+  await expect(hero.locator(".compact-hero__image")).toHaveCount(1);
+  await expect(hero).not.toHaveAttribute("aria-roledescription", "carousel");
 
-  // CSS uppercases the poster heading; compare its actual event text.
-  const heroTitle = (await hero.getByRole("heading", { level: 1 }).textContent())?.trim() ?? "";
-  expect(heroTitle).toBeTruthy();
-  await expect(hero.getByRole("heading", { level: 1 })).toHaveCSS("text-transform", "none");
-  await expect(hero.getByRole("heading", { level: 1 })).toHaveCSS("opacity", "1");
-  await expect(hero.locator(".compact-hero__shade")).toHaveCSS("opacity", "1");
-  const primaryAction = hero.locator('.ticket-action[data-variant="primary"]');
-  await expect(primaryAction).toBeVisible();
-  const actionBounds = await primaryAction.boundingBox();
-  expect(actionBounds?.height).toBeGreaterThanOrEqual(44);
-  expect(actionBounds?.width).toBeGreaterThanOrEqual(44);
-  if (activeEvent?.scheduleStatus === 'coming_soon') {
-    await expect(hero.locator('.compact-hero__price')).toHaveCount(0);
-    await expect(hero).toContainText("Coming soon");
-  } else if (activeEvent?.registrationMode === 'rsvp' || activeEvent?.registrationMode === 'interest') {
-    const label = activeEvent.registrationMode === 'rsvp' ? 'RSVP' : 'Keep me posted';
-    await expect(hero.locator('.compact-hero__price')).toHaveText(label);
-    await expect(primaryAction).toHaveText(label);
-    await expect(primaryAction).toHaveAttribute('href', `/rsvp/${activeSlug}`);
-    await expect(hero.locator('.compact-hero__price')).not.toContainText('GH₵');
+  const browse = page.locator("#drop").getByRole("link", { name: "Browse all events", exact: true });
+  await expect(browse).toHaveCount(1);
+  await expect(browse).toHaveAttribute("href", "/events");
+  await expect(browse.locator(".lucide-arrow-up-right")).toHaveCount(0);
+  const browseTarget = await browse.boundingBox();
+  expect(browseTarget?.height).toBeGreaterThanOrEqual(44);
+  const dropContent = page.locator("#drop :is(.event-empty, .discovery-explorer)").first();
+  const contentBounds = await dropContent.boundingBox();
+  expect(browseTarget!.y).toBeGreaterThanOrEqual(contentBounds!.y + contentBounds!.height - 1);
+
+  if (!scenes.length) {
+    expect(activeSlug).toBe("waiting");
+    await expect(title).toHaveText("Plans, sorted.");
+    await expect(hero.locator(".compact-hero__price")).toHaveCount(0);
+    await expect(page.locator(".room-product-phone__header b").first()).toHaveText("After Dark");
   } else {
-    await expect(hero.locator('.compact-hero__price')).toContainText("GH₵350");
-    await expect(hero.locator('.compact-hero__price')).not.toContainText(/fee/i);
+    const active = scenes.find(event => event.slug === activeSlug);
+    expect(active, "Featured event comes from the eligible public catalogue").toBeTruthy();
+    await expect(title).toHaveText(active!.title);
+    await expect(title).toHaveCSS("text-transform", "none");
+    await expect(page.locator(".room-product-phone__header b").first()).toHaveText(active!.title);
+    const card = page.locator('.drop-card[data-featured="true"]');
+    if (await card.count()) await expect(card).toHaveAttribute("data-event-slug", activeSlug!);
+    const primary = hero.locator('.ticket-action[data-variant="primary"]');
+    await expect(primary).toBeVisible();
+    const box = await primary.boundingBox();
+    expect(box?.height).toBeGreaterThanOrEqual(44);
+    expect(box?.width).toBeGreaterThanOrEqual(44);
+    if (active?.scheduleStatus === "coming_soon") {
+      await expect(hero.locator(".compact-hero__price")).toHaveCount(0);
+    } else if (active?.registrationMode === "rsvp" || active?.registrationMode === "interest") {
+      const label = active.registrationMode === "rsvp" ? "RSVP" : "Keep me posted";
+      await expect(hero.locator(".compact-hero__price")).toHaveText(label);
+      await expect(primary).toHaveText(label);
+      await expect(primary).toHaveAttribute("href", `/rsvp/${activeSlug}`);
+    } else {
+      await expect(hero.locator(".compact-hero__price")).not.toContainText(/fee/i);
+    }
   }
-  await expect(page.locator(".room-product-phone__header b").first()).toHaveText(heroTitle);
 
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-  expect(overflow).toBeLessThanOrEqual(1);
+  // Cross the former 4.5s interval twice without freezing the browser clock
+  // on hosted runs. A change in hero event, image, or title is a regression.
+  const currentTitle = await title.textContent();
+  const currentImage = await hero.locator("img").first().getAttribute("src");
+  if (process.env.E2E_BASE_URL) await page.waitForTimeout(9_250);
+  else await page.clock.runFor(9_250);
+  await expect(experience).toHaveAttribute("data-active-night", activeSlug!);
+  await expect(title).toHaveText(currentTitle!);
+  await expect(hero.locator("img").first()).toHaveAttribute("src", currentImage!);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
 });
 
-test("featured motion continues in the Room and resumes after returning to the hero", async ({ page, catalogue }) => {
-  // Keep navigation bounded while reserving time for both real-time rotations.
-  test.setTimeout(60_000);
-  const now = process.env.E2E_BASE_URL ? Date.now() : Date.parse("2026-09-19T12:00:00Z");
-  if (!process.env.E2E_BASE_URL) await page.clock.setFixedTime(new Date(now));
-  const scenes = catalogue.screens!.filter(({ event }) => isWebsiteListedEvent(event) && event.eventState !== "cancelled" && event.eventState !== "postponed" && (!event.startsAt || Date.parse(event.endsAt ?? event.startsAt) > now));
-  const multiple = scenes.length > 1;
-  await page.emulateMedia({ reducedMotion: "no-preference" });
-  await page.goto("/", { timeout: 30_000 });
-  await expectWebsiteDiscovery(page, catalogue);
-  if (!scenes.length) {
-    const fallback = page.getByRole('region', { name: 'Featured nights' });
-    await expect(fallback.getByRole('heading', { level: 1 })).toHaveText('Plans, sorted.');
-    await expect(fallback.getByRole('link', { name: 'Explore The Drop', exact: true })).toHaveAttribute('href', '/events');
-    await expect(fallback.locator('.active-night-autoplay-toggle, .compact-hero__price')).toHaveCount(0);
-    await expect(page.locator('.room-product-phone__header b').first()).toHaveText('After Dark');
-    return;
-  }
-  const experience = page.locator(".active-night-experience");
+test("The Room retains its two previews, manual rail and compact conversation", async ({ page }) => {
+  await page.goto("/");
   const room = page.locator("#the-room");
-  const track = room.locator(".room-product-scene__phones");
+  const preview = room.getByRole("region", { name: "The Room preview" });
+  const track = preview.locator(".room-product-scene__phones");
   await room.scrollIntoViewIfNeeded();
-  // Retain the selected phone when its event changes on narrow screens.
-  await track.evaluate((element) => element.scrollTo({ left: element.scrollWidth, behavior: "instant" }));
-  const offset = await track.evaluate((element) => element.scrollLeft);
-  const roomSlug = await experience.getAttribute("data-active-night");
-  if (multiple) await expect(experience).not.toHaveAttribute("data-active-night", roomSlug ?? "waiting", { timeout: 6_500 });
-  else { await page.waitForTimeout(5_000); await expect(experience).toHaveAttribute("data-active-night", roomSlug!); }
-  expect(Math.abs(await track.evaluate((element) => element.scrollLeft) - offset)).toBeLessThanOrEqual(2);
-
-  const hero = page.getByRole("region", { name: "Featured nights" });
-  await hero.scrollIntoViewIfNeeded();
-  await hero.hover();
-  const heroSlug = await experience.getAttribute("data-active-night");
-  if (multiple) await expect(experience).not.toHaveAttribute("data-active-night", heroSlug ?? "waiting", { timeout: 6_500 });
-  else await expect(experience).toHaveAttribute("data-active-night", heroSlug!);
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  if (multiple) await expect(hero.getByRole("button", { name: "Pause featured nights", exact: true })).toBeDisabled();
-  else await expect(hero.locator(".active-night-autoplay-toggle")).toHaveCount(0);
+  await expect(preview.getByRole("group", { name: "Before arrival, 1 of 2" })).toHaveCount(1);
+  await expect(preview.getByRole("group", { name: "Inside the night, 2 of 2" })).toHaveCount(1);
+  for (const side of ["arrival", "inside"]) {
+    const frame = room.locator(`.room-product-phone--${side} .room-product-phone__render`);
+    await expect(frame).toHaveAttribute("src", `/devices/box-office-${side}.webp`);
+    await expect.poll(() => frame.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
+  }
+  if (await track.evaluate(element => element.scrollWidth > element.clientWidth + 2)) {
+    await track.focus();
+    await expect(track).toBeFocused();
+    await track.evaluate(element => element.scrollTo({ left: element.scrollWidth, behavior: "instant" }));
+    await expect.poll(() => track.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
+    const position = await track.evaluate(element => element.scrollLeft);
+    await expect.poll(() => track.evaluate(element => Math.abs(element.scrollLeft - position))).toBeLessThanOrEqual(2);
+  }
   // Host notices must remain inside the phone's visible conversation area.
   const hostNotices = await room.locator(".scene-host").evaluateAll((notices) => notices.map((notice) => {
     const noticeBounds = notice.getBoundingClientRect();
@@ -315,13 +296,8 @@ for (const path of publicPages) {
 test("customer controls use neutral keyboard focus without halos", async ({ page, catalogue }) => {
   for (const path of ["/", "/my-nights", "/notifications"]) {
     await page.goto(path, { waitUntil: "domcontentloaded" });
-    let listed = true;
-    if (path === "/") {
-      // The single-event hero has no playback control. Use the shared
-      // interactive readiness signal rather than focusing server markup.
-      listed = await expectWebsiteDiscovery(page, catalogue);
-    }
-    const controls = path === "/" ? (listed ? page.locator('.compact-hero .ticket-action[data-variant="primary"]') : page.locator('.event-empty').getByRole('link', { name: 'My Nights', exact: true })) : path === "/my-nights" ? page.locator('.nights-privacy') : page.locator('.account-navigation a[aria-current="page"]');
+    if (path === "/") await expectWebsiteDiscovery(page, catalogue);
+    const controls = path === "/" ? page.locator('#drop').getByRole('link', { name: 'Browse all events', exact: true }) : path === "/my-nights" ? page.locator('.nights-privacy') : page.locator('.account-navigation a[aria-current="page"]');
     await page.keyboard.press("Tab");
     await controls.focus();
     await expect(controls).toBeFocused();

@@ -95,24 +95,21 @@ for (const route of ['/help', '/terms', '/privacy']) {
 test("Hosts connect to the guest journey", async ({ page }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
-  const bridge = page.locator(".backstage-bridge");
-  await bridge.scrollIntoViewIfNeeded();
-  await expect(bridge.getByRole("link", { name: "Meet the Hosts" })).toHaveAttribute("href", "/hosts");
-  await expect(bridge.getByRole("link", { name: "Explore nights" })).toHaveAttribute("href", "/events");
-  const photo = bridge.locator(".backstage-bridge__image img");
-  await expect.poll(() => photo.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
-  const bounds = await photo.boundingBox();
-  expect(bounds?.height).toBeGreaterThan(180);
-  expect(bounds?.width).toBeGreaterThan(200);
-  await expect(bridge.locator("figcaption")).toBeVisible();
-  if (await bridge.evaluate(element => element.classList.contains("backstage-bridge--split")) && page.viewportSize()!.width > 700) {
-    const copy = await bridge.locator(".organizer-intelligence__copy").boundingBox();
-    const benefits = await bridge.locator("dl").boundingBox();
-    expect(bounds!.x).toBeGreaterThan(copy!.x + copy!.width);
-    expect(Math.abs(benefits!.x - copy!.x)).toBeLessThanOrEqual(1);
-    expect(bounds!.height).toBeGreaterThan(copy!.height);
+  const kit = page.getByRole("region", { name: "Good to go." });
+  await kit.scrollIntoViewIfNeeded();
+  await expect(kit.getByText("Your tickets", { exact: true })).toBeVisible();
+  await expect(kit.getByText("The Room", { exact: true })).toBeVisible();
+  await expect(kit.getByText("Host updates", { exact: true })).toBeVisible();
+  const desktopHosts = page.locator(".night-desktop-links").getByRole("link", { name: "Hosts", exact: true });
+  if (await desktopHosts.isVisible()) {
+    await expect(desktopHosts).toHaveAttribute("href", "/hosts");
+  } else {
+    await page.getByRole("button", { name: "Open navigation", exact: true }).click();
+    await expect(page.getByRole("link", { name: "Discover hosts", exact: true })).toHaveAttribute("href", "/hosts");
+    await page.keyboard.press("Escape");
   }
-  await bridge.screenshot({ path: testInfo.outputPath("homepage-organisers.png") });
+  await kit.screenshot({ path: testInfo.outputPath("homepage-guest-kit.png") });
+
 });
 
 test("the Room keeps reactions on their messages and matches the homepage conversation", async ({ page, eventSlug }, testInfo) => {
