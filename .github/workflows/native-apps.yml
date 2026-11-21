@@ -56,7 +56,7 @@ jobs:
           fi
       - run: node ../scripts/verify-browser-environment.mjs chromium webkit
       - run: npm run test:browser
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: mobile-browser-evidence-${{ github.run_id }}
@@ -92,13 +92,13 @@ jobs:
       - name: Validate Android release configuration
         run: ./gradlew --no-daemon -PunsignedReleaseCheck assembleRelease lintRelease
         working-directory: mobile/android
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: Android-unsigned-validation-${{ github.run_id }}
           path: mobile/android/app/build/outputs/apk/release/app-release-unsigned.apk
           if-no-files-found: error
           retention-days: 30
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: android-build-reports-${{ github.run_id }}
@@ -161,7 +161,7 @@ jobs:
         run: |
           python3 scripts/ios-release.py verify-app ios/output/BeCore-Tickets-unsigned.xcarchive/Products/Applications/App.app iphoneos
           ditto -c -k --sequesterRsrc --keepParent ios/output/BeCore-Tickets-unsigned.xcarchive ios/output/BeCore-Tickets-unsigned-archive.zip
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: iPhone-release-validation-${{ github.run_id }}
@@ -175,7 +175,7 @@ jobs:
           retention-days: 30
       - name: Package simulator app
         run: ditto -c -k --sequesterRsrc --keepParent ios/DerivedData/Build/Products/Release-iphonesimulator/App.app BeCore-Tickets-iOS-simulator.zip
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: BeCore-Tickets-iOS-simulator-${{ github.run_id }}
           path: mobile/BeCore-Tickets-iOS-simulator.zip

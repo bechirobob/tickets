@@ -31,7 +31,7 @@ jobs:
       - run: node scripts/verify-browser-environment.mjs chromium webkit
       # setContent + real components/styles only: no app server, accounts or API writes.
       - run: npx playwright test --config playwright.input-modality.config.ts --workers=1 --retries=0
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: always()
         with:
           name: input-modality-${{ github.sha }}
