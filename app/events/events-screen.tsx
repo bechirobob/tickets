@@ -1,5 +1,6 @@
-import "../box-office-home.css";
 "use client";
+
+import "../box-office-home.css";
 
 import BrandLogo from "../brand-logo";
 import Link from "next/link";
