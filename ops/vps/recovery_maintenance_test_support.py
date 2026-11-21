@@ -29,7 +29,7 @@ BASE_WORKFLOWS = {'.github/workflows/deploy.yml': '0bf4539141356389a96f768ac8305
                   '.github/workflows/vps-runtime.yml': '06bdc48477eb0977ed471e549630bd6070758a95'}
 
 
-BOX_OFFICE_DEPLOY_BLOB = 'a9dd72488aa169b0fb02b2b6f716ae098c9a404d'
+BOX_OFFICE_DEPLOY_BLOB = 'eaf8c2a60008607e13329ae6dd6235211c23b020'
 PRE_BOX_OFFICE_DEPLOY_BLOB = '268260bd7642ee1430568aaeeff0a788389535e8'
 
 
@@ -41,6 +41,7 @@ def restore_box_office_deploy(raw):
         b"      - 'ops/vps/box_office_standby_boundary.py'\n"
         b"      - 'ops/vps/test_box_office_standby_boundary.py'\n"
         b"      - 'ops/vps/recovery_maintenance_test_support.py'\n"
+        b"      - 'ops/vps/test_audit_readiness.py'\n"
     )
     needs = (b"    needs: [box_office_standby_boundary]\n"
              b"    if: needs.box_office_standby_boundary.outputs.allow_cloudflare == 'true'\n")

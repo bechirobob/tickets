@@ -117,10 +117,10 @@ test('ordinary deployment excludes only the finite reviewed tooling paths withou
   let currentWorkflow = readFileSync(new URL('../.github/workflows/deploy.yml', import.meta.url), 'utf8');
   const gitBlob = bytes => createHash('sha1').update(`blob ${Buffer.byteLength(bytes)}\0`).update(bytes).digest('hex');
   const previousOverlay = '268260bd7642ee1430568aaeeff0a788389535e8';
-  const standbyPaths = ['ops/vps/box_office_standby_boundary.py', 'ops/vps/test_box_office_standby_boundary.py', 'ops/vps/recovery_maintenance_test_support.py'];
+  const standbyPaths = ['ops/vps/box_office_standby_boundary.py', 'ops/vps/test_box_office_standby_boundary.py', 'ops/vps/recovery_maintenance_test_support.py', 'ops/vps/test_audit_readiness.py'];
   const standby = gitBlob(currentWorkflow) !== previousOverlay;
   if (standby) {
-    assert.equal(gitBlob(currentWorkflow), 'a9dd72488aa169b0fb02b2b6f716ae098c9a404d');
+    assert.equal(gitBlob(currentWorkflow), 'eaf8c2a60008607e13329ae6dd6235211c23b020');
     const parsed = load(currentWorkflow);
     assert.deepEqual(parsed.permissions, { contents: 'read' });
     const gate = parsed.jobs.box_office_standby_boundary;

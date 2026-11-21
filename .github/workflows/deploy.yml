@@ -37,6 +37,7 @@ on:
       - 'ops/vps/box_office_standby_boundary.py'
       - 'ops/vps/test_box_office_standby_boundary.py'
       - 'ops/vps/recovery_maintenance_test_support.py'
+      - 'ops/vps/test_audit_readiness.py'
       - 'ops/vps/parallel_candidate_retry.py'
       - 'ops/vps/parallel_candidate_retry_control.py'
       - 'ops/vps/test_candidate_build.py'

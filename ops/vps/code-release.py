@@ -4222,6 +4222,7 @@ BOX_OFFICE_CONTROLS = frozenset({
     'ops/vps/code-release.py',
     'ops/vps/test_box_office_standby_boundary.py',
     'ops/vps/recovery_maintenance_test_support.py',
+    'ops/vps/test_audit_readiness.py',
     'ops/vps/test_code_release.py',
     'tests/browser-environment.test.mjs',
 })

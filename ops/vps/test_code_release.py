@@ -3985,14 +3985,15 @@ def installment_source_family(root):
 # Independently reviewed control files. The test's self-blob is normalized from
 # this explicitly selected test file, as in the historical fixture families.
 BOX_OFFICE_TEST_FILE = Path(__file__).resolve()
-BOX_OFFICE_OPERATOR_BLOB = 'a0dcd3f3e76408c5b3bcc0535de6dc377affe381'
+BOX_OFFICE_OPERATOR_BLOB = 'f3ddda89336cfb9d6c2b5dbb257a2426da30e693'
 BOX_OFFICE_TEST_CONTROLS = {
     'ops/vps/code-release.py': ('100644', BOX_OFFICE_OPERATOR_BLOB),
-    '.github/workflows/deploy.yml': ('100644', 'a9dd72488aa169b0fb02b2b6f716ae098c9a404d'),
-    'ops/vps/box_office_standby_boundary.py': ('100644', '972541a39ea44c1d4d0b3ae279c9f17bab698214'),
+    '.github/workflows/deploy.yml': ('100644', 'eaf8c2a60008607e13329ae6dd6235211c23b020'),
+    'ops/vps/box_office_standby_boundary.py': ('100644', '608d7f8326b84e215eb57252563045890202acdc'),
     'ops/vps/test_box_office_standby_boundary.py': ('100644', '44db27df7a122ed6078b4de884b37168c6efa14b'),
-    'ops/vps/recovery_maintenance_test_support.py': ('100644', '63f01a0c83acb477b98ee6d0d2afd3d15035d81c'),
-    'tests/browser-environment.test.mjs': ('100644', '940afb909f8eed3f5e042890845e5773dbf256df'),
+    'ops/vps/test_audit_readiness.py': ('100644', 'c2073226f401a3e7840823c744511782fd4a0068'),
+    'ops/vps/recovery_maintenance_test_support.py': ('100644', '7d61237cd5cdcf6a81dc526e22a8fec6dc203199'),
+    'tests/browser-environment.test.mjs': ('100644', 'a2f99d8de32e089118561fab1062ad1d927de97a'),
 }
 
 
