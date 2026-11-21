@@ -51,8 +51,9 @@
  inset:1.7% 3.4%;border-radius:13.4% / 6.7%;
 }
 @media(max-width:760px){
- .discovery-home .compact-hero.box-office-hero{
-  grid-template-columns:1fr;width:calc(100% - 32px);margin-top:12px
+ .discovery-home .compact-hero.box-office-hero,
+ .discovery-home .compact-hero.box-office-hero:has(img[data-portrait-crop]){
+  grid-template-columns:1fr;width:calc(100% - 32px);height:auto;min-height:0;margin-top:12px
  }
  .discovery-home .box-office-hero > img.compact-hero__image{
   grid-column:1;grid-row:1;height:clamp(148px,51vw,330px);min-height:0
@@ -93,4 +94,10 @@
  order:2;margin-top:4px;min-height:44px;padding:8px 11px;border:1px solid #887780;border-radius:7px;
  color:#fff3e3;text-decoration:none
 }
-@media(max-width:780px){.drop-explorer--full .discovery-grid{grid-template-columns:1fr}}
+@media(max-width:780px){
+ .drop-explorer--full .discovery-grid{grid-template-columns:1fr}
+ /* Keep one flyer size across stacked listings, irrespective of the copy length. */
+ .drop-explorer--full .discovery-grid .drop-card[data-colour-scheme] .drop-card__image{
+  aspect-ratio:4/5;align-self:start
+ }
+}
