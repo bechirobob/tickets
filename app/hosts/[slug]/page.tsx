@@ -2,8 +2,9 @@
 import type { Metadata } from "next";
 import HostPortrait from "../../host-portrait";
 import BrandLogo from "../../brand-logo";
+import { ActionLink } from "../../action";
 import Link from "next/link";
-import { ArrowLeft, ArrowUpRight, BadgeCheck, Instagram, MapPin } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, CalendarDays, Instagram } from "lucide-react";
 import { notFound } from "next/navigation";
 import MemberActions from "../../member-actions";
 import { getPublicEvents } from "../../events";
@@ -11,7 +12,6 @@ import { isWebsiteListedEvent } from "../../../lib/website-event-listings";
 import { eventTiming, findHostBySlug, listHostEventSlugs } from "../../../lib/event-experience";
 import PublicNavigation from "../../mobile-navigation";
 import "../hosts.css";
-import "../../host-brand.css";
 
 export const dynamic = "force-dynamic";
 
@@ -35,35 +35,35 @@ export default async function HostPage({ params }: { params: Promise<{ slug: str
   if (!host) notFound();
   const [eventSlugs, allEvents] = await Promise.all([listHostEventSlugs(env.DB, host.id), getPublicEvents()]);
   const events = allEvents.filter((event) => isWebsiteListedEvent(event) && eventSlugs.includes(event.slug) && eventTiming(event) !== "past");
-  return <main className="host-page">
+  return <main className="host-page hosts-box-office">
     <header className="directory-header">
-      <Link href="/hosts" aria-label="Back to hosts"><ArrowLeft size={16} /><span className="directory-header__back-label">Hosts</span></Link>
+      <Link href="/hosts" aria-label="Back to hosts"><ArrowLeft size={16} aria-hidden="true" /><span className="directory-header__back-label">Hosts</span></Link>
       <Link href="/" className="brand-mark"><BrandLogo /></Link><PublicNavigation />
     </header>
-    <section className={`host-profile host-profile--portrait${host.brandName?.trim() ? " host-profile--branded" : ""}`} aria-labelledby="host-name">
-      <div className="host-profile__portrait">
-        <HostPortrait host={host} variant="profile" />
-      </div>
-      <div className="host-profile__identity">
-        {host.brandName?.trim() ? <p className="host-brand-eyebrow">{host.brandName}</p> : <p className="eyebrow">{host.verificationStatus === "verified" ? <><BadgeCheck size={14} /> Verified host</> : "Meet your host"}</p>}
-        <h1 id="host-name">{host.name}</h1>
-        <div className="host-profile__city"><span><MapPin size={14} aria-hidden="true" /> {host.city}</span>{host.brandName?.trim() && host.verificationStatus === "verified" ? <span className="host-profile__verified"><BadgeCheck size={14} aria-hidden="true" /> Verified host</span> : null}</div>
-      </div>
-      <div className="host-profile__details">
-        <p className="host-profile__bio">{host.bio}</p>
-        {host.instagramHandle || host.snapchatHandle ? <nav className="host-profile__socials" aria-label={`${host.name} on social media`}>
-          {host.instagramHandle ? <a href={`https://www.instagram.com/${encodeURIComponent(host.instagramHandle)}/`} target="_blank" rel="noopener noreferrer"><Instagram size={18} aria-hidden="true" /><span>Instagram<small>@{host.instagramHandle}</small></span><ArrowUpRight size={16} aria-hidden="true" /></a> : null}
-          {host.snapchatHandle ? <a href={`https://www.snapchat.com/add/${encodeURIComponent(host.snapchatHandle)}`} target="_blank" rel="noopener noreferrer"><span>Snapchat<small>@{host.snapchatHandle}</small></span><ArrowUpRight size={16} aria-hidden="true" /></a> : null}
-        </nav> : null}
-        <MemberActions hostSlug={host.slug} />
-      </div>
-    </section>
-    <section className="host-events">
-      <header><p className="eyebrow">From {host.name}</p><h2>Next on the list</h2></header>
-      {events.length ? <div>{events.map((event) => <article key={event.slug}>
-        <img src={event.image} alt={`Poster for ${event.title}`} loading="lazy" />
-        <div><span>{event.shortDate} · {event.area}</span><h3>{event.title}</h3><p>{event.registrationMode === "rsvp" ? "RSVP" : event.registrationMode === "interest" ? "Keep me posted" : `From GH₵${event.price}`}</p><Link href={`/event/${event.slug}`}>See the night <ArrowUpRight size={14} /></Link></div>
-      </article>)}</div> : <div className="host-profile__empty"><p>The next invite is still under wraps. Keep an eye here.</p><Link href="/events">See what else is on <ArrowUpRight size={15} aria-hidden="true" /></Link></div>}
-    </section>
+    <div className="hosts-box-office__content">
+      <section className="host-ticket host-ticket--profile" aria-labelledby="host-name">
+        <div className="host-ticket__copy">
+          {host.brandName?.trim() ? <p className="hosts-box-office__label">{host.brandName}</p> : null}
+          <h1 id="host-name">{host.name}</h1>
+          <p className="host-ticket__brand">{host.city}{host.verificationStatus === "verified" ? " · Verified host" : ""}</p>
+          <p className="host-ticket__bio">{host.bio}</p>
+          {host.instagramHandle || host.snapchatHandle ? <nav className="host-profile__socials" aria-label={`${host.name} on social media`}>
+            {host.instagramHandle ? <a href={`https://www.instagram.com/${encodeURIComponent(host.instagramHandle)}/`} target="_blank" rel="noopener noreferrer"><Instagram size={18} aria-hidden="true" /><span>Instagram<small>@{host.instagramHandle}</small></span><ArrowUpRight size={16} aria-hidden="true" /></a> : null}
+            {host.snapchatHandle ? <a href={`https://www.snapchat.com/add/${encodeURIComponent(host.snapchatHandle)}`} target="_blank" rel="noopener noreferrer"><span>Snapchat<small>@{host.snapchatHandle}</small></span><ArrowUpRight size={16} aria-hidden="true" /></a> : null}
+          </nav> : null}
+          <MemberActions hostSlug={host.slug} />
+        </div>
+        <div className="host-ticket__stub">
+          <HostPortrait host={host} variant="profile" />
+        </div>
+      </section>
+      <section className="host-events" aria-labelledby="host-nights-heading">
+        <header><p className="hosts-box-office__label">From {host.name}</p><h2 id="host-nights-heading">Next on the list</h2></header>
+        {events.length ? <div>{events.map((event) => <article key={event.slug}>
+          <img src={event.image} alt={`Poster for ${event.title}`} loading="lazy" />
+          <div><span>{event.shortDate} · {event.area}</span><h3>{event.title}</h3><p>{event.registrationMode === "rsvp" ? "RSVP" : event.registrationMode === "interest" ? "Keep me posted" : `From GH₵${event.price}`}</p><Link href={`/event/${event.slug}`}>See the night <ArrowUpRight size={14} /></Link></div>
+        </article>)}</div> : <div className="host-profile__empty"><p>The next invite is still under wraps. Keep an eye here.</p><ActionLink href="/events" variant="secondary" icon={<CalendarDays size={17} />}>Browse events</ActionLink></div>}
+      </section>
+    </div>
   </main>;
 }

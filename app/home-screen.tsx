@@ -2,10 +2,8 @@
 
 import PaymentFooter from "./payment-footer";
 import BrandLogo from "./brand-logo";
-import Image from "next/image";
 import Link from "next/link";
-import { Bell, MapPin, MessageCircle, Ticket } from "lucide-react";
-import { ActionLink } from "./action";
+import { Bell, MapPin, Ticket } from "lucide-react";
 import ActiveNightExperience from "./active-night-experience";
 import type { CustomerEvent } from "../lib/customer-screen";
 import ScrollReveal from "./scroll-reveal";
@@ -22,17 +20,11 @@ export default function HomeScreen({ events }: { events: CustomerEvent[] }) {
 
     <ActiveNightExperience events={events} />
 
-    <section className="organizer-intelligence backstage-bridge backstage-bridge--split" data-scroll-reveal>
-      <div className="organizer-intelligence__copy">
-        <p className="night-kicker"><span /> Behind the night / Meet the Hosts</p>
-        <h2>Find your people.<br />Make a night of it.</h2>
-        <p>Meet the people behind the nights and find your next plan.</p>
-        <div className="backstage-bridge__actions"><ActionLink href="/hosts">Meet the Hosts</ActionLink><ActionLink href="/events" variant="text">Explore nights</ActionLink></div>
-      </div>
-      <figure className="backstage-bridge__image"><Image src="/atmospheres/behind-the-night.webp" width={1100} height={733} sizes="(max-width: 700px) 100vw, 50vw" alt="" aria-hidden="true" unoptimized /><figcaption>Good nights don’t happen by accident.</figcaption></figure>
+    <section className="box-office-guest-kit" aria-labelledby="guest-kit-title">
+      <p className="night-kicker">BeCore Tickets</p><h2 id="guest-kit-title">Good to go.</h2>
       <dl>
         <div><dt><Ticket aria-hidden="true" size={20} /> Your tickets</dt><dd>Keep your bookings and entry passes in My Nights.</dd></div>
-        <div><dt><MessageCircle aria-hidden="true" size={20} /> The Room</dt><dd>Meet the crowd before your night begins.</dd></div>
+        <div><dt><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 21V9a7 7 0 0 1 14 0v12M3 21h18M5 9l9-3v15H5M10.5 14h.01" /></svg> The Room</dt><dd>Meet the crowd before your night begins.</dd></div>
         <div><dt><Bell aria-hidden="true" size={20} /> Host updates</dt><dd>Check My Nights for updates to your plans.</dd></div>
       </dl>
     </section>

@@ -42,7 +42,7 @@ export default function TicketAccess() {
       window.location.replace(ticketAccessRedirect(kind,data.redirectTo,data.eventSlug,window.location.origin));
     } catch (error) { setMessage(requestErrorMessage(error)); setBusy(false); submitting.current = false; }
   }
-  return <main className="ticket-access">
+  return <main className="ticket-access supporting-box-office">
     <header><Link href="/events"><ArrowLeft size={16} /> The Drop</Link><Link href="/" aria-label="BeCore Tickets home"><BrandLogo /></Link></header>
     <section aria-labelledby="ticket-access-title">
       <Ticket size={32} aria-hidden="true" />

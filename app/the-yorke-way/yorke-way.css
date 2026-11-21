@@ -97,3 +97,51 @@ body .yorke-sponsor .brand-logo__type > small { font: 550 8px/1 var(--font-syste
 }
 @media (max-width: 360px) { .yorke-header, .yorke-main, .yorke-footer { padding-left: 16px; padding-right: 16px; }.yorke-identity > span { font-size: 16px; }.yorke-identity > img { width: 43px; height: 43px; }.yorke-intro h1 { font-size: 35px; } }
 @media (prefers-reduced-motion: reduce) { .yorke-way *, .yorke-way *::before, .yorke-way *::after { animation: none !important; transition: none !important; } }
+
+/* Early-access signup only: flat layout on the existing host colour field. */
+.yorke-main {
+  --yorke-signup-accent: #e9bfae;
+  max-width: 1120px;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-items: start;
+  gap: 14px clamp(20px, 5vw, 54px);
+  padding: 16px clamp(16px, 5vw, 48px) 0;
+}
+.yorke-main .yorke-intro { padding: 0; }
+.yorke-main .yorke-intro h1 { font-size: clamp(2.15rem, 5.1vw, 4.55rem); line-height: 1.01; margin: .45rem 0 .85rem; }
+.yorke-main .yorke-intro .yorke-eyebrow,
+.yorke-main .yorke-intro h1 > .yorke-punchline { color: var(--yorke-signup-accent); }
+.yorke-main .yorke-intro .yorke-eyebrow > span { border-radius: 50%; }
+.yorke-main .yorke-logo-stage { align-self: center; min-height: 0; padding: 0; }
+.yorke-main .yorke-logo-stage > img { width: min(100%, 290px); }
+.yorke-main .yorke-form-section { max-width: 550px; padding: 0; }
+.yorke-main .yorke-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; }
+.yorke-main .yorke-field label { margin-bottom: 2px; font-size: .94rem; font-weight: 650; }
+.yorke-main .yorke-field input {
+  min-height: 44px; padding: 8px 4px; border: 0; border-radius: 0;
+  border-bottom: 1px solid #b8a2ad; background: transparent;
+}
+.yorke-main .yorke-consent { min-height: 44px; margin: 14px 0; font-size: .9rem; }
+.yorke-main .yorke-submit {
+  width: fit-content; min-height: 44px; padding: 8px 14px;
+  background: var(--yorke-signup-accent); color: var(--yorke-plum);
+}
+.yorke-main .yorke-fine-print { margin-top: 13px; padding-top: 0; border: 0; }
+@media (hover: hover) {
+  .yorke-main .yorke-submit:hover:not(:disabled) { background: #f4d0c0; }
+}
+@media (forced-colors: none) {
+  .yorke-main .yorke-field input:focus {
+    outline: none; border-bottom: 3px solid var(--yorke-cream); padding-bottom: 6px;
+  }
+  .yorke-main .yorke-consent:has(input:focus-visible) > span { text-decoration: underline; text-underline-offset: .2em; }
+  .yorke-main .yorke-consent input:focus-visible { outline: none; }
+}
+@media (max-width: 700px) {
+  .yorke-main { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; gap: 13px; }
+  .yorke-main .yorke-logo-stage { grid-column: 1; grid-row: auto; }
+  .yorke-main .yorke-logo-stage > img { width: min(40vw, 168px); }
+  .yorke-main .yorke-fields { grid-template-columns: minmax(0, 1fr); }
+  .yorke-main .yorke-submit { width: 100%; }
+}
