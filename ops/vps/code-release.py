@@ -4210,8 +4210,130 @@ def reviewed_installment_application_blobs(expected, source):
     return {name: blob for name, (_, blob) in candidate.items()}
 
 
+# One Box Office visual release with its exact mandatory Next.js patch; no schema or runtime changes.
+BOX_OFFICE_LIVE = '8c77eec14c6093a707a15bdaff6c4c631dbd358a'
+BOX_OFFICE_BASE_TREE = 'ecaa585e893982b6e7bd35d8a0467d684fd9d8e5'
+BOX_OFFICE_SNAPSHOT = '768181e508dff5ec56dc9cfe5efec4cde6bca2bb'
+BOX_OFFICE_SNAPSHOT_TREE = '12eab55d78f200ace79930fa57d2f6d42a411fb9'
+BOX_OFFICE_CANDIDATE_BRANCH = 'release/tickets-box-office-20261121'
+BOX_OFFICE_CONTROLS = frozenset({
+    '.github/workflows/deploy.yml',
+    'ops/vps/box_office_standby_boundary.py',
+    'ops/vps/code-release.py',
+    'ops/vps/test_box_office_standby_boundary.py',
+    'ops/vps/recovery_maintenance_test_support.py',
+    'ops/vps/test_code_release.py',
+    'tests/browser-environment.test.mjs',
+})
+BOX_OFFICE_DEPENDENCY_PAIR = {
+    'package.json': 'ad29f6051b61653524c425957f52a557483a278d',
+    'package-lock.json': '73a957ec9574541344352d3de17145933ad1b17f',
+}
+BOX_OFFICE_BLOBS = {
+    **BOX_OFFICE_DEPENDENCY_PAIR,
+    "app/about/page.tsx": "1518134e12f55e0e9f27a105b382810f566e34e8",
+    "app/active-night-experience.tsx": "dd2b27612b81cd551967798f59e330ffbb84efa2",
+    "app/box-office-home.css": "84f25d904e308b8fa603a8c7f99b4119ab0e4a98",
+    "app/checkout/[slug]/checkout-form.tsx": "74a899c6bdddb3556625b2a1788cc54b04f0a440",
+    "app/checkout/[slug]/checkout-panels.css": "ed7f31ab235123f4c14841956b85e2815a43ce3a",
+    "app/event-explorer.tsx": "b42f97c9308fdacbc676f63f6d51e69f80d70d80",
+    "app/event/[slug]/event-details.css": "15f66095ccb316b16579d09591dc45ee2c51e0e8",
+    "app/event/[slug]/event-screen.tsx": "6e380fc357aa4ffd2028e343dc06dba99a647f9a",
+    "app/events/events-screen.tsx": "04a8a23fb4ddf3b6d4a6dfdc853e4bf041da5086",
+    "app/help/page.tsx": "35cc19e1a4325f90181f57bfcc5788d5ddcdbd06",
+    "app/home-screen.tsx": "453d622f6744851f50fa9a89fa69895d334fd6dd",
+    "app/hosts/[slug]/page.tsx": "2c4375b723487b7cd2126146d5de76883dc807f3",
+    "app/hosts/hosts.css": "fcd644684ed30b3d9b3c2bbd2eaa0f429c175d29",
+    "app/hosts/page.tsx": "8a6cfe92b50afd50b8e56ab8537c2f836f232385",
+    "app/hosts/velvet-rope.tsx": "e9928e0c3686f454b854f1aba30b41bec14cc58a",
+    "app/my-nights/[slug]/night-hub.tsx": "72e510900a19362f1039308410cfa58022c1cfbc",
+    "app/my-nights/access/page.tsx": "61dff4207fbcb28113342f71683a842c86b2282d",
+    "app/my-nights/my-nights-client.tsx": "91fa290d2a3733c18eae263fdbb19fd5c91eea21",
+    "app/organizer/submit/page.tsx": "4511b51d548e0760749838e5880ff21b68a8a217",
+    "app/organizer/submit/submit-box-office.css": "34412caf8673af55fe90a0ba7511de4a352a68ff",
+    "app/payment-outcome.css": "b5d2af79f9d0158dd588004d578d8ab88323a103",
+    "app/payment/return/page.tsx": "5436a3b5f508c7633d7a62c61d241ec36e68b548",
+    "app/rsvp-audience.css": "5438c714e057f05bd8ea9c0c8290e483c57a9baa",
+    "app/supporting-box-office.css": "311758a8d051593a7d6efd46ee6b05602cbd27ad",
+    "app/the-yorke-way/yorke-way.css": "ddce125b850fbaddbe4e246f731e6c5e24641ff1",
+    "app/tickets/ticket-wallet.tsx": "3eaedd067b251ed937d40c63a876201660a92098",
+    "mobile/tests/app.spec.ts": "e83226c6e1b295ba91d745cfe2d40645243f6a56",
+    "public/devices/box-office-arrival.webp": "1509d77cfb6b1625ca17f27e88f58fff697de68a",
+    "public/devices/box-office-inside.webp": "3663ff852af5f355c32e101344d6e8bd893f278b",
+    "styles/customer.css": "c67ab6483f82aafaefb8745e1bcb4241c60031e8",
+    "tests/e2e/checkout-quantity.spec.ts": "9e8d0fe99279fc21ef0aff1ca58df0d87adcded1",
+    "tests/e2e/host-brand-identity.spec.ts": "cf170c01cf2cef2e28124ebe7f6989f4933e7bd7",
+    "tests/e2e/public-journey.spec.ts": "be68f8fe44caa9acdf1358f8fc8e1bc2bf419d05",
+    "tests/e2e/room-demo.spec.ts": "d1dfd848f8e37ffca0836a469586339c030507e5",
+    "tests/e2e/room-identity.spec.ts": "3a68dce04376b4ffca3fd1c609d16ef002d25c7d",
+    "tests/mobile-ui.test.mjs": "b546dd61059ef931b14de35c42d5e935a835f9c3",
+}
+
+
+def verify_box_office_dependency_pair(expected, snapshot_entries):
+    require(all(snapshot_entries.get(name) == ('100644', blob)
+                for name, blob in BOX_OFFICE_DEPENDENCY_PAIR.items()),
+            'Box Office Next.js dependency or lock blob differs.')
+    original = strict_json(git('show', expected + ':package.json').encode())
+    patched = strict_json(git('show', BOX_OFFICE_SNAPSHOT + ':package.json').encode())
+    lock = strict_json(git('show', BOX_OFFICE_SNAPSHOT + ':package-lock.json').encode())
+    require(original.get('dependencies', {}).get('next') == '16.4.1',
+            'Box Office must begin at the reviewed Next.js version.')
+    original['dependencies']['next'] = '16.4.6'
+    packages = lock.get('packages', {})
+    require(patched == original and packages.get('', {}).get('dependencies', {}).get('next') == '16.4.6'
+            and packages.get('node_modules/next', {}).get('version') == '16.4.6',
+            'Box Office must change only the reviewed direct Next.js dependency and exact matching lock.')
+
+
+def reviewed_box_office_application_blobs(expected, source):
+    require(expected == BOX_OFFICE_LIVE, 'Box Office live baseline differs.')
+    for revision, tree in ((BOX_OFFICE_LIVE, BOX_OFFICE_BASE_TREE),
+                           (BOX_OFFICE_SNAPSHOT, BOX_OFFICE_SNAPSHOT_TREE)):
+        require(git('rev-parse', revision + '^{tree}') == tree, 'Box Office reviewed tree differs.')
+    verify_trusted_operator(source)
+    trusted = os.environ['BECORE_TRUSTED_BASE']
+    require(trusted not in (expected, BOX_OFFICE_SNAPSHOT, source),
+            'Box Office requires independently merged controls.')
+    for before, after in ((expected, trusted), (expected, BOX_OFFICE_SNAPSHOT), (BOX_OFFICE_SNAPSHOT, source)):
+        require(git('merge-base', before, after) == before, 'Box Office reviewed ancestry differs.')
+    base, snapshot = rsc_patch_tree_entries(expected), rsc_patch_tree_entries(BOX_OFFICE_SNAPSHOT)
+    control, candidate = rsc_patch_tree_entries(trusted), rsc_patch_tree_entries(source)
+    require(BOX_OFFICE_CONTROLS.isdisjoint(BOX_OFFICE_BLOBS), 'Box Office app and controls overlap.')
+    reviewed = dict(base)
+    reviewed.update({name: ('100644', blob) for name, blob in BOX_OFFICE_BLOBS.items()})
+    require(snapshot == reviewed and all(base.get(name) != snapshot[name] for name in BOX_OFFICE_BLOBS),
+            'Box Office snapshot path, byte or mode inventory differs.')
+    verify_box_office_dependency_pair(expected, snapshot)
+    require({name for name in base.keys() | control.keys() if base.get(name) != control.get(name)}
+            == BOX_OFFICE_CONTROLS, 'Box Office controls changed outside reviewed scope.')
+    require(all(control.get(name, (None,))[0] == '100644' for name in BOX_OFFICE_CONTROLS),
+            'Box Office trusted controls must be regular files.')
+    reviewed.update({name: control[name] for name in BOX_OFFICE_CONTROLS})
+    require(candidate == reviewed, 'Box Office complete source inventory differs.')
+    return {name: candidate[name][1] for name in BOX_OFFICE_BLOBS.keys() | BOX_OFFICE_CONTROLS}
+
+
+def verify_box_office_host_scope(expected, changes, proof, *, enable_crypto, enable_first_host, recover_prepared):
+    candidate = proof.get('candidateVerification') or {}
+    if expected == BOX_OFFICE_LIVE or candidate.get('head_branch') == BOX_OFFICE_CANDIDATE_BRANCH:
+        require(expected == BOX_OFFICE_LIVE
+                and candidate.get('head_branch') == BOX_OFFICE_CANDIDATE_BRANCH
+                and candidate.get('event') == 'workflow_dispatch'
+                and candidate.get('schema') == 'tickets-parallel-candidate/v2',
+                'Box Office host transaction requires exact parallel candidate proof.')
+        require(not enable_crypto and not enable_first_host and not recover_prepared,
+                'Box Office must preserve runtime configuration and normal recovery guards.')
+        require(len(changes) == len(set(changes))
+                and set(changes) == BOX_OFFICE_BLOBS.keys() | BOX_OFFICE_CONTROLS
+                and not migration_plan(changes), 'Box Office requires exact code-only source inventory.')
+
+
+
 def reviewed_application_blobs(expected, source):
     """Select each exact application tree only from its approved live baseline."""
+    if expected == BOX_OFFICE_LIVE:
+        return reviewed_box_office_application_blobs(expected, source)
     if expected == INSTALLMENT_LIVE:
         return reviewed_installment_application_blobs(expected, source)
     if expected == RSC_PATCH_LIVE:
@@ -4338,6 +4460,9 @@ def vetted_changes(expected, source):
         require(before.count(original) == 1 and after == before.replace(
             original, "'SEEV_ENABLED', 'SEEV_CRYPTO_ENABLED', 'SEEV_ENVIRONMENT',"),
             "Only the vetted crypto configuration-name addition is permitted.")
+    if expected == BOX_OFFICE_LIVE:
+        require(not migration_plan(changed), 'Box Office cannot introduce migrations.')
+        return changed
     # Security-response changes require their exact entry in the reviewed blob
     # manifest above; there is no broad header-policy or path-pattern exception.
     if expected == INSTALLMENT_LIVE:
@@ -4626,7 +4751,7 @@ def admitted_parallel_ref(event, branch):
     # Preserve historical admission; only this reviewed release gains a manual ref.
     return (branch == "improve/release-evidence-parallel-20261013"
             and event in ("push", "workflow_dispatch")) or (
-                branch in (COMBINED_CANDIDATE_BRANCH, CUSTOMER_CANDIDATE_BRANCH, ROOM_REFRESH_CANDIDATE_BRANCH, RSC_PATCH_CANDIDATE_BRANCH, INSTALLMENT_CANDIDATE_BRANCH) and event == "workflow_dispatch")
+                branch in (BOX_OFFICE_CANDIDATE_BRANCH, COMBINED_CANDIDATE_BRANCH, CUSTOMER_CANDIDATE_BRANCH, ROOM_REFRESH_CANDIDATE_BRANCH, RSC_PATCH_CANDIDATE_BRANCH, INSTALLMENT_CANDIDATE_BRANCH) and event == "workflow_dispatch")
 
 
 def verify_combined_parallel_scope(candidate, expected, source):
@@ -4657,6 +4782,14 @@ def verify_rsc_patch_parallel_scope(candidate, expected, source, candidate_mode=
         require(candidate.get("head_branch") == RSC_PATCH_CANDIDATE_BRANCH, "RSC security patch candidate branch differs.")
         require(candidate.get("event") == "workflow_dispatch", "RSC security patch candidate must be manually dispatched.")
         reviewed_rsc_patch_application_blobs(expected, source)
+
+
+def verify_box_office_parallel_scope(candidate, expected, source, candidate_mode="parallel-v1"):
+    if expected == BOX_OFFICE_LIVE or candidate.get("head_branch") == BOX_OFFICE_CANDIDATE_BRANCH:
+        require(candidate_mode == "parallel-v1" and candidate.get("head_branch") == BOX_OFFICE_CANDIDATE_BRANCH
+                and candidate.get("event") == "workflow_dispatch",
+                "Box Office requires its exact parallel candidate.")
+        reviewed_box_office_application_blobs(expected, source)
 
 
 def verify_installment_parallel_scope(candidate, expected, source, candidate_mode="parallel-v1"):
@@ -4977,6 +5110,7 @@ def verify_ci(args):
     candidate_mode = getattr(args, "candidate_mode", "legacy")
     require(candidate_mode in ("legacy", "parallel-v1", "parallel-retry-v3"), "Unknown candidate verification mode.")
     verify_rsc_patch_parallel_scope(candidate, args.expected, args.source, candidate_mode)
+    verify_box_office_parallel_scope(candidate, args.expected, args.source, candidate_mode)
     verify_installment_parallel_scope(candidate, args.expected, args.source, candidate_mode)
     verify_room_refresh_parallel_scope(candidate, args.expected, args.source, candidate_mode)
     verify_customer_parallel_scope(candidate, args.expected, args.source, candidate_mode)
@@ -6000,6 +6134,9 @@ class Deployment:
         changes = self.proof.get("changedFiles", [])
         require(isinstance(changes, list) and all(isinstance(name, str) for name in changes),
                 "Release changed-file manifest is invalid.")
+        verify_box_office_host_scope(self.expected, changes, self.proof,
+                                     enable_crypto=self.enable_crypto, enable_first_host=self.enable_first_host,
+                                     recover_prepared=self.recover_prepared)
         if self.expected == INSTALLMENT_LIVE:
             require(not self.enable_crypto and not self.enable_first_host,
                     "Installments must preserve runtime configuration.")

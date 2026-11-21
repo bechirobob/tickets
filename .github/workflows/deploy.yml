@@ -34,6 +34,9 @@ on:
       - '.github/workflows/tickets-code-release.yml'
       - 'ops/vps/candidate_build.py'
       - 'ops/vps/code-release.py'
+      - 'ops/vps/box_office_standby_boundary.py'
+      - 'ops/vps/test_box_office_standby_boundary.py'
+      - 'ops/vps/recovery_maintenance_test_support.py'
       - 'ops/vps/parallel_candidate_retry.py'
       - 'ops/vps/parallel_candidate_retry_control.py'
       - 'ops/vps/test_candidate_build.py'
@@ -57,7 +60,48 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  box_office_standby_boundary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      allow_cloudflare: ${{ steps.classify.outputs.allow_cloudflare }}
+    steps:
+      - name: Check out exact pushed tree without persisted credentials
+        if: github.event_name == 'push'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Classify exact Box Office standby boundary
+        id: classify
+        shell: bash
+        env:
+          BECORE_PUSH_BEFORE: ${{ github.event.before }}
+          BECORE_BOX_BASE: 8c77eec14c6093a707a15bdaff6c4c631dbd358a
+          BECORE_BOX_BASE_TREE: ecaa585e893982b6e7bd35d8a0467d684fd9d8e5
+          BECORE_BOX_SNAPSHOT: 768181e508dff5ec56dc9cfe5efec4cde6bca2bb
+          BECORE_BOX_SNAPSHOT_TREE: 12eab55d78f200ace79930fa57d2f6d42a411fb9
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = bechirobob/tickets
+          test "$GITHUB_REF" = refs/heads/main
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            echo 'allow_cloudflare=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          test "$GITHUB_EVENT_NAME" = push
+          [[ "$BECORE_PUSH_BEFORE" =~ ^[a-f0-9]{40}$ ]]
+          unset "${!GIT_@}"
+          export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_NO_LAZY_FETCH=1 GIT_TERMINAL_PROMPT=0
+          trusted="$(mktemp "$RUNNER_TEMP/box-office-boundary.XXXXXXXX.py")"
+          trap 'rm -f "$trusted"' EXIT
+          git show "$BECORE_PUSH_BEFORE:ops/vps/box_office_standby_boundary.py" > "$trusted"
+          python3 -I "$trusted"
+
   deploy:
+    needs: [box_office_standby_boundary]
+    if: needs.box_office_standby_boundary.outputs.allow_cloudflare == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:

@@ -24,6 +24,34 @@ BASE_WORKFLOWS = {'.github/workflows/deploy.yml': '0bf4539141356389a96f768ac8305
                   '.github/workflows/vps-runtime.yml': '06bdc48477eb0977ed471e549630bd6070758a95'}
 
 
+BOX_OFFICE_DEPLOY_BLOB = 'a9dd72488aa169b0fb02b2b6f716ae098c9a404d'
+PRE_BOX_OFFICE_DEPLOY_BLOB = '268260bd7642ee1430568aaeeff0a788389535e8'
+
+
+def restore_box_office_deploy(raw):
+    """Only the exact checked-in overlay may restore the earlier reviewed byte shape."""
+    if digest(raw) != BOX_OFFICE_DEPLOY_BLOB:
+        return raw
+    paths = (
+        b"      - 'ops/vps/box_office_standby_boundary.py'\n"
+        b"      - 'ops/vps/test_box_office_standby_boundary.py'\n"
+        b"      - 'ops/vps/recovery_maintenance_test_support.py'\n"
+    )
+    needs = (b"    needs: [box_office_standby_boundary]\n"
+             b"    if: needs.box_office_standby_boundary.outputs.allow_cloudflare == 'true'\n")
+    start = b'  box_office_standby_boundary:\n'
+    end = b'  deploy:\n'
+    if any(raw.count(block) != 1 for block in (paths, needs, start, end)):
+        raise AssertionError('Box Office workflow overlay is ambiguous or incomplete')
+    left, right = raw.index(start), raw.index(end)
+    if left >= right:
+        raise AssertionError('Box Office workflow overlay ordering differs')
+    raw = (raw[:left] + raw[right:]).replace(paths, b'', 1).replace(needs, b'', 1)
+    if digest(raw) != PRE_BOX_OFFICE_DEPLOY_BLOB:
+        raise AssertionError('Box Office changed unrelated historical deployment controls')
+    return raw
+
+
 def restore_workflow(name, raw):
     if name not in BASE_WORKFLOWS or b'Classify exact recovery maintenance' not in raw:
         return raw
@@ -31,6 +59,8 @@ def restore_workflow(name, raw):
     # pin tests still check the reconstructed original bytes below.
     if digest(raw) != OVERLAY[name][1]:
         return raw
+    if name == '.github/workflows/deploy.yml':
+        raw = restore_box_office_deploy(raw)
     start = raw.index(b'      - name: Classify exact recovery maintenance\n')
     end = raw.index(b'      - name: Verify exact source ancestry', start)
     raw = raw[:start] + raw[end:]

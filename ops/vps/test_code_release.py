@@ -3982,7 +3982,92 @@ def installment_source_family(root):
     return {name: blob for name, (_, blob) in manifest.items()}
 
 
+# Independently reviewed control files. The test's self-blob is normalized from
+# this explicitly selected test file, as in the historical fixture families.
+BOX_OFFICE_TEST_FILE = Path(__file__).resolve()
+BOX_OFFICE_OPERATOR_BLOB = 'a0dcd3f3e76408c5b3bcc0535de6dc377affe381'
+BOX_OFFICE_TEST_CONTROLS = {
+    'ops/vps/code-release.py': ('100644', BOX_OFFICE_OPERATOR_BLOB),
+    '.github/workflows/deploy.yml': ('100644', 'a9dd72488aa169b0fb02b2b6f716ae098c9a404d'),
+    'ops/vps/box_office_standby_boundary.py': ('100644', '972541a39ea44c1d4d0b3ae279c9f17bab698214'),
+    'ops/vps/test_box_office_standby_boundary.py': ('100644', '44db27df7a122ed6078b4de884b37168c6efa14b'),
+    'ops/vps/recovery_maintenance_test_support.py': ('100644', '6909c2ae13c972bb93a269ce6ca63ebd252816c9'),
+    'tests/browser-environment.test.mjs': ('100644', '940afb909f8eed3f5e042890845e5773dbf256df'),
+}
+
+
+def box_office_source_family(root):
+    root = Path(root)
+    digest = lambda raw: release.hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
+    operator = root/'ops/vps/code-release.py'
+    selected = (root/'ops/vps/test_code_release.py').resolve() == BOX_OFFICE_TEST_FILE
+    marked = operator.is_file() and not operator.is_symlink() and digest(operator.read_bytes()) == BOX_OFFICE_OPERATOR_BLOB
+    if not (selected or marked):
+        return None
+    controls = {**BOX_OFFICE_TEST_CONTROLS,
+                'ops/vps/test_code_release.py': ('100644', digest(BOX_OFFICE_TEST_FILE.read_bytes()))}
+    if set(controls) != release.BOX_OFFICE_CONTROLS:
+        raise AssertionError('Box Office controls inventory differs')
+    if os.path.lexists(root/'package.json') or os.path.lexists(root/'app'):
+        def pinned_tree(revision, expected_tree):
+            if checkout_git(root, 'rev-parse', revision + '^{tree}').decode().strip() != expected_tree:
+                raise AssertionError('Box Office test source reviewed tree differs')
+            manifest = {}
+            for record in checkout_git(root, 'ls-tree', '-rz', '--full-tree', revision).split(b'\0'):
+                if not record:
+                    continue
+                meta, name = record.split(b'\t', 1)
+                mode, kind, blob = meta.decode().split()
+                if kind != 'blob' or mode not in ('100644', '100755'):
+                    raise AssertionError('Box Office test source unsupported file mode')
+                manifest[os.fsdecode(name)] = (mode, blob)
+            return manifest
+
+        base = pinned_tree(release.BOX_OFFICE_LIVE, release.BOX_OFFICE_BASE_TREE)
+        composed = pinned_tree(release.BOX_OFFICE_SNAPSHOT, release.BOX_OFFICE_SNAPSHOT_TREE)
+        if composed != {**base, **{name: ('100644', blob) for name, blob in release.BOX_OFFICE_BLOBS.items()}}:
+            raise AssertionError('Box Office app and dependency source manifest differs')
+        manifest = {}
+        for record in checkout_git(root, 'ls-files', '--stage', '-z').split(b'\0'):
+            if not record:
+                continue
+            meta, name = record.split(b'\t', 1)
+            mode, blob, stage = meta.decode().split()
+            if stage != '0':
+                raise AssertionError('Box Office test source has unmerged index')
+            manifest[os.fsdecode(name)] = (mode, blob)
+        if manifest not in ({**base, **controls}, {**composed, **controls}) or checkout_git(
+                root, 'ls-files', '--others', '--exclude-standard', '-z'):
+            raise AssertionError('Box Office test source complete index inventory differs')
+    else:
+        # Exact 8c77 archive inventory equals these historical pins except the two
+        # preexisting release controls, both replaced by the exact overlays above.
+        # Browser tooling tests are deliberately not archived with the operator.
+        manifest = {**INSTALLMENT_STAGED_PINS,
+                    **{name: pin for name, pin in controls.items() if name != 'tests/browser-environment.test.mjs'}}
+        validate_staged_inventory(root, manifest)
+    for name, (mode, blob) in manifest.items():
+        path = root/name
+        try:
+            metadata = path.lstat()
+            if (not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1
+                    or bool(metadata.st_mode & 0o111) != (mode == '100755')
+                    or any(parent.is_symlink() for parent in (path, *path.parents))):
+                raise AssertionError('Box Office test source requires regular files and exact modes')
+            raw = path.read_bytes()
+            if name == 'mobile/android/gradlew.bat':
+                raw = raw.replace(b'\r\n', b'\n')
+            if digest(raw) != blob:
+                raise AssertionError('Box Office test source bytes differ: ' + name)
+        except OSError as error:
+            raise AssertionError('Box Office test source incomplete') from error
+    return {name: blob for name, (_, blob) in manifest.items()}
+
+
 def checkout_source_family(root):
+    box_office = box_office_source_family(root)
+    if box_office is not None:
+        return box_office
     installment = installment_source_family(root)
     if installment is not None:
         return installment
@@ -14369,7 +14454,7 @@ class FirstHostConfigurationTests(unittest.TestCase):
 
     def test_workflow_activation_is_default_off_step_local_stdin_only(self):
         family = checkout_source_family(Path(__file__).resolve().parents[2])
-        if family.get('ops/vps/code-release.py') in (INSTALLMENT_OPERATOR_BLOB, RSC_PATCH_OPERATOR_BLOB, ROOM_REFRESH_OPERATOR_BLOB, CUSTOMER_OPERATOR_BLOB, COMBINED_OPERATOR_BLOB, SCANNER_DEPS_CONTROL_PINS['ops/vps/code-release.py'][1], SCANNER_CONTROL_PINS['ops/vps/code-release.py'][1], STAFF_APP_CONTROL_PINS['ops/vps/code-release.py'][1], AUDIT_CONTROL_PINS['ops/vps/code-release.py'][1], STAFF_CONTROL_PINS['ops/vps/code-release.py'][1], ROOM_MAIL_VPS_OPERATOR_BLOB, YORKEWAY_OPERATOR_BLOB, OWNER_PUSH_OPERATOR_BLOB, SECURITY_OPERATOR_BLOB, PARALLEL_GATE_OUTPUTS['ops/vps/code-release.py'][1], DOWNLOAD_RETRY_OUTPUTS['ops/vps/code-release.py'][1]):
+        if family.get('ops/vps/code-release.py') in (BOX_OFFICE_OPERATOR_BLOB, INSTALLMENT_OPERATOR_BLOB, RSC_PATCH_OPERATOR_BLOB, ROOM_REFRESH_OPERATOR_BLOB, CUSTOMER_OPERATOR_BLOB, COMBINED_OPERATOR_BLOB, SCANNER_DEPS_CONTROL_PINS['ops/vps/code-release.py'][1], SCANNER_CONTROL_PINS['ops/vps/code-release.py'][1], STAFF_APP_CONTROL_PINS['ops/vps/code-release.py'][1], AUDIT_CONTROL_PINS['ops/vps/code-release.py'][1], STAFF_CONTROL_PINS['ops/vps/code-release.py'][1], ROOM_MAIL_VPS_OPERATOR_BLOB, YORKEWAY_OPERATOR_BLOB, OWNER_PUSH_OPERATOR_BLOB, SECURITY_OPERATOR_BLOB, PARALLEL_GATE_OUTPUTS['ops/vps/code-release.py'][1], DOWNLOAD_RETRY_OUTPUTS['ops/vps/code-release.py'][1]):
             # Only the exact new family may add this public archive dependency.
             # Reconstruct the original bytes before keeping its historical pin.
             name = '.github/workflows/tickets-code-release.yml'
@@ -17467,6 +17552,156 @@ class RscPatchParallelIdentityTests(unittest.TestCase):
         with self.assertRaises(release.ReleaseError):
             release.validate_parallel_proof(proof, repository='bechirobob/tickets',
                 candidate='b'*40, tree='d'*40, run_id='456', attempt=2, baseline='c'*40)
+
+
+class BoxOfficeAdmissionTests(unittest.TestCase):
+    """Prove the independently controlled, exact visual change with real Git trees."""
+
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        previous = Path.cwd()
+        os.chdir(self.root)
+        self.addCleanup(os.chdir, previous)
+        self.git('init', '-q')
+        self.git('config', 'user.name', 'Release fixture')
+        self.git('config', 'user.email', 'fixture@example.invalid')
+        self.write('app/events/page.tsx', 'old event')
+        self.write('README.md', 'must remain unchanged')
+        self.write('package.json', '{"dependencies":{"next":"16.4.1","react":"19"}}')
+        self.write('package-lock.json', '{"packages":{"":{"dependencies":{"next":"16.4.1"}},"node_modules/next":{"version":"16.4.1"}}}')
+        for name in release.BOX_OFFICE_CONTROLS:
+            self.write(name, 'old controls')
+        self.live = self.commit()
+        self.write('app/events/page.tsx', 'reviewed event')
+        self.commit()
+        self.write('app/events/panel.css', 'reviewed new regular file')
+        self.write('package.json', '{"dependencies":{"next":"16.4.6","react":"19"}}')
+        self.write('package-lock.json', '{"packages":{"":{"dependencies":{"next":"16.4.6"}},"node_modules/next":{"version":"16.4.6"}}}')
+        self.snapshot = self.commit()
+        self.git('checkout', '-q', '--detach', self.live)
+        for name in release.BOX_OFFICE_CONTROLS:
+            self.write(name, 'trusted independent controls')
+        self.write('ops/vps/code-release.py', Path(release.__file__).read_text())
+        self.trusted = self.commit()
+        self.git('update-ref', 'refs/remotes/origin/main', self.trusted)
+        self.git('merge', '-q', '--no-ff', '-m', 'combine independent controls and app', self.snapshot)
+        self.source = self.git('rev-parse', 'HEAD')
+        self.paths = {'app/events/page.tsx', 'app/events/panel.css', 'package.json', 'package-lock.json'}
+        self.pins = {p: self.git('rev-parse', self.snapshot + ':' + p) for p in self.paths}
+        self.dependencies = {name: self.pins[name] for name in ('package.json', 'package-lock.json')}
+        mocked = patch.multiple(release, BOX_OFFICE_LIVE=self.live, BOX_OFFICE_SNAPSHOT=self.snapshot,
+            BOX_OFFICE_BASE_TREE=self.git('rev-parse', self.live + '^{tree}'),
+            BOX_OFFICE_SNAPSHOT_TREE=self.git('rev-parse', self.snapshot + '^{tree}'), BOX_OFFICE_BLOBS=self.pins,
+            BOX_OFFICE_DEPENDENCY_PAIR=self.dependencies)
+        mocked.start()
+        self.addCleanup(mocked.stop)
+        env = patch.dict(os.environ, {'BECORE_TRUSTED_BASE': self.trusted})
+        env.start()
+        self.addCleanup(env.stop)
+
+    def git(self, *args):
+        return subprocess.check_output(['git', *args], text=True, stderr=subprocess.PIPE).strip()
+
+    def write(self, path, content):
+        path = self.root / path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content)
+
+    def commit(self):
+        self.git('add', '-A')
+        self.git('commit', '-qm', 'isolated release fixture')
+        return self.git('rev-parse', 'HEAD')
+
+    def test_exact_code_only_scope(self):
+        self.assertEqual(set(release.vetted_changes(self.live, self.source)), self.paths | release.BOX_OFFICE_CONTROLS)
+        candidate = {'head_branch': release.BOX_OFFICE_CANDIDATE_BRANCH, 'event': 'workflow_dispatch'}
+        release.verify_box_office_parallel_scope(candidate, self.live, self.source)
+        self.assertTrue(release.admitted_parallel_ref('workflow_dispatch', candidate['head_branch']))
+        self.assertFalse(release.admitted_parallel_ref('push', candidate['head_branch']))
+
+    def test_candidate_rejects_tampering_and_unreviewed_modes_and_paths(self):
+        changes = {
+            'changed reviewed blob': lambda: self.write('app/events/page.tsx', 'different'),
+            'changed control blob': lambda: self.write('ops/vps/test_code_release.py', 'different'),
+            'changed file mode': lambda: (self.root / 'app/events/panel.css').chmod(0o755),
+            'deleted file': lambda: (self.root / 'README.md').unlink(),
+            'unreviewed schema': lambda: self.write('drizzle/9999_unreviewed.sql', 'unreviewed'),
+            'unreviewed config': lambda: self.write('wrangler.jsonc', 'unreviewed'),
+            'unreviewed dependencies': lambda: self.write('package-lock.json', 'unreviewed'),
+            'unreviewed general path': lambda: self.write('docs/injected.md', 'unreviewed'),
+        }
+        for name, tamper in changes.items():
+            with self.subTest(name=name):
+                self.git('reset', '--hard', self.source)
+                tamper()
+                with self.assertRaises(release.ReleaseError):
+                    release.vetted_changes(self.live, self.commit())
+
+    def test_exact_next_pair_rejects_wrong_pin_or_any_other_manifest_dependency(self):
+        entries = release.rsc_patch_tree_entries(self.snapshot)
+        with patch.dict(release.BOX_OFFICE_DEPENDENCY_PAIR, {'package-lock.json': 'f' * 40}):
+            with self.assertRaisesRegex(release.ReleaseError, 'dependency or lock blob'):
+                release.verify_box_office_dependency_pair(self.live, entries)
+        original_git = release.git
+        def wrong_manifest(*args):
+            if args == ('show', self.snapshot + ':package.json'):
+                return '{"dependencies":{"next":"16.4.6","react":"20"}}'
+            return original_git(*args)
+        with patch.object(release, 'git', side_effect=wrong_manifest):
+            with self.assertRaisesRegex(release.ReleaseError, 'only the reviewed direct'):
+                release.verify_box_office_dependency_pair(self.live, entries)
+
+    def test_independent_ancestry_and_full_tree_hash_are_required(self):
+        with self.assertRaisesRegex(release.ReleaseError, 'live baseline'):
+            release.reviewed_box_office_application_blobs('f' * 40, self.source)
+        with patch.object(release, 'BOX_OFFICE_SNAPSHOT_TREE', 'f' * 40):
+            with self.assertRaisesRegex(release.ReleaseError, 'reviewed tree'):
+                release.vetted_changes(self.live, self.source)
+        with patch.dict(os.environ, {'BECORE_TRUSTED_BASE': self.source}):
+            with self.assertRaisesRegex(release.ReleaseError, 'own trusted control'):
+                release.vetted_changes(self.live, self.source)
+        self.git('update-ref', 'refs/remotes/origin/main', self.live)
+        with self.assertRaises(subprocess.CalledProcessError):
+            release.vetted_changes(self.live, self.source)
+
+    def test_parallel_rejects_wrong_ref_mode_event_or_base(self):
+        candidate = {'head_branch': release.BOX_OFFICE_CANDIDATE_BRANCH, 'event': 'workflow_dispatch'}
+        cases = (
+            (dict(candidate, event='push'), self.live, 'parallel-v1'),
+            (dict(candidate, event='pull_request'), self.live, 'parallel-v1'),
+            (dict(candidate, head_branch='improve/release-evidence-parallel-20261013'), self.live, 'parallel-v1'),
+            (candidate, self.live, 'legacy'),
+            (candidate, self.live, 'parallel-retry-v3'),
+            (candidate, 'a' * 40, 'parallel-v1'),
+        )
+        for metadata, expected, mode in cases:
+            with self.subTest(metadata=metadata, expected=expected, mode=mode), self.assertRaises(release.ReleaseError):
+                release.verify_box_office_parallel_scope(metadata, expected, self.source, mode)
+
+    def test_host_rejects_feature_flags_recovery_shortcut_and_imprecise_proof(self):
+        candidate = {'head_branch': release.BOX_OFFICE_CANDIDATE_BRANCH, 'event': 'workflow_dispatch',
+                     'schema': 'tickets-parallel-candidate/v2'}
+        paths = sorted(self.paths | release.BOX_OFFICE_CONTROLS)
+        proof = {'candidateVerification': candidate}
+        defaults = dict(enable_crypto=False, enable_first_host=False, recover_prepared=None)
+        release.verify_box_office_host_scope(self.live, paths, proof, **defaults)
+        for toggle in ('enable_crypto', 'enable_first_host', 'recover_prepared'):
+            with self.subTest(toggle=toggle), self.assertRaises(release.ReleaseError):
+                release.verify_box_office_host_scope(self.live, paths, proof, **dict(defaults, **{toggle: True}))
+        negatives = (
+            (paths, {}),
+            (paths, {'candidateVerification': dict(candidate, event='push')}),
+            (paths, {'candidateVerification': dict(candidate, head_branch='unexpected')}),
+            (paths, {'candidateVerification': dict(candidate, schema='tickets-parallel-candidate-retry/v3')}),
+            (paths + [paths[0]], proof),
+            (paths[:-1], proof),
+            (paths + ['drizzle/9999_unreviewed.sql'], proof),
+        )
+        for changed, attempted_proof in negatives:
+            with self.subTest(changed=changed, proof=attempted_proof), self.assertRaises(release.ReleaseError):
+                release.verify_box_office_host_scope(self.live, changed, attempted_proof, **defaults)
 
 
 class InstallmentAdmissionTests(unittest.TestCase):
