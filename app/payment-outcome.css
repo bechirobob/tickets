@@ -1,6 +1,18 @@
 /* Style only existing server-backed payment results and wallet receipts. */
-.payment-return.payment-return--box-office > div { width: min(100%, 540px); text-align: start; }
-.payment-return--box-office > div > a { min-height: 44px; display: inline-flex; align-items: center; }
+.payment-return.payment-return--box-office {
+  --result-paper: #241b23; --result-ink: #fff3e8; --result-muted: #d7c7ce; --result-accent: #ffb18b;
+  min-height: 100vh; min-height: 100dvh; place-items: start center;
+  padding: max(clamp(38px, 11vh, 104px), calc(22px + env(safe-area-inset-top)))
+    max(22px, env(safe-area-inset-right)) max(42px, env(safe-area-inset-bottom)) max(22px, env(safe-area-inset-left));
+  background: var(--result-paper); color: var(--result-ink);
+}
+.payment-return.payment-return--box-office > div { width: min(100%, 540px); border: 0; box-shadow: none; text-align: start; }
+.payment-return--box-office > div > svg,
+.payment-return--box-office .eyebrow { color: var(--result-accent); }
+.payment-return--box-office p:not(.eyebrow),
+.payment-return--box-office > div > span { color: var(--result-muted); }
+.payment-return--box-office > div > span { justify-content: flex-start; }
+.payment-return--box-office > div > a { min-height: 44px; display: inline-flex; align-items: center; background: var(--result-accent); color: var(--result-paper); }
 .wallet-receipt.wallet-receipt--box-office { background: transparent; padding: 20px 0; border-radius: 0; box-shadow: none; }
 .wallet-receipt--box-office > header { flex-wrap: wrap; gap: 12px; }
 .wallet-receipt--box-office > header small { overflow-wrap: anywhere; }
