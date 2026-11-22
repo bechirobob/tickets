@@ -4213,8 +4213,8 @@ def reviewed_installment_application_blobs(expected, source):
 # One Box Office visual release with its exact mandatory Next.js patch; no schema or runtime changes.
 BOX_OFFICE_LIVE = '8c77eec14c6093a707a15bdaff6c4c631dbd358a'
 BOX_OFFICE_BASE_TREE = 'ecaa585e893982b6e7bd35d8a0467d684fd9d8e5'
-BOX_OFFICE_SNAPSHOT = '768181e508dff5ec56dc9cfe5efec4cde6bca2bb'
-BOX_OFFICE_SNAPSHOT_TREE = '12eab55d78f200ace79930fa57d2f6d42a411fb9'
+BOX_OFFICE_SNAPSHOT = '1f937e5f1ac2de711d162ea46c98d65f28f46325'
+BOX_OFFICE_SNAPSHOT_TREE = '6c8c2083deca098fd2a8fc2cc7d486249270d5c0'
 BOX_OFFICE_CANDIDATE_BRANCH = 'release/tickets-box-office-20261121'
 BOX_OFFICE_CONTROLS = frozenset({
     '.github/workflows/deploy.yml',
@@ -4235,7 +4235,7 @@ BOX_OFFICE_BLOBS = {
     **BOX_OFFICE_DEPENDENCY_PAIR,
     "app/about/page.tsx": "1518134e12f55e0e9f27a105b382810f566e34e8",
     "app/active-night-experience.tsx": "dd2b27612b81cd551967798f59e330ffbb84efa2",
-    "app/box-office-home.css": "84f25d904e308b8fa603a8c7f99b4119ab0e4a98",
+    "app/box-office-home.css": "9d96a5be6e8a646b358cac533c63069986a4e0d7",
     "app/checkout/[slug]/checkout-form.tsx": "74a899c6bdddb3556625b2a1788cc54b04f0a440",
     "app/checkout/[slug]/checkout-panels.css": "ed7f31ab235123f4c14841956b85e2815a43ce3a",
     "app/event-explorer.tsx": "b42f97c9308fdacbc676f63f6d51e69f80d70d80",
@@ -4252,11 +4252,11 @@ BOX_OFFICE_BLOBS = {
     "app/my-nights/access/page.tsx": "61dff4207fbcb28113342f71683a842c86b2282d",
     "app/my-nights/my-nights-client.tsx": "91fa290d2a3733c18eae263fdbb19fd5c91eea21",
     "app/organizer/submit/page.tsx": "4511b51d548e0760749838e5880ff21b68a8a217",
-    "app/organizer/submit/submit-box-office.css": "34412caf8673af55fe90a0ba7511de4a352a68ff",
+    "app/organizer/submit/submit-box-office.css": "cc255ea77959befd2e8711815a1ad2561ad180f6",
     "app/payment-outcome.css": "b5d2af79f9d0158dd588004d578d8ab88323a103",
     "app/payment/return/page.tsx": "5436a3b5f508c7633d7a62c61d241ec36e68b548",
     "app/rsvp-audience.css": "5438c714e057f05bd8ea9c0c8290e483c57a9baa",
-    "app/supporting-box-office.css": "311758a8d051593a7d6efd46ee6b05602cbd27ad",
+    "app/supporting-box-office.css": "fb1fe2537d6eec64f1c56fa7906375ab11b19135",
     "app/the-yorke-way/yorke-way.css": "ddce125b850fbaddbe4e246f731e6c5e24641ff1",
     "app/tickets/ticket-wallet.tsx": "3eaedd067b251ed937d40c63a876201660a92098",
     "mobile/tests/app.spec.ts": "e83226c6e1b295ba91d745cfe2d40645243f6a56",
@@ -4264,8 +4264,10 @@ BOX_OFFICE_BLOBS = {
     "public/devices/box-office-inside.webp": "3663ff852af5f355c32e101344d6e8bd893f278b",
     "styles/customer.css": "c67ab6483f82aafaefb8745e1bcb4241c60031e8",
     "tests/e2e/checkout-quantity.spec.ts": "9e8d0fe99279fc21ef0aff1ca58df0d87adcded1",
+    "tests/e2e/event-details.spec.ts": "11554b2ef2ed9037edc5b46559ad2c83a715e659",
     "tests/e2e/host-brand-identity.spec.ts": "cf170c01cf2cef2e28124ebe7f6989f4933e7bd7",
-    "tests/e2e/public-journey.spec.ts": "be68f8fe44caa9acdf1358f8fc8e1bc2bf419d05",
+    "tests/e2e/host-profile.spec.ts": "b7db80c8f6affdfd619eb70ab1605b64c983321f",
+    "tests/e2e/public-journey.spec.ts": "00ab482cad38aef74160ab4b1e0367f25c3e72a3",
     "tests/e2e/room-demo.spec.ts": "d1dfd848f8e37ffca0836a469586339c030507e5",
     "tests/e2e/room-identity.spec.ts": "3a68dce04376b4ffca3fd1c609d16ef002d25c7d",
     "tests/mobile-ui.test.mjs": "b546dd61059ef931b14de35c42d5e935a835f9c3",
