@@ -4338,8 +4338,8 @@ def verify_box_office_host_scope(expected, changes, proof, *, enable_crypto, ena
 # The one-off Box Office iPhone visual correction does not reopen the first release.
 BOX_IPHONE_LIVE = '024eaef59cb08ef277ec6c1598406d6c4ba06862'
 BOX_IPHONE_BASE_TREE = '5e4790e1c3cf3262fded40d8178e98dd46a4502e'
-BOX_IPHONE_SNAPSHOT = '64d67260b026972be710e8625c7efd88a4da88a3'
-BOX_IPHONE_SNAPSHOT_TREE = '44e561786150cab8e2c43d1be5eed9735e85d21f'
+BOX_IPHONE_SNAPSHOT = 'fd67a6b9d1cff5fec90adf1feec4849db72c1337'
+BOX_IPHONE_SNAPSHOT_TREE = '48d42cfbbba1fa4e50789af9c0c1bd7d742d8a55'
 BOX_IPHONE_CANDIDATE_BRANCH = 'release/tickets-box-office-iphone-20261122'
 BOX_IPHONE_CONTROLS = BOX_OFFICE_CONTROLS - {'ops/vps/test_audit_readiness.py'}
 BOX_IPHONE_BLOBS = {
@@ -4350,7 +4350,7 @@ BOX_IPHONE_BLOBS = {
     'app/rsvp-audience.css': '1d93f2cf603bca9df0ce40fe58ab6df0ac3fdb9a',
     'styles/customer.css': '8bea86600e30a59ba8d586f1a0219000514e3a99',
     'tests/e2e/checkout-quantity.spec.ts': 'fee48dc0116060a3bf258beff3f3419305c77b69',
-    'tests/e2e/mobile-app-behavior.spec.ts': 'fb65afc1d0ed56b2fdcc861587077dc66e34ea3e',
+    'tests/e2e/mobile-app-behavior.spec.ts': '6c2ec1df3bad4a985ef703457c90e77f6bd17505',
     'tests/e2e/payment-return.spec.ts': 'baff806e60d7b9855fa5e5d180621fca0cc07e9f',
     'tests/e2e/registration.spec.ts': 'eb416b34f4134bead540a32f98a4c3e65f351fce',
 }

@@ -35,8 +35,8 @@ PRE_BOX_OFFICE_DEPLOY_BLOB = '268260bd7642ee1430568aaeeff0a788389535e8'
 
 def restore_box_office_deploy(raw):
     """Only the exact checked-in overlay may restore the earlier reviewed byte shape."""
-    if digest(raw) == 'fb98bff71bec9e18b8e41d8cfbc65646c64560b3':
-        overlay = b'          BECORE_CANVAS_BASE: 024eaef59cb08ef277ec6c1598406d6c4ba06862\n          BECORE_CANVAS_BASE_TREE: 5e4790e1c3cf3262fded40d8178e98dd46a4502e\n          BECORE_CANVAS_SNAPSHOT: 64d67260b026972be710e8625c7efd88a4da88a3\n          BECORE_CANVAS_SNAPSHOT_TREE: 44e561786150cab8e2c43d1be5eed9735e85d21f\n'
+    if digest(raw) == 'cc1445ebbd49e05680d204240dc3f77619252ab5':
+        overlay = b'          BECORE_CANVAS_BASE: 024eaef59cb08ef277ec6c1598406d6c4ba06862\n          BECORE_CANVAS_BASE_TREE: 5e4790e1c3cf3262fded40d8178e98dd46a4502e\n          BECORE_CANVAS_SNAPSHOT: fd67a6b9d1cff5fec90adf1feec4849db72c1337\n          BECORE_CANVAS_SNAPSHOT_TREE: 48d42cfbbba1fa4e50789af9c0c1bd7d742d8a55\n'
         if raw.count(overlay) != 1:
             raise AssertionError('Mobile standby overlay is ambiguous or incomplete')
         raw = raw.replace(overlay, b'', 1)
