@@ -246,6 +246,11 @@ const gitBlob = raw => createHash('sha1').update(`blob ${Buffer.byteLength(raw)}
 
 function restoreReviewedStandbyOverlay(raw) {
   if (gitBlob(raw) === priorRecoveryBlob) return raw;
+  if (gitBlob(raw) === 'fb98bff71bec9e18b8e41d8cfbc65646c64560b3') {
+    const pins = '          BECORE_CANVAS_BASE: 024eaef59cb08ef277ec6c1598406d6c4ba06862\n          BECORE_CANVAS_BASE_TREE: 5e4790e1c3cf3262fded40d8178e98dd46a4502e\n          BECORE_CANVAS_SNAPSHOT: 64d67260b026972be710e8625c7efd88a4da88a3\n          BECORE_CANVAS_SNAPSHOT_TREE: 44e561786150cab8e2c43d1be5eed9735e85d21f\n';
+    assert.equal(raw.split(pins).length, 2);
+    raw = raw.replace(pins, '');
+  }
   assert.equal(gitBlob(raw), reviewedStandbyBlob, 'Cloudflare standby overlay must match its entire reviewed blob');
   const paths = [
     'ops/vps/box_office_standby_boundary.py',

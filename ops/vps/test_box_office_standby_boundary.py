@@ -1,6 +1,8 @@
 """Real Git fixtures; no Cloudflare, network, secrets, or work outside temporary trees."""
 import importlib.util
+import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -54,12 +56,73 @@ class StandbyBoundaryTests(unittest.TestCase):
     def outcome(self, **overrides):
         return boundary.allow_cloudflare(self.root, **(self.context | overrides))
 
+    def canvas_fixture(self):
+        self.put('app/page.tsx', 'reviewed follow-up visual')
+        snapshot = self.commit('follow-up app only')
+        self.git('checkout', '-q', '--detach', self.head)
+        for path in boundary.CANVAS_CONTROLS:
+            self.put(path, 'reviewed independent follow-up controls')
+        trusted = self.commit('follow-up controls only')
+        self.git('merge', '--no-ff', '-m', 'exact follow-up and independent controls', snapshot)
+        return trusted, snapshot, self.git('rev-parse', 'HEAD')
+
+    def classify_canvas(self, trusted, snapshot, head, missing=None):
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp) / 'step-output'
+            env = dict(os.environ, GITHUB_REPOSITORY=boundary.REPOSITORY,
+                GITHUB_REF=boundary.MAIN, GITHUB_EVENT_NAME='push', GITHUB_SHA=head, GITHUB_OUTPUT=str(output),
+                BECORE_PUSH_BEFORE=trusted,
+                BECORE_BOX_BASE=self.base, BECORE_BOX_BASE_TREE=self.rev_tree(self.base),
+                BECORE_BOX_SNAPSHOT=self.snapshot, BECORE_BOX_SNAPSHOT_TREE=self.rev_tree(self.snapshot),
+                BECORE_CANVAS_BASE=self.head, BECORE_CANVAS_BASE_TREE=self.rev_tree(self.head),
+                BECORE_CANVAS_SNAPSHOT=snapshot, BECORE_CANVAS_SNAPSHOT_TREE=self.rev_tree(snapshot))
+            if missing:
+                del env[missing]
+            result = subprocess.run([sys.executable, '-I', boundary.__file__], cwd=self.root, env=env,
+                                    text=True, capture_output=True, timeout=15)
+            return result.returncode, output.read_text() if output.exists() else ''
+
     def test_exact_box_office_only_defers_cloudflare(self):
         self.assertFalse(self.outcome())
 
     def test_later_unrelated_main_push_still_allows(self):
         self.put('app/later.tsx', 'ordinary future app work')
         self.assertTrue(self.outcome(before=self.head, head=self.commit('ordinary later push')))
+
+    def test_exact_canvas_push_defers_then_later_unrelated_main_allows(self):
+        trusted, snapshot, head = self.canvas_fixture()
+        self.assertEqual(self.classify_canvas(trusted, snapshot, head), (0, 'allow_cloudflare=false\n'))
+        self.put('app/later.tsx', 'ordinary future app work')
+        future = self.commit('ordinary later push')
+        self.assertEqual(self.classify_canvas(head, snapshot, future), (0, 'allow_cloudflare=true\n'))
+
+    def test_canvas_snapshot_missing_ancestry_or_pin_fails_closed(self):
+        trusted, snapshot, head = self.canvas_fixture()
+        for pin in ('BECORE_CANVAS_BASE', 'BECORE_CANVAS_BASE_TREE', 'BECORE_CANVAS_SNAPSHOT', 'BECORE_CANVAS_SNAPSHOT_TREE'):
+            with self.subTest(pin=pin):
+                self.assertEqual(self.classify_canvas(trusted, snapshot, head, missing=pin), (1, ''))
+        self.git('checkout', '-q', '--detach', trusted)
+        self.put('app/page.tsx', 'unreviewed app')
+        self.assertEqual(self.classify_canvas(trusted, snapshot, self.commit('wrong app')), (1, ''))
+
+    def test_canvas_rejects_changed_app_control_or_mode(self):
+        trusted, snapshot, head = self.canvas_fixture()
+        for mutation in (
+            lambda: self.put('app/extra.tsx', 'unreviewed app'),
+            lambda: self.put('.github/workflows/deploy.yml', 'unreviewed controls'),
+            lambda: (self.root / 'app/page.tsx').chmod(0o755),
+        ):
+            self.git('reset', '--hard', head)
+            mutation()
+            self.assertEqual(self.classify_canvas(trusted, snapshot, self.commit('unreviewed merge bytes')), (1, ''))
+
+    def test_canvas_first_appearance_without_controls_fails_closed(self):
+        _trusted, snapshot, _head = self.canvas_fixture()
+        self.git('checkout', '-q', '--detach', self.head)
+        self.put('README.md', 'ordinary unrelated work')
+        before = self.commit('unexpected prior main')
+        self.git('merge', '--no-ff', '-m', 'app without independently staged controls', snapshot)
+        self.assertEqual(self.classify_canvas(before, snapshot, self.git('rev-parse', 'HEAD')), (1, ''))
 
     def test_unrelated_push_without_pending_controls_still_allows(self):
         self.git('checkout', '-q', '--detach', self.base)
@@ -112,6 +175,9 @@ class StandbyBoundaryTests(unittest.TestCase):
         self.assertNotIn('CLOUDFLARE_API_TOKEN', gate)
         self.assertIn('persist-credentials: false', gate)
         self.assertIn('git show "$BECORE_PUSH_BEFORE:ops/vps/box_office_standby_boundary.py"', gate)
+        ignored = gate.split('  workflow_dispatch:', 1)[0]
+        for path in boundary.CANVAS_CONTROLS:
+            self.assertIn(f"      - '{path}'\n", ignored)
         self.assertIn('if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then', gate)
         self.assertIn("echo 'allow_cloudflare=true'", gate)
         self.assertIn("if: needs.box_office_standby_boundary.outputs.allow_cloudflare == 'true'", existing)

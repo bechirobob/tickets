@@ -120,6 +120,11 @@ test('ordinary deployment excludes only the finite reviewed tooling paths withou
   const standbyPaths = ['ops/vps/box_office_standby_boundary.py', 'ops/vps/test_box_office_standby_boundary.py', 'ops/vps/recovery_maintenance_test_support.py', 'ops/vps/test_audit_readiness.py'];
   const standby = gitBlob(currentWorkflow) !== previousOverlay;
   if (standby) {
+    if (gitBlob(currentWorkflow) === 'fb98bff71bec9e18b8e41d8cfbc65646c64560b3') {
+      const pins = '          BECORE_CANVAS_BASE: 024eaef59cb08ef277ec6c1598406d6c4ba06862\n          BECORE_CANVAS_BASE_TREE: 5e4790e1c3cf3262fded40d8178e98dd46a4502e\n          BECORE_CANVAS_SNAPSHOT: 64d67260b026972be710e8625c7efd88a4da88a3\n          BECORE_CANVAS_SNAPSHOT_TREE: 44e561786150cab8e2c43d1be5eed9735e85d21f\n';
+      assert.equal(currentWorkflow.split(pins).length, 2);
+      currentWorkflow = currentWorkflow.replace(pins, '');
+    }
     assert.equal(gitBlob(currentWorkflow), 'ffc2efacd307da66d64e55d3af524011819da3f8');
     const parsed = load(currentWorkflow);
     assert.deepEqual(parsed.permissions, { contents: 'read' });

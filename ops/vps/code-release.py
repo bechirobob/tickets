@@ -4335,8 +4335,73 @@ def verify_box_office_host_scope(expected, changes, proof, *, enable_crypto, ena
 
 
 
+# The one-off Box Office iPhone visual correction does not reopen the first release.
+BOX_IPHONE_LIVE = '024eaef59cb08ef277ec6c1598406d6c4ba06862'
+BOX_IPHONE_BASE_TREE = '5e4790e1c3cf3262fded40d8178e98dd46a4502e'
+BOX_IPHONE_SNAPSHOT = '64d67260b026972be710e8625c7efd88a4da88a3'
+BOX_IPHONE_SNAPSHOT_TREE = '44e561786150cab8e2c43d1be5eed9735e85d21f'
+BOX_IPHONE_CANDIDATE_BRANCH = 'release/tickets-box-office-iphone-20261122'
+BOX_IPHONE_CONTROLS = BOX_OFFICE_CONTROLS - {'ops/vps/test_audit_readiness.py'}
+BOX_IPHONE_BLOBS = {
+    'app/box-office-home.css': 'b92a17317af70eed3a6b1e354f847aeb8fbd7e32',
+    'app/box-office-mobile-shell.css': '793f39bafceb98a8c1c86f72ccb1e8c0caf34691',
+    'app/checkout/[slug]/checkout-panels.css': '0ec39bc15e22c2efd02b3796ff61c8aed745b17a',
+    'app/payment-outcome.css': '71cb3c048e0f2927a9fc03d1b0720b7406af5f39',
+    'app/rsvp-audience.css': '1d93f2cf603bca9df0ce40fe58ab6df0ac3fdb9a',
+    'styles/customer.css': '8bea86600e30a59ba8d586f1a0219000514e3a99',
+    'tests/e2e/checkout-quantity.spec.ts': 'fee48dc0116060a3bf258beff3f3419305c77b69',
+    'tests/e2e/mobile-app-behavior.spec.ts': 'fb65afc1d0ed56b2fdcc861587077dc66e34ea3e',
+    'tests/e2e/payment-return.spec.ts': 'baff806e60d7b9855fa5e5d180621fca0cc07e9f',
+    'tests/e2e/registration.spec.ts': 'eb416b34f4134bead540a32f98a4c3e65f351fce',
+}
+
+
+def reviewed_box_iphone_application_blobs(expected, source):
+    require(expected == BOX_IPHONE_LIVE, 'Box Office iPhone live baseline differs.')
+    for revision, tree in ((expected, BOX_IPHONE_BASE_TREE), (BOX_IPHONE_SNAPSHOT, BOX_IPHONE_SNAPSHOT_TREE)):
+        require(git('rev-parse', revision + '^{tree}') == tree, 'Box Office iPhone reviewed tree differs.')
+    require(git('rev-list', '--parents', '-n', '1', BOX_IPHONE_SNAPSHOT) == BOX_IPHONE_SNAPSHOT + ' ' + expected,
+            'Box Office iPhone snapshot must be an exact child of the live release.')
+    verify_trusted_operator(source)
+    trusted = os.environ['BECORE_TRUSTED_BASE']
+    require(trusted not in (expected, BOX_IPHONE_SNAPSHOT, source),
+            'Box Office iPhone requires independently merged controls.')
+    for before, after in ((expected, trusted), (BOX_IPHONE_SNAPSHOT, source)):
+        require(git('merge-base', before, after) == before, 'Box Office iPhone reviewed ancestry differs.')
+    base, snapshot = rsc_patch_tree_entries(expected), rsc_patch_tree_entries(BOX_IPHONE_SNAPSHOT)
+    control, candidate = rsc_patch_tree_entries(trusted), rsc_patch_tree_entries(source)
+    require(BOX_IPHONE_CONTROLS.isdisjoint(BOX_IPHONE_BLOBS), 'Box Office iPhone app and controls overlap.')
+    reviewed = {**base, **{name: ('100644', blob) for name, blob in BOX_IPHONE_BLOBS.items()}}
+    require(snapshot == reviewed and all(base.get(name) != snapshot[name] for name in BOX_IPHONE_BLOBS),
+            'Box Office iPhone snapshot path, byte or mode inventory differs.')
+    require({name for name in base.keys() | control.keys() if base.get(name) != control.get(name)}
+            == BOX_IPHONE_CONTROLS, 'Box Office iPhone controls changed outside reviewed scope.')
+    require(all(control.get(name, (None,))[0] == '100644' for name in BOX_IPHONE_CONTROLS),
+            'Box Office iPhone trusted controls must be regular files.')
+    reviewed.update({name: control[name] for name in BOX_IPHONE_CONTROLS})
+    require(candidate == reviewed, 'Box Office iPhone complete source inventory differs.')
+    return {name: candidate[name][1] for name in BOX_IPHONE_BLOBS.keys() | BOX_IPHONE_CONTROLS}
+
+
+def verify_box_iphone_host_scope(expected, changes, proof, *, enable_crypto, enable_first_host, recover_prepared):
+    candidate = proof.get('candidateVerification') or {}
+    if expected == BOX_IPHONE_LIVE or candidate.get('head_branch') == BOX_IPHONE_CANDIDATE_BRANCH:
+        require(expected == BOX_IPHONE_LIVE
+                and candidate.get('head_branch') == BOX_IPHONE_CANDIDATE_BRANCH
+                and candidate.get('event') == 'workflow_dispatch'
+                and candidate.get('schema') == 'tickets-parallel-candidate/v2',
+                'Box Office iPhone host transaction requires exact parallel candidate proof.')
+        require(not enable_crypto and not enable_first_host and not recover_prepared,
+                'Box Office iPhone must preserve runtime configuration and normal recovery guards.')
+        require(len(changes) == len(set(changes))
+                and set(changes) == BOX_IPHONE_BLOBS.keys() | BOX_IPHONE_CONTROLS
+                and not migration_plan(changes), 'Box Office iPhone requires exact code-only source inventory.')
+
+
 def reviewed_application_blobs(expected, source):
     """Select each exact application tree only from its approved live baseline."""
+    if expected == BOX_IPHONE_LIVE:
+        return reviewed_box_iphone_application_blobs(expected, source)
     if expected == BOX_OFFICE_LIVE:
         return reviewed_box_office_application_blobs(expected, source)
     if expected == INSTALLMENT_LIVE:
@@ -4465,6 +4530,9 @@ def vetted_changes(expected, source):
         require(before.count(original) == 1 and after == before.replace(
             original, "'SEEV_ENABLED', 'SEEV_CRYPTO_ENABLED', 'SEEV_ENVIRONMENT',"),
             "Only the vetted crypto configuration-name addition is permitted.")
+    if expected == BOX_IPHONE_LIVE:
+        require(not migration_plan(changed), 'Box Office iPhone cannot introduce migrations.')
+        return changed
     if expected == BOX_OFFICE_LIVE:
         require(not migration_plan(changed), 'Box Office cannot introduce migrations.')
         return changed
@@ -4756,7 +4824,7 @@ def admitted_parallel_ref(event, branch):
     # Preserve historical admission; only this reviewed release gains a manual ref.
     return (branch == "improve/release-evidence-parallel-20261013"
             and event in ("push", "workflow_dispatch")) or (
-                branch in (BOX_OFFICE_CANDIDATE_BRANCH, COMBINED_CANDIDATE_BRANCH, CUSTOMER_CANDIDATE_BRANCH, ROOM_REFRESH_CANDIDATE_BRANCH, RSC_PATCH_CANDIDATE_BRANCH, INSTALLMENT_CANDIDATE_BRANCH) and event == "workflow_dispatch")
+                branch in (BOX_IPHONE_CANDIDATE_BRANCH, BOX_OFFICE_CANDIDATE_BRANCH, COMBINED_CANDIDATE_BRANCH, CUSTOMER_CANDIDATE_BRANCH, ROOM_REFRESH_CANDIDATE_BRANCH, RSC_PATCH_CANDIDATE_BRANCH, INSTALLMENT_CANDIDATE_BRANCH) and event == "workflow_dispatch")
 
 
 def verify_combined_parallel_scope(candidate, expected, source):
@@ -4795,6 +4863,14 @@ def verify_box_office_parallel_scope(candidate, expected, source, candidate_mode
                 and candidate.get("event") == "workflow_dispatch",
                 "Box Office requires its exact parallel candidate.")
         reviewed_box_office_application_blobs(expected, source)
+
+
+def verify_box_iphone_parallel_scope(candidate, expected, source, candidate_mode="parallel-v1"):
+    if expected == BOX_IPHONE_LIVE or candidate.get("head_branch") == BOX_IPHONE_CANDIDATE_BRANCH:
+        require(candidate_mode == "parallel-v1" and candidate.get("head_branch") == BOX_IPHONE_CANDIDATE_BRANCH
+                and candidate.get("event") == "workflow_dispatch",
+                "Box Office iPhone requires its exact parallel candidate.")
+        reviewed_box_iphone_application_blobs(expected, source)
 
 
 def verify_installment_parallel_scope(candidate, expected, source, candidate_mode="parallel-v1"):
@@ -5116,6 +5192,7 @@ def verify_ci(args):
     require(candidate_mode in ("legacy", "parallel-v1", "parallel-retry-v3"), "Unknown candidate verification mode.")
     verify_rsc_patch_parallel_scope(candidate, args.expected, args.source, candidate_mode)
     verify_box_office_parallel_scope(candidate, args.expected, args.source, candidate_mode)
+    verify_box_iphone_parallel_scope(candidate, args.expected, args.source, candidate_mode)
     verify_installment_parallel_scope(candidate, args.expected, args.source, candidate_mode)
     verify_room_refresh_parallel_scope(candidate, args.expected, args.source, candidate_mode)
     verify_customer_parallel_scope(candidate, args.expected, args.source, candidate_mode)
@@ -6140,6 +6217,9 @@ class Deployment:
         require(isinstance(changes, list) and all(isinstance(name, str) for name in changes),
                 "Release changed-file manifest is invalid.")
         verify_box_office_host_scope(self.expected, changes, self.proof,
+                                     enable_crypto=self.enable_crypto, enable_first_host=self.enable_first_host,
+                                     recover_prepared=self.recover_prepared)
+        verify_box_iphone_host_scope(self.expected, changes, self.proof,
                                      enable_crypto=self.enable_crypto, enable_first_host=self.enable_first_host,
                                      recover_prepared=self.recover_prepared)
         if self.expected == INSTALLMENT_LIVE:
