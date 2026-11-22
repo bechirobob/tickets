@@ -2,6 +2,32 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test, expectWebsiteDiscovery } from './catalogue';
 test.use({ serviceWorkers: 'block' });
 
+test('mobile box office keeps a matched canvas and unobtrusive bottom navigation', async ({ page }, info) => {
+  test.skip((page.viewportSize()?.width ?? 1000) > 700, 'Mobile homepage');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/');
+  const scene = page.locator('.discovery-home .active-night-experience');
+  const hero = scene.getByRole('region', { name: 'Featured night' });
+  await expect(page.locator('html')).toHaveCSS('background-color', 'rgb(37, 28, 36)');
+  await expect(scene).toHaveCSS('background-color', 'rgb(37, 28, 36)');
+  expect((await hero.boundingBox())!.y - (await scene.boundingBox())!.y).toBeCloseTo(13, 0);
+  await page.screenshot({ path: info.outputPath('mobile-box-office-home.png') });
+  const dock = page.getByRole('navigation', { name: 'Customer navigation' });
+  for (const [path, canvas] of [['/', 'rgb(37, 28, 36)'], ['/events', 'rgb(48, 32, 51)'], ['/hosts', 'rgb(37, 28, 36)']]) {
+    await page.goto(path);
+    await expect(page.locator('html')).toHaveCSS('background-color', canvas);
+    await expect(dock).toHaveCSS('background-color', 'rgb(36, 27, 35)');
+    const box = (await dock.boundingBox())!;
+    expect(box.x).toBe(0);
+    expect(box.width).toBe(page.viewportSize()!.width);
+    expect(box.y + box.height).toBeCloseTo(page.viewportSize()!.height, 0);
+    expect(await dock.getByRole('link').evaluateAll(links => links.every(link => link.getBoundingClientRect().height >= 44))).toBe(true);
+  }
+  await page.goto('/organizer/submit');
+  await expect(page.locator('html')).toHaveCSS('background-color', 'rgb(40, 30, 38)');
+  await expect(dock).toHaveCount(0);
+});
+
 test('mobile Back closes navigation before leaving and outside destinations keep the new route', async ({ page }) => {
   test.skip((page.viewportSize()?.width ?? 1000) > 760, 'Mobile history boundary');
   await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -158,16 +184,17 @@ test('mobile header and visual-viewport keyboard geometry integration preserve u
       && initialHeader.width > 0 && initialHeader.height > 0
       && dockBox.width > 0 && dockBox.height > 0;
   }, { message: 'The hydrated mobile header and dock must have usable geometry' }).toBe(true);
-  expect(dockBox!.x).toBeGreaterThanOrEqual(12);
-  expect(dockBox!.width).toBeLessThan(page.viewportSize()!.width - 20);
-  expect(dockBox!.y + dockBox!.height).toBeLessThanOrEqual(page.viewportSize()!.height - 12);
+  expect(dockBox!.x).toBe(0);
+  expect(dockBox!.width).toBe(page.viewportSize()!.width);
+  expect(dockBox!.y + dockBox!.height).toBeCloseTo(page.viewportSize()!.height, 0);
   await page.evaluate(() => window.scrollTo(0, 400));
   await expect.poll(() => header.evaluate(element => Math.round(element.getBoundingClientRect().top))).toBe(Math.round(initialHeader!.y));
   const active = dock.getByRole('link', { name: 'The Drop', exact: true });
   await expect(active).toHaveAttribute('aria-current', 'page');
   const colors = await active.evaluate(element => ({ foreground: getComputedStyle(element).color, background: getComputedStyle(element).backgroundColor }));
-  expect(colors.background).not.toBe('rgba(0, 0, 0, 0)');
-  expect(colors.foreground).not.toBe(colors.background);
+  expect(colors.background).toBe('rgba(0, 0, 0, 0)');
+  expect(colors.foreground).toBe('rgb(223, 240, 152)');
+  await expect(dock).toHaveCSS('background-color', 'rgb(36, 27, 35)');
   // Exercise MobileAppFrame's focus/resize integration. This is simulated
   // viewport geometry, not evidence from a physical device's keyboard.
   const listed = await expectWebsiteDiscovery(page, catalogue);
