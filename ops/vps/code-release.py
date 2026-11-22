@@ -4402,8 +4402,8 @@ def verify_box_iphone_host_scope(expected, changes, proof, *, enable_crypto, ena
 # Unified reviewed public surfaces retain the exact VPS-only posture.
 BOX_UNIFIED_LIVE = '46ef0197aa524459d26f3ff046c9da75b929881f'
 BOX_UNIFIED_BASE_TREE = '32b464ae8d13393b41de13d089ec86e08f61629e'
-BOX_UNIFIED_SNAPSHOT = '35a15e5cf3ae9c9699e3288d4133ef4ba884d2f9'
-BOX_UNIFIED_SNAPSHOT_TREE = 'b9a04220ba265f0405f89227346cea7531c1a980'
+BOX_UNIFIED_SNAPSHOT = 'bbfb1e3de3e344f7dbc0e8210e88725436e898eb'
+BOX_UNIFIED_SNAPSHOT_TREE = 'ce5e9e1eac6d3f4cf9d547d11ba9f2fc92c615cc'
 BOX_UNIFIED_CANDIDATE_BRANCH = 'release/tickets-unified-box-office-20261122'
 BOX_UNIFIED_CONTROLS = BOX_OFFICE_CONTROLS - {'ops/vps/test_audit_readiness.py'}
 BOX_UNIFIED_BLOBS = {
@@ -4440,6 +4440,7 @@ BOX_UNIFIED_BLOBS = {
     'mobile/tests/app.spec.ts': '78c0fb6b5eb7e4e30487bf16118a192bace4b67d',
     'tests/e2e/checkout-quantity.spec.ts': 'c85b2166bf562792b28683cd3b7467c1b3788b2f',
     'tests/e2e/discovery-pass-access.spec.ts': 'bb3bbbd0c5a08ec099ebc7a4ade42dac2a27f64e',
+    'tests/e2e/event-details.spec.ts': '0ee26007d504ef5479c66f47767b26e282a76237',
     'tests/e2e/guest-clarity.spec.ts': '6957a9099514f9db41cd73906d39bf6f5d0b30c1',
     'tests/e2e/host-brand-identity.spec.ts': '5101ba6b8fdfa26cd2ce966cc6f6f66abcf6b073',
     'tests/e2e/mobile-app-behavior.spec.ts': '63b1489fbf4bf0fbe32850f2e6713cbc54a28cae',

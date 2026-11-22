@@ -120,8 +120,8 @@ test('ordinary deployment excludes only the finite reviewed tooling paths withou
   const standbyPaths = ['ops/vps/box_office_standby_boundary.py', 'ops/vps/test_box_office_standby_boundary.py', 'ops/vps/recovery_maintenance_test_support.py', 'ops/vps/test_audit_readiness.py'];
   const standby = gitBlob(currentWorkflow) !== previousOverlay;
   if (standby) {
-    if (gitBlob(currentWorkflow) === 'dcecb18c8ba5916587a4f09970bb44f676f61e60') {
-      const unifiedPins = "          BECORE_UNIFIED_BASE: 46ef0197aa524459d26f3ff046c9da75b929881f\n          BECORE_UNIFIED_BASE_TREE: 32b464ae8d13393b41de13d089ec86e08f61629e\n          BECORE_UNIFIED_SNAPSHOT: 35a15e5cf3ae9c9699e3288d4133ef4ba884d2f9\n          BECORE_UNIFIED_SNAPSHOT_TREE: b9a04220ba265f0405f89227346cea7531c1a980\n";
+    if (gitBlob(currentWorkflow) === '1d2bd5b0e215a45c9d61be49aab996ac3f32f11e') {
+      const unifiedPins = "          BECORE_UNIFIED_BASE: 46ef0197aa524459d26f3ff046c9da75b929881f\n          BECORE_UNIFIED_BASE_TREE: 32b464ae8d13393b41de13d089ec86e08f61629e\n          BECORE_UNIFIED_SNAPSHOT: bbfb1e3de3e344f7dbc0e8210e88725436e898eb\n          BECORE_UNIFIED_SNAPSHOT_TREE: ce5e9e1eac6d3f4cf9d547d11ba9f2fc92c615cc\n";
       assert.equal(currentWorkflow.split(unifiedPins).length, 2);
       currentWorkflow = currentWorkflow.replace(unifiedPins, '');
       assert.equal(gitBlob(currentWorkflow), 'b7750995662249f55e2e28a6662f36927083a9e3');
