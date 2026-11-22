@@ -4,7 +4,7 @@ import SegmentedControl from "./segmented-control";
 import { useDiscoveryState } from "./discovery-state";
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowLeft, ArrowRight, ArrowUpRight, BadgeCheck, CalendarDays, ChevronDown, MapPin, Search, Ticket } from "lucide-react";
+import { ArrowLeft, ArrowRight, BadgeCheck, CalendarDays, ChevronDown, MapPin, Search, Ticket } from "lucide-react";
 import { useMemo, useRef, useSyncExternalStore } from "react";
 import { useCurrentTime } from "./use-current-time";
 import { eventImageLoader, eventImageUrl } from "./event-images";
@@ -13,6 +13,7 @@ import { matchesEventWindow, type EventWindow } from "../lib/event-discovery";
 import { ActionLink } from "./action";
 import { discoveryOffer } from "../lib/event-pricing";
 import PosterLink from "./poster-link";
+import VelvetRope from "./hosts/velvet-rope";
 import { eventColourScheme, eventPresentationStyle } from "../lib/event-presentation";
 
 type WindowFilter = EventWindow;
@@ -61,7 +62,7 @@ export default function EventExplorer({ events, full = false, featuredSlug }: { 
 
   if (!events.length) {
     const EmptyHeading = full ? "h2" : "h3";
-    return <section className="event-empty"><Ticket size={24} aria-hidden="true" /><EmptyHeading>No upcoming nights announced.</EmptyHeading><p>New events will appear here. Already booked? Your tickets and RSVPs are in My Nights.</p><div className="event-empty__actions"><Link href="/my-nights">My Nights <ArrowUpRight size={16} aria-hidden="true" /></Link><Link href="/hosts">Explore hosts <ArrowUpRight size={16} aria-hidden="true" /></Link></div></section>;
+    return <section className="event-empty"><Ticket size={24} aria-hidden="true" /><EmptyHeading>No upcoming nights announced.</EmptyHeading><p>New events will appear here. Already booked? Your tickets and RSVPs are in My Nights.</p><div className="event-empty__actions"><Link href="/my-nights"><Ticket size={16} aria-hidden="true" /> My Nights</Link><Link href="/hosts"><VelvetRope size={16} /> Explore hosts</Link></div></section>;
   }
 
   return <div className={`drop-explorer discovery-explorer${full ? " drop-explorer--full" : ""}`}>
@@ -107,7 +108,7 @@ export default function EventExplorer({ events, full = false, featuredSlug }: { 
           <small>{event.venue} · {event.area}</small>
           <p className="drop-card__quip" aria-hidden={event.quip ? undefined : true}>{event.quip}</p>
           <div><span>{discoveryOffer(event).label}</span></div><p className="drop-card__verification" aria-hidden={event.isVerified ? undefined : true}>{event.isVerified ? <span className="drop-card__verified"><BadgeCheck size={13} aria-hidden="true" /> Verified event</span> : null}</p>
-          <ActionLink href={`/event/${event.slug}`} variant="text" aria-label={`See ${event.title}`}>View event</ActionLink>
+          <ActionLink href={`/event/${event.slug}`} variant="text" icon={null} aria-label={`See ${event.title}`}>View event</ActionLink>
         </div>
       </article>)}
     </div> : <div className="drop-no-match"><CalendarDays size={22} /><h3>Even Accra has a quiet corner.</h3><p>No nights match just yet. Try another date, area or music style.</p><button type="button" onClick={clearFilters}>Show all upcoming nights</button></div>}

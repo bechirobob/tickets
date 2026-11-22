@@ -1,0 +1,20 @@
+/* Style only existing server-backed payment results and wallet receipts. */
+.payment-return.payment-return--box-office > div { width: min(100%, 540px); text-align: start; }
+.payment-return--box-office > div > a { min-height: 44px; display: inline-flex; align-items: center; }
+.wallet-receipt.wallet-receipt--box-office { background: transparent; padding: 20px 0; border-radius: 0; box-shadow: none; }
+.wallet-receipt--box-office > header { flex-wrap: wrap; gap: 12px; }
+.wallet-receipt--box-office > header small { overflow-wrap: anywhere; }
+.wallet-receipt--box-office button { min-height: 44px; }
+
+
+/* The short perforation is outside the QR area, on an issued pass only. */
+@media screen {
+  .night-entry-pass--issued > .night-entry-pass__head,
+  .wallet-pass--box-office > div:first-child { position: relative; padding-top: 13px; }
+  .night-entry-pass--issued > .night-entry-pass__head::before,
+  .wallet-pass--box-office > div:first-child::before {
+    content: ""; position: absolute; inset: 0 auto auto 0; width: 60px; height: 6px;
+    pointer-events: none;
+    background: radial-gradient(circle at 4px 3px, currentColor 1.5px, transparent 1.9px) 0 0 / 9px 6px repeat-x;
+  }
+}

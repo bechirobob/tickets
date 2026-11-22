@@ -135,7 +135,7 @@ export default function MyNightsClient() {
 
   if (loading && !recovering) return <LoadingSkeleton kind="wallet" label="Lining up your nights" />;
   const member = Boolean(payload) || registrationCount > 0;
-  return <main className="my-nights-page my-nights-page--studio">
+  return <main className="my-nights-page my-nights-page--studio supporting-box-office">
     <header className="directory-header"><Link href="/events" aria-label="Back to The Drop"><ArrowLeft size={16} /><span className="directory-header__back-label">The Drop</span></Link><Link href="/" className="brand-mark"><BrandLogo /></Link><span className="my-nights-header-actions"><PublicNavigation /><NotificationBell /></span></header>
     <section className="my-nights-shell">
       <header className="nights-heading"><div><p className="eyebrow">{payload ? `For ${payload.attendee.displayName}` : "BeCore Tickets"}</p><h1>My Nights<span aria-hidden="true">.</span></h1></div><Link className="nights-privacy" href="/account/privacy"><ShieldCheck size={17} /><span>Privacy</span></Link></header>

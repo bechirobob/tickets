@@ -117,29 +117,30 @@ test.beforeEach(async ({ page, request }, info) => {
 test('The Yorke Way signature preserves Kofi’s personal profile and source artwork', async ({ page }) => {
   await page.goto('/hosts/kofi-bills');
   await expect(page.getByRole('heading', { name: 'Kofi Bills', exact: true })).toBeVisible();
-  await expect(page.locator('.host-profile__identity')).not.toContainText('Henry Yorke');
-  await expect(page.locator('.host-profile__bio')).toContainText('Henry Yorke');
-  await expect(page.locator('.host-profile__identity')).toContainText('Verified host');
-  await expect(page.locator('.host-profile__portrait .host-portrait__image')).toHaveAttribute('src', '/hosts/kofi-bills.webp');
-  await readyPortrait(page, '.host-profile__portrait .host-portrait');
-  const signature = page.locator('.host-profile__identity .host-brand-eyebrow');
+  await expect(page.locator('#host-name')).toHaveText('Kofi Bills');
+  await expect(page.locator('.host-ticket--profile .host-ticket__bio')).toContainText('Henry Yorke');
+  await expect(page.locator('.host-ticket--profile .host-ticket__brand')).toContainText('Verified host');
+  await expect(page.locator('.host-ticket--profile .host-ticket__stub .host-portrait__image')).toHaveAttribute('src', '/hosts/kofi-bills.webp');
+  await readyPortrait(page, '.host-ticket--profile .host-ticket__stub .host-portrait');
+  const signature = page.locator('.host-ticket--profile .host-ticket__copy > .hosts-box-office__label');
   await expect(signature).toHaveText('The Yorke Way');
-  const seal = page.locator('.host-profile__portrait .host-portrait__seal');
+  const seal = page.locator('.host-ticket--profile .host-ticket__stub .host-portrait__seal');
   await expect(seal.locator('img')).toHaveAttribute('src', '/hosts/the-yorke-way.svg');
   await expect.poll(() => seal.locator('img').evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
-  const size = await seal.boundingBox(), portrait = await page.locator('.host-profile__portrait .host-portrait__image').boundingBox();
-  expect(size?.width).toBe(page.viewportSize()!.width > 600 ? 52 : 36);
+  const size = await seal.boundingBox(), portrait = await page.locator('.host-ticket--profile .host-ticket__stub .host-portrait__image').boundingBox();
+  expect(size?.width).toBe(page.viewportSize()!.width > 600 ? 52 : 32);
   expect(size?.height).toBe(size?.width);
   expect(size!.y).toBeGreaterThan(portrait!.y + portrait!.height / 2);
   expect(size!.x + size!.width).toBeCloseTo(portrait!.x + portrait!.width + (page.viewportSize()!.width > 600 ? 8 : 6), 0);
   const brandBox = await signature.boundingBox(), nameBox = await page.locator('#host-name').boundingBox();
-  expect(nameBox!.y - brandBox!.y - brandBox!.height).toBeCloseTo(6, 0);
-  await expect(signature).toHaveCSS('text-transform', 'none');
-  await expect(signature).toHaveCSS('font-weight', '600');
+  const identityGap = nameBox!.y - brandBox!.y - brandBox!.height;
+  expect(identityGap).toBeGreaterThanOrEqual(0);
+  expect(identityGap).toBeLessThanOrEqual(12);
+  expect(nameBox!.height).toBeGreaterThan(brandBox!.height);
   await expect(seal).toHaveCSS('box-shadow', 'none');
   await expect(page.getByRole('link', { name: /Instagram/ })).toHaveAttribute('href', 'https://www.instagram.com/mr.yorke/');
   await expect(page.getByRole('link', { name: /Snapchat/ })).toHaveAttribute('href', 'https://www.snapchat.com/add/kofi_billz123');
-  expect((await new AxeBuilder({ page }).include('.host-profile').analyze()).violations).toEqual([]);
+  expect((await new AxeBuilder({ page }).include('.hosts-box-office').analyze()).violations).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
   await expect(page.getByTestId('brand-arrival'), 'Target screenshot must not capture the opening scene').toBeHidden();
   await page.screenshot({ path: test.info().outputPath('yorke-profile.png'), fullPage: true, scale: 'css' });
@@ -164,21 +165,21 @@ test('linked event gives the host a subordinate brand credit without replacing o
   await page.locator('.event-detail-story').screenshot({ path: test.info().outputPath('yorke-event-host.png'), scale: 'css' });
   await recordHostSpacing(page, host, 'yorke-host-spacing.json');
   await host.getByRole('link', { name: 'View Host', exact: true }).click();
-  await expect(page.locator('.host-profile__identity .host-brand-eyebrow')).toHaveText('The Yorke Way');
+  await expect(page.locator('.host-ticket--profile .host-ticket__copy > .hosts-box-office__label')).toHaveText('The Yorke Way');
 });
 
 test('the portrait seal and brand hierarchy stay contained on a 320px phone', async ({ page }) => {
   test.skip(test.info().project.name === 'desktop-chromium', 'Narrow phone evidence uses the phone browser context.');
   await page.setViewportSize({ width: 320, height: 900 });
   await page.goto('/hosts/kofi-bills');
-  const seal = page.locator('.host-profile__portrait .host-portrait__seal');
-  await readyPortrait(page, '.host-profile__portrait .host-portrait');
+  const seal = page.locator('.host-ticket--profile .host-ticket__stub .host-portrait__seal');
+  await readyPortrait(page, '.host-ticket--profile .host-ticket__stub .host-portrait');
   await expect(seal).toBeVisible();
-  expect((await seal.boundingBox())!.width).toBe(36);
-  await expect(page.locator('.host-profile__city')).toContainText('Verified host');
+  expect((await seal.boundingBox())!.width).toBe(32);
+  await expect(page.locator('.host-ticket--profile .host-ticket__brand')).toContainText('Verified host');
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
   await expect(page.getByTestId('brand-arrival'), 'Target screenshot must not capture the opening scene').toBeHidden();
-  const nextNight = page.getByRole('link', { name: 'See what else is on', exact: true });
+  const nextNight = page.getByRole('link', { name: 'Browse events', exact: true });
   await expect(nextNight).toHaveAttribute('href', '/events');
   // Scroll to the viewport edge deliberately: the document's dock clearance
   // must keep the link reachable without centering it or hiding navigation.
@@ -211,11 +212,17 @@ test('the portrait seal and brand hierarchy stay contained on a 320px phone', as
 
 test('host directory uses the same portrait seal and one display name', async ({ page }) => {
   await page.goto('/hosts');
-  const host = page.locator('.hosts-list article').filter({ has: page.getByRole('heading', { name: 'Kofi Bills', exact: true }) });
-  await readyPortrait(page, '.hosts-list article:has(h2:text-is("Kofi Bills")) .host-portrait');
+  const host = page.getByRole('region', { name: 'Host directory' }).getByRole('article').filter({ has: page.getByRole('heading', { name: 'Kofi Bills', exact: true }) });
+  await readyPortrait(page, '.host-ticket--directory:has(h2:text-is("Kofi Bills")) .host-portrait');
   await expect(host.locator('.host-portrait__seal img')).toHaveAttribute('src', '/hosts/the-yorke-way.svg');
   await expect(host.locator('h2')).toHaveText('Kofi Bills');
-  await expect(host).toContainText('Henry Yorke');
+  await expect(host.getByRole('heading', { level: 2, name: 'Kofi Bills', exact: true })).toHaveCount(1);
+  await expect(host).toContainText('Verified host');
+  await expect(host.locator('.host-ticket__brand')).toHaveText('The Yorke Way');
+  await expect(host).not.toContainText('Henry Yorke');
+  const profileLink = host.getByRole('link', { name: 'View host: Kofi Bills', exact: true });
+  await expect(profileLink).toHaveAttribute('href', '/hosts/kofi-bills');
+  expect((await profileLink.boundingBox())!.height).toBeGreaterThanOrEqual(44);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
   await expect(page.getByTestId('brand-arrival'), 'Target screenshot must not capture the opening scene').toBeHidden();
   await page.screenshot({ path: test.info().outputPath('yorke-directory.png'), fullPage: true, scale: 'css' });

@@ -63,12 +63,14 @@ test('checkout header keeps the logo clear and back navigation reachable', async
     expect(backBox.x + backBox.width + 8).toBeLessThanOrEqual(logoBox.x);
     expect(Math.abs(logoBox.x + logoBox.width / 2 - width / 2)).toBeLessThanOrEqual(1);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    const reassurance = header.getByText('Secure checkout', { exact: true });
+    await expect(reassurance).toHaveCount(1);
     if (width < 640) {
       await expect(back).toHaveText('Back to event');
       await expect(page.locator('.checkout-back__detail')).toBeHidden();
-      await expect(header.locator(':scope > span')).toBeHidden();
+      await expect(reassurance).toBeHidden();
     } else {
-      await expect(header.getByText('Good plans. Safe payment.')).toBeVisible();
+      await expect(reassurance).toBeVisible();
     }
     await back.focus();
     await expect(back).toBeFocused();
