@@ -120,8 +120,8 @@ test('ordinary deployment excludes only the finite reviewed tooling paths withou
   const standbyPaths = ['ops/vps/box_office_standby_boundary.py', 'ops/vps/test_box_office_standby_boundary.py', 'ops/vps/recovery_maintenance_test_support.py', 'ops/vps/test_audit_readiness.py'];
   const standby = gitBlob(currentWorkflow) !== previousOverlay;
   if (standby) {
-    if (gitBlob(currentWorkflow) === 'cc1445ebbd49e05680d204240dc3f77619252ab5') {
-      const pins = '          BECORE_CANVAS_BASE: 024eaef59cb08ef277ec6c1598406d6c4ba06862\n          BECORE_CANVAS_BASE_TREE: 5e4790e1c3cf3262fded40d8178e98dd46a4502e\n          BECORE_CANVAS_SNAPSHOT: fd67a6b9d1cff5fec90adf1feec4849db72c1337\n          BECORE_CANVAS_SNAPSHOT_TREE: 48d42cfbbba1fa4e50789af9c0c1bd7d742d8a55\n';
+    if (gitBlob(currentWorkflow) === 'c1f6990cd053c5e9821654388cff21b359e3e93b') {
+      const pins = '          BECORE_CANVAS_BASE: 024eaef59cb08ef277ec6c1598406d6c4ba06862\n          BECORE_CANVAS_BASE_TREE: 5e4790e1c3cf3262fded40d8178e98dd46a4502e\n          BECORE_CANVAS_SNAPSHOT: 8f137fed554db1db4a2e77bc5d4a9ce25e97972e\n          BECORE_CANVAS_SNAPSHOT_TREE: e9e0f8dd9dc83c2e08818833849df166038f18a3\n';
       assert.equal(currentWorkflow.split(pins).length, 2);
       currentWorkflow = currentWorkflow.replace(pins, '');
     }
