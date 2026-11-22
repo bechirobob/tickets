@@ -1,14 +1,17 @@
 "use client";
 
+import { eventImageUrl } from "../../event-images";
+import BookingProgress from "../../booking-progress";
 import BrandLogo from "../../brand-logo";
 import Link from "next/link";
 import Image from "next/image";
 import "./checkout-panels.css";
-import { ArrowLeft, Check, CreditCard, Gem, LockKeyhole, ShieldCheck, Smartphone, Wallet } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, CreditCard, Gem, LockKeyhole, ShieldCheck, Smartphone, Wallet } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useSearchParams } from "next/navigation";
 import { ActionButton } from "../../action";
 import type { CuratedEvent } from "../../events";
+import { eventPresentationStyle } from "../../../lib/event-presentation";
 import { formatGhanaCedis } from "../../../lib/ticket-tiers";
 import { trackProductMetric } from "../../../lib/client-analytics";
 
@@ -161,7 +164,7 @@ export default function CheckoutForm({ installmentStepMinor, slug, event, feeBas
   }
 
   return (
-    <main className="checkout-page checkout-box-office">
+    <main className="checkout-page checkout-box-office" style={eventPresentationStyle(event)}>
       <header className="checkout-header">
         <Link href={`/event/${slug}`} className="checkout-back" aria-label="Back to event"><ArrowLeft size={17} aria-hidden="true" /><span>Back<span className="checkout-back__detail"> to event</span></span></Link>
         <Link href="/" className="brand-mark"><BrandLogo /></Link>
@@ -171,7 +174,16 @@ export default function CheckoutForm({ installmentStepMinor, slug, event, feeBas
         <section className="checkout-main">
           {event.isTestEvent ? <div className="preview-checkout-note"><strong>Test checkout</strong><span>No real event is taking place and no real money should be used. For Paystack, test mode accepts MTN number <b>055 123 498 7</b> without a PIN or OTP. {seevEnabled ? "SeevCash offers success and decline actions in its sandbox checkout." : ""}</span></div> : null}
           <div className="checkout-step">
-            <div><small>Box office</small><h1>Your tickets</h1><p className="checkout-event-name">{event.title}</p></div>
+            <div className="checkout-event-name">
+              <span className="checkout-event-mark" aria-hidden="true">
+                {event.title.split(/\s+/u).slice(0,2).map(word => word[0]).join("")}
+                {event.image ? <Image src={eventImageUrl(event.image, 120, 75)} alt="" width={40} height={48} unoptimized onError={e => { e.currentTarget.hidden = true; }} /> : null}
+              </span>
+              <span><strong>{event.title}</strong><small>{event.shortDate} · {event.venue}</small></span>
+            </div>
+            <small>Box office</small><h1>Your tickets</h1>
+            <p>Choose your tickets and see the full total before continuing.</p>
+            <BookingProgress active="Choose tickets" />
           </div>
           <section className="checkout-box-panel" aria-labelledby="ticket-selection"><h2 id="ticket-selection">Choose tickets</h2><div className="ticket-tier-list" role="radiogroup" aria-label="Choose ticket tier">
             {event.ticketTiers.filter((tier) => tier.status !== "hidden").map((tier) => {
@@ -193,14 +205,17 @@ export default function CheckoutForm({ installmentStepMinor, slug, event, feeBas
                   </button>
                   {selected && !soldOut && (
                     <div className="quantity-control"><span className="quantity-label">Quantity</span>
-                      <select
-                        aria-label={`${tier.name} quantity`}
-                        value={quantity}
-                        disabled={!ready || isPaying}
-                        onChange={(event) => setQuantity(Math.max(1, Math.min(maxPurchasableUnits, Number(event.target.value))))}
-                      >
-                        {Array.from({ length: maxPurchasableUnits }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}
-                      </select>
+                      <span className="checkout-quantity-picker">
+                        <select
+                          aria-label={`${tier.name} quantity`}
+                          value={quantity}
+                          disabled={!ready || isPaying}
+                          onChange={(event) => setQuantity(Math.max(1, Math.min(maxPurchasableUnits, Number(event.target.value))))}
+                        >
+                          {Array.from({ length: maxPurchasableUnits }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}
+                        </select>
+                        <ChevronDown size={16} aria-hidden="true" />
+                      </span>
                     </div>
                   )}
                   {selected && !soldOut ? <small className="tier-availability">{tier.remainingAdmissions} admissions currently available</small> : null}
@@ -233,6 +248,7 @@ export default function CheckoutForm({ installmentStepMinor, slug, event, feeBas
               <label className="payment-method-choice">
                 <input ref={paymentMethodChoice} aria-invalid={invalidField === "payment" || undefined} aria-describedby={invalidField === "payment" ? "checkout-payment-message" : undefined} type="radio" name="paymentMethod" value="mobile_money" checked={paymentMethod === "mobile_money"} onChange={() => { setPaymentMethod("mobile_money"); setMessage(""); setInvalidField(null); }} />
                 <Smartphone size={20} aria-hidden="true" /><span>Mobile Money<small>MTN MoMo, Telecel Cash or AT Money</small></span>
+                <span className="checkout-method-marks" aria-hidden="true">{paymentNetworks.map(item => <Image key={item.id} src={item.icon} alt="" width={28} height={20} />)}</span>
               </label>
               {paymentMethod === "mobile_money" ? <div className="payment-method-detail">
                 {seevEnabled && paystackEnabled ? <fieldset className="checkout-provider-choice" disabled={isPaying}>
@@ -259,9 +275,10 @@ export default function CheckoutForm({ installmentStepMinor, slug, event, feeBas
               <label className="payment-method-choice">
                 <input type="radio" name="paymentMethod" value="card" checked={paymentMethod === "card"} onChange={() => { setPaymentMethod("card"); setMessage(""); setInvalidField(null); }} />
                 <CreditCard size={20} aria-hidden="true" /><span>Cards<small>Visa or Mastercard through Paystack</small></span>
+                <span className="checkout-method-marks" role="img" aria-label="Accepted cards: Visa and Mastercard"><Image src="/payment-providers/visa.svg" alt="" width={32} height={20} /><Image src="/payment-providers/mastercard.svg" alt="" width={28} height={20} /></span>
               </label>
               {paymentMethod === "card" ? <div className="payment-method-detail"><div className="card-payment-detail">
-                <div><strong>Secure card checkout</strong><p>Continue to Paystack to enter your card details securely. BeCore never receives or stores your card number.</p><span className="accepted-card-brands" role="img" aria-label="Accepted cards: Visa and Mastercard"><Image src="/payment-providers/visa.svg" alt="" width={56} height={32} /><Image src="/payment-providers/mastercard.svg" alt="" width={48} height={32} /></span></div>
+                <div><strong>Secure card checkout</strong><p>Continue to Paystack to enter your card details securely. BeCore never receives or stores your card number.</p></div>
               </div></div> : null}
             </section> : null}
             {seevEnabled && seevCryptoEnabled ? <section className={`payment-option${paymentMethod === "crypto" ? " selected" : ""}`}>

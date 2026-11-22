@@ -1,16 +1,16 @@
 /* eslint-disable @next/next/no-img-element -- approved host and event assets are served directly. */
 import type { Metadata } from "next";
 import HostPortrait from "../../host-portrait";
-import BrandLogo from "../../brand-logo";
+import BoxOfficeHeader from "../../box-office-header";
+import BoxOfficeFooter from "../../box-office-footer";
 import { ActionLink } from "../../action";
 import Link from "next/link";
-import { ArrowLeft, ArrowUpRight, CalendarDays, Instagram } from "lucide-react";
+import { ArrowUpRight, CalendarDays, Instagram } from "lucide-react";
 import { notFound } from "next/navigation";
 import MemberActions from "../../member-actions";
 import { getPublicEvents } from "../../events";
 import { isWebsiteListedEvent } from "../../../lib/website-event-listings";
 import { eventTiming, findHostBySlug, listHostEventSlugs } from "../../../lib/event-experience";
-import PublicNavigation from "../../mobile-navigation";
 import "../hosts.css";
 
 export const dynamic = "force-dynamic";
@@ -36,11 +36,9 @@ export default async function HostPage({ params }: { params: Promise<{ slug: str
   const [eventSlugs, allEvents] = await Promise.all([listHostEventSlugs(env.DB, host.id), getPublicEvents()]);
   const events = allEvents.filter((event) => isWebsiteListedEvent(event) && eventSlugs.includes(event.slug) && eventTiming(event) !== "past");
   return <main className="host-page hosts-box-office">
-    <header className="directory-header">
-      <Link href="/hosts" aria-label="Back to hosts"><ArrowLeft size={16} aria-hidden="true" /><span className="directory-header__back-label">Hosts</span></Link>
-      <Link href="/" className="brand-mark"><BrandLogo /></Link><PublicNavigation />
-    </header>
+    <BoxOfficeHeader />
     <div className="hosts-box-office__content">
+      <Link href="/hosts" className="host-profile__back">Back to Hosts</Link>
       <section className="host-ticket host-ticket--profile" aria-labelledby="host-name">
         <div className="host-ticket__copy">
           {host.brandName?.trim() ? <p className="hosts-box-office__label">{host.brandName}</p> : null}
@@ -65,5 +63,6 @@ export default async function HostPage({ params }: { params: Promise<{ slug: str
         </article>)}</div> : <div className="host-profile__empty"><p>The next invite is still under wraps. Keep an eye here.</p><ActionLink href="/events" variant="secondary" icon={<CalendarDays size={17} />}>Browse events</ActionLink></div>}
       </section>
     </div>
+    <BoxOfficeFooter />
   </main>;
 }

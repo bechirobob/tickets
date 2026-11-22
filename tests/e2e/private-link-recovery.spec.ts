@@ -193,6 +193,10 @@ for (const [status, heading] of [['requested', 'Your request is with the host'],
     await page.getByRole('button', { name: 'Confirm my email', exact: true }).click();
     await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Show my QR passes' })).toHaveCount(0);
+    if (status === 'interested') {
+      await expect(page.getByText('You’re on the update list, not the guest list.')).toBeVisible();
+      await expect(page.getByRole('link', { name: 'View the event' })).toHaveAttribute('href', '/event/isolated-event');
+    }
   });
 }
 

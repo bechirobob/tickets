@@ -197,7 +197,7 @@ test('the portrait seal and brand hierarchy stay contained on a 320px phone', as
   await nextNight.tap();
   await expect(page).toHaveURL(/\/events$/);
   // Client navigation updates the URL before its destination has rendered.
-  await expect(page.getByRole('heading', { name: 'Find your next night.', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'The Drop', exact: true })).toBeVisible();
   await page.goto('/event/sun-chasers-labadi');
   await expect(page.locator('.event-host .host-brand-eyebrow')).toHaveText('The Yorke Way');
   await readyPortrait(page, '.event-host .host-portrait');

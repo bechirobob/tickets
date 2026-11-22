@@ -65,7 +65,7 @@ body .yorke-sponsor .brand-logo__type > small { font: 550 8px/1 var(--font-syste
 .yorke-footer > span:first-child { color: var(--yorke-cream); }
 .yorke-success { padding: 0 0 12px; }
 .yorke-status-icon { width: 34px; height: 34px; margin-bottom: 20px; stroke: var(--yorke-lime); stroke-width: 1.5; }
-.yorke-success h2 { margin: 10px 0 16px; font-size: 34px; line-height: 1.1; font-weight: 580; letter-spacing: -.05em; }
+.yorke-success h1 { margin: .45rem 0 .85rem; font-size: clamp(2.15rem,5.1vw,4.55rem); line-height: 1.01; font-weight: 620; letter-spacing: -.05em; }
 .yorke-success > p:not(.yorke-eyebrow) { font-size: 14px; line-height: 1.65; color: var(--yorke-muted); }
 .yorke-success a { text-decoration: underline; text-underline-offset: 3px; }
 .yorke-success > p.yorke-success-hint { margin-top: 12px; font-size: 12px; }
@@ -128,6 +128,8 @@ body .yorke-sponsor .brand-logo__type > small { font: 550 8px/1 var(--font-syste
   background: var(--yorke-signup-accent); color: var(--yorke-plum);
 }
 .yorke-main .yorke-fine-print { margin-top: 13px; padding-top: 0; border: 0; }
+.yorke-main:has(.yorke-success) .yorke-intro,
+.yorke-main:has(.yorke-success) .yorke-fine-print { display: none; }
 @media (hover: hover) {
   .yorke-main .yorke-submit:hover:not(:disabled) { background: #f4d0c0; }
 }
@@ -141,6 +143,7 @@ body .yorke-sponsor .brand-logo__type > small { font: 550 8px/1 var(--font-syste
 @media (max-width: 700px) {
   .yorke-main { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; gap: 13px; }
   .yorke-main .yorke-logo-stage { grid-column: 1; grid-row: auto; }
+  .yorke-main:has(.yorke-success) .yorke-form-section { grid-row: 1; }
   .yorke-main .yorke-logo-stage > img { width: min(40vw, 168px); }
   .yorke-main .yorke-fields { grid-template-columns: minmax(0, 1fr); }
   .yorke-main .yorke-submit { width: 100%; }

@@ -6,6 +6,7 @@ import {
   ArrowUp,
   BadgeCheck,
   BatteryFull,
+  CalendarDays,
   Camera,
   ConciergeBell,
   ChevronLeft,
@@ -97,8 +98,8 @@ export default function ActiveNightExperience({ events }: { events: CustomerEven
       <Image className="compact-hero__image compact-hero__image--active" data-portrait-crop={eventArtworkPath(heroImage) === "/events/on-the-guest-list.webp" || undefined} src={eventImageUrl(heroImage, 1600, 78)} width={1600} height={900} sizes="(max-width: 700px) 100vw, 55vw" alt={active ? `Atmosphere for ${active.title}` : "A DJ at the decks in front of the crowd"} priority unoptimized />
       <div className="compact-hero__copy">
         <p className="box-office-hero__imprint"><span>BeCore Tickets</span><span>Accra, GH</span></p>
-        <p className="night-kicker hero-editor-note"><span /> {active ? active.quip : "Your next good excuse to go out."}{active?.isTestEvent ? <small> / Preview</small> : null}</p>
         <h1>{active?.title ?? "Plans, sorted."}</h1>
+        <p className="night-kicker hero-editor-note"><span /> {active ? active.quip : "Your next good excuse to go out."}{active?.isTestEvent ? <small> / Preview</small> : null}</p>
         <p>{active ? active.startsAt ? `${active.vibe} · ${active.day} ${active.shortDate} · ${active.time.split(" — ")[0]}` : `${active.vibe} · ${active.shortDate}` : "Discover music, people and places worth going out for."}</p>
         {active ? <p className="hero-venue">{active.venue}, {active.area}</p> : null}
         {active ? <div className="hero-actions"><ActionLink href={discoveryOffer(active).href} icon={<Ticket size={18} />}>{discoveryOffer(active).action}</ActionLink>{discoveryOffer(active).href !== `/event/${active.slug}` ? <ActionLink href={`/event/${active.slug}`} variant="text" icon={null}>Event details</ActionLink> : null}</div> : null}
@@ -110,7 +111,7 @@ export default function ActiveNightExperience({ events }: { events: CustomerEven
     <section className="night-drop night-drop--compact" id="drop">
       <div className="compact-section-head"><div><p className="night-kicker"><span /> The Drop / Accra</p><h2>Where are we going?</h2></div></div>
       <EventExplorer events={events} featuredSlug={active?.slug} />
-      <div className="box-office-drop-actions"><ActionLink href="/events" icon={null}>Browse all events</ActionLink></div>
+      {events.length > 0 && <div className="box-office-drop-actions"><ActionLink href="/events" icon={<CalendarDays size={16} />}>Browse all events</ActionLink></div>}
     </section>
 
     <section className="room-product-scene active-night-room" id="the-room">

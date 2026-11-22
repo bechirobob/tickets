@@ -2,11 +2,21 @@
 .payment-return.payment-return--box-office {
   --result-paper: #241b23; --result-ink: #fff3e8; --result-muted: #d7c7ce; --result-accent: #ffb18b;
   min-height: 100vh; min-height: 100dvh; place-items: start center;
-  padding: max(clamp(38px, 11vh, 104px), calc(22px + env(safe-area-inset-top)))
-    max(22px, env(safe-area-inset-right)) max(42px, env(safe-area-inset-bottom)) max(22px, env(safe-area-inset-left));
+  grid-template-rows:auto 1fr; padding:0;
   background: var(--result-paper); color: var(--result-ink);
 }
-.payment-return.payment-return--box-office > div { width: min(100%, 540px); border: 0; box-shadow: none; text-align: start; }
+.payment-outcome-header {
+  width:100%; min-height:calc(60px + env(safe-area-inset-top)); display:flex; align-items:center;
+  padding:env(safe-area-inset-top) max(18px,env(safe-area-inset-right)) 0 max(18px,env(safe-area-inset-left));
+  border-bottom:1px solid #493e46; background:#241b22; color:var(--result-ink);
+}
+.payment-return.payment-return--box-office > div {
+  width:min(calc(100% - 36px),720px); padding:clamp(24px,4vh,50px) 0 max(44px,env(safe-area-inset-bottom));
+  border:0; box-shadow:none; text-align:start;
+}
+.payment-return--box-office h1 {
+  margin-block:6px 10px; font-size:clamp(2rem,6vw,3.7rem); line-height:1.06; color:var(--result-accent);
+}
 .payment-return--box-office > div > svg,
 .payment-return--box-office .eyebrow { color: var(--result-accent); }
 .payment-return--box-office p:not(.eyebrow),
@@ -29,4 +39,44 @@
     pointer-events: none;
     background: radial-gradient(circle at 4px 3px, currentColor 1.5px, transparent 1.9px) 0 0 / 9px 6px repeat-x;
   }
+}
+
+/* A payment acknowledgement only after the server verifies it. Actual passes and QR stay in My Nights. */
+.payment-confirmation-stub {
+  width:min(100%,405px); margin-top:18px; padding:14px 16px 0; overflow:hidden;
+  border-radius:8px; background:var(--result-accent); color:var(--result-paper);
+}
+.payment-confirmation-stub strong { display:block; padding-bottom:12px; }
+.payment-confirmation-stub a {
+  display:flex; align-items:center; min-height:48px; padding:7px 16px 0; margin-inline:-16px;
+  color:inherit; text-underline-offset:.25em;
+  background:radial-gradient(circle at 5px 2px,var(--result-paper) 1.5px,transparent 1.9px) 0 0 / 10px 5px repeat-x;
+}
+
+/* One progress marker for the real checkout and return states. */
+.booking-progress {
+  display:flex; flex-wrap:wrap; align-items:center; gap:5px 17px; margin:12px 0 0;
+  list-style:none; padding:0; color:var(--result-muted,var(--muted)); font-size:13px;
+}
+.booking-progress li { padding-bottom:3px; border-bottom:2px solid transparent; }
+.booking-progress li[aria-current="step"] {
+  border-color:var(--result-accent,var(--booking-accent)); color:var(--result-ink,var(--ink)); font-weight:700;
+}
+
+/* The issued ticket face uses the Box Office stub; the scannable area stays white. */
+@media screen {
+  .night-entry-pass--issued > .night-entry-pass__head {
+    min-height: 42px;
+    box-sizing: border-box;
+    padding: 9px 12px 12px;
+    border-radius: 6px 6px 0 0;
+    background: #3d2c38;
+    color: #fff3e8;
+  }
+  .night-entry-pass--issued > .night-entry-pass__head::before {
+    inset: auto 12px 0 12px;
+    width: 60px;
+    color: #e9bfae;
+  }
+  .night-entry-pass--issued .night-entry-pass__state { color: #e1ed9a; }
 }

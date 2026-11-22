@@ -22,6 +22,10 @@ test('phone RSVP links show the form under a compact, linked event summary', asy
     await expect(image).toHaveCSS('height', '72px');
     await expect(image).toHaveCSS('object-fit', 'contain');
     await expect(page.getByLabel('Your name')).toBeInViewport();
+    await expect(page.locator('.rsvp-signup')).toHaveCSS('background-color', 'rgb(36, 27, 35)');
+    await page.getByLabel('Your name').focus();
+    await expect(page.getByLabel('Your name')).toHaveCSS('outline-style', 'none');
+    await expect(page.getByLabel('Your name')).toHaveCSS('border-bottom-width', '3px');
     await expect(summary.locator('.rsvp-signup__facts')).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
   }
@@ -91,7 +95,9 @@ test('an undated event keeps optional email consent event-scoped without implyin
   let attempts = 0;
   await page.route('**/api/registrations', route => {
     expect(route.request().postDataJSON()).toMatchObject({ eventSlug: 'sun-chasers-labadi', announcementsOptIn: attempts++ > 0, platformAnnouncementsOptIn: false });
-    return route.fulfill({ status: 503, json: { error: 'Test registration stopped before sending email.' } });
+    return attempts === 1
+      ? route.fulfill({ status: 503, json: { error: 'Test registration stopped before sending email.' } })
+      : route.fulfill({ status: 202, json: { message: 'We’ve sent your confirmation link.' } });
   });
   await page.getByLabel('Your name').fill('Interest Guest');
   await page.getByLabel('Email address').fill('interest@example.com');
@@ -102,6 +108,10 @@ test('an undated event keeps optional email consent event-scoped without implyin
   await updates.check();
   await activate(page.getByRole('button', { name: 'Send my confirmation link' }));
   await expect.poll(() => attempts).toBe(2);
+  const status = page.locator('.registration-form').getByRole('status');
+  await expect(status.getByRole('heading', { name: 'Check your inbox.' })).toBeVisible();
+  await expect(status).toContainText('This doesn’t reserve a spot.');
+  await status.screenshot({ path: test.info().outputPath('event-update-inbox.png') });
 });
 
 test('RSVP can be submitted without opting into platform announcements', async ({ page }) => {

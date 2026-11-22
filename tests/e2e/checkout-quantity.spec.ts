@@ -1,7 +1,7 @@
 import { test, expect } from './analytics-fixture';
 import AxeBuilder from '@axe-core/playwright';
 
-test('boxed quantity preserves purchase limits, totals and tier changes', async ({ page, baseURL }) => {
+test('native quantity preserves purchase limits, totals and tier changes', async ({ page, baseURL }) => {
   test.skip(!test.info().config.configFile?.endsWith('playwright.seev.config.ts'), 'Requires the isolated checkout fixture.');
   test.skip(!baseURL || !['localhost', '127.0.0.1'].includes(new URL(baseURL).hostname), 'Synthetic local inventory only.');
   await page.route('**/api/config/booking-fee?*', route => route.fulfill({ json: { percentage: 5 } }));
@@ -19,7 +19,10 @@ test('boxed quantity preserves purchase limits, totals and tier changes', async 
   expect(box.height).toBeGreaterThanOrEqual(44);
   await quantity.focus();
   await expect(quantity).toBeFocused();
-  expect(await quantity.evaluate(element => getComputedStyle(element).outlineStyle)).not.toBe('none');
+  await expect(quantity).toHaveCSS('outline-style', 'none');
+  await expect(quantity).toHaveCSS('border-bottom-width', '3px');
+  await expect(page.getByRole('list', { name: 'Checkout progress' }).locator('[aria-current=step]')).toHaveText('Choose tickets');
+  await expect(page.locator('.checkout-box-office')).toHaveCSS('background-color', 'rgb(36, 27, 35)');
   await quantity.selectOption('3');
   await expect(page.locator('.summary-lines')).toContainText('3 × General admission');
   await expect(page.locator('.summary-lines')).toContainText('GH₵360');

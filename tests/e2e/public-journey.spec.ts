@@ -85,7 +85,14 @@ test("a single featured night stays synchronized with The Drop and The Room", as
   expect(browseTarget?.height).toBeGreaterThanOrEqual(44);
   const dropContent = page.locator("#drop :is(.event-empty, .discovery-explorer)").first();
   const contentBounds = await dropContent.boundingBox();
-  expect(browseTarget!.y).toBeGreaterThanOrEqual(contentBounds!.y + contentBounds!.height - 1);
+  if (await dropContent.evaluate((element) => element.classList.contains("event-empty"))) {
+    const status = await dropContent.locator(".event-empty__status").boundingBox();
+    const secondary = await dropContent.locator(".event-empty__actions").boundingBox();
+    expect(browseTarget!.y).toBeGreaterThanOrEqual(status!.y + status!.height - 1);
+    expect(browseTarget!.y + browseTarget!.height).toBeLessThanOrEqual(secondary!.y + 1);
+  } else {
+    expect(browseTarget!.y).toBeGreaterThanOrEqual(contentBounds!.y + contentBounds!.height - 1);
+  }
 
   if (!scenes.length) {
     expect(activeSlug).toBe("waiting");
@@ -289,12 +296,12 @@ for (const path of publicPages) {
     expect(findings.oversizedHeadings).toEqual([]);
     const back = page.locator('.poster-event-page .back-link');
     if (await back.count()) {
-      await expect(back).toHaveAccessibleName('The Drop');
+      await expect(back).toHaveAccessibleName('Back to The Drop');
       await expect(back).toHaveAttribute('href', '/events');
       const target = await back.boundingBox();
       expect(target!.width).toBeGreaterThanOrEqual(44);
       expect(target!.height).toBeGreaterThanOrEqual(44);
-      const headerBoxes = await page.locator('.poster-event-page .sub-header > *').evaluateAll(elements => elements.map(el => {
+      const headerBoxes = await page.locator('.poster-event-page .box-office-header > *').evaluateAll(elements => elements.map(el => {
         const box = el.getBoundingClientRect(); return { left: box.left, right: box.right };
       }));
       for (let i = 1; i < headerBoxes.length; i++) expect(headerBoxes[i].left - headerBoxes[i - 1].right).toBeGreaterThanOrEqual(0);

@@ -133,7 +133,8 @@ test("notification history stays behind the verified My Nights entrance", async 
   assert.doesNotMatch(home, /href="\/notifications"/u);
   assert.doesNotMatch(dock, /href="\/notifications"/u);
   assert.doesNotMatch(dock, /MobileNavigation|PublicNavigation/u);
-  assert.match(home, /<PublicNavigation(?: primaryVisible)? \/>/u);
+  assert.match(home, /<BoxOfficeHeader \/>/u);
+  assert.match(await readFile(new URL("../app/box-office-header.tsx", import.meta.url), "utf8"), /<PublicNavigation primaryVisible \/>/u);
   assert.match(myNights, /<NotificationBell \/>/u);
   assert.doesNotMatch(myNights, /payload \? <NotificationBell/u);
   assert.match(hub, /<NotificationBell \/>/u);
@@ -321,7 +322,8 @@ test("one featured night drives the hero, Drop and Room without autoplay", async
   assert.match(experience, /aria-hidden="true" unoptimized\s*\/>/u);
   assert.ok(experience.includes('`/devices/box-office-${conversation}.webp`'));
   assert.equal(experience.match(/>Browse all events<\/ActionLink>/gu)?.length, 1);
-  assert.match(experience, /<EventExplorer[^>]+\/>\s*<div className="box-office-drop-actions">/u);
+  assert.match(experience, /<EventExplorer[^>]+\/>\s*\{events.length > 0 && <div className="box-office-drop-actions">/u);
+  assert.match(explorer, /!full && <div className="box-office-drop-actions">/u);
   assert.doesNotMatch(experience, /sceneInterval|className="active-night-autoplay-toggle"|(?:Pause|Resume|Previous|Next) featured night|compact-hero__image--outgoing/u);
   assert.match(explorer, /data-featured=\{event\.slug === featuredSlug \? "true"/u);
 });
@@ -342,14 +344,16 @@ test("public navigation belongs to each header on mobile and desktop", async () 
     readFile(accessPolishUrl, "utf8"),
     readFile(homeUrl, "utf8"),
     readFile(aboutUrl, "utf8"),
-    readFile(new URL("../app/events/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/events/events-screen.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/help/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/privacy/page.tsx", import.meta.url), "utf8"),
     readFile(mobileNavigationUrl, "utf8"),
     readFile(customerDockUrl, "utf8"),
   ]);
 
-  for (const page of [home, about, events, help, privacy]) assert.match(page, /<PublicNavigation(?: primaryVisible)? \/>/u);
+  for (const page of [home, events]) assert.match(page, /<BoxOfficeHeader \/>/u);
+  assert.match(await readFile(new URL("../app/box-office-header.tsx", import.meta.url), "utf8"), /<PublicNavigation primaryVisible \/>/u);
+  for (const page of [about, help, privacy]) assert.match(page, /<PublicNavigation(?: primaryVisible)? \/>/u);
   assert.doesNotMatch(dock, /MobileNavigation|PublicNavigation/u);
   assert.match(mobileNavigation, /href: "\/events", label: "The Drop"/u);
   assert.match(mobileNavigation, /href: "\/my-nights", label: "My Nights"/u);
@@ -537,7 +541,9 @@ test("public organiser actions keep submission public and named workspaces prote
     readFile(submissionUrl, "utf8"),
     readFile(adminSubmissionsUrl, "utf8"),
   ]);
-  const home = `${homeShell}\n${activeNight}`;
+  const footer = await readFile(new URL("../app/box-office-footer.tsx", import.meta.url), "utf8");
+  const header = await readFile(new URL("../app/box-office-header.tsx", import.meta.url), "utf8");
+  const home = `${homeShell}\n${activeNight}\n${footer}\n${header}`;
 
   assert.doesNotMatch(home, /href="\/organizer"/u);
   assert.equal(home.match(/href="\/organizer\/submit"/gu)?.length, 1);
@@ -589,7 +595,9 @@ test("About us has its own open page and no longer interrupts the landing page",
     readFile(accessPolishUrl, "utf8"),
   ]);
 
-  assert.match(home, /<Link href="\/about">About us<\/Link>/u);
+  assert.match(home, /<BoxOfficeFooter \/>/u);
+  const footer = await readFile(new URL("../app/box-office-footer.tsx", import.meta.url), "utf8");
+  assert.match(footer, /<Link href="\/about">About us<\/Link>/u);
   assert.doesNotMatch(home, /<nav aria-label="Main navigation">[^<]*(?:<[^>]+>[^<]*)*<Link href="\/hosts">/u);
   assert.doesNotMatch(home, /id="about"|className="becore-about"|Accra plans differently/u);
   assert.match(about, /className="about-page(?: [^"]+)?"/u);
@@ -965,12 +973,14 @@ test("public browsing is edge-cached without caching private customer journeys",
 
 test("homepage footer stays useful without duplicating the customer dock", async () => {
   const [home, css] = await Promise.all([readFile(homeUrl, "utf8"), readFile(cssUrl, "utf8")]);
-  assert.match(home, /href="\/staff">Event staff/u);
-  assert.match(home, /href="\/organizer\/submit">Organisers/u);
-  assert.match(home, /href="\/about">About us/u);
-  assert.match(home, /href="\/help">Help/u);
-  assert.doesNotMatch(home, /compact-footer[\s\S]*href="\/events">The Drop/u);
-  assert.doesNotMatch(home, /compact-footer[\s\S]*href="\/my-nights">My Nights/u);
+  assert.equal(home.match(/<BoxOfficeFooter \/>/gu)?.length, 1);
+  const footer = await readFile(new URL("../app/box-office-footer.tsx", import.meta.url), "utf8");
+  assert.match(footer, /href="\/staff">Event staff/u);
+  assert.match(footer, /href="\/organizer\/submit">Organisers/u);
+  assert.match(footer, /href="\/about">About us/u);
+  assert.match(footer, /href="\/help">Help/u);
+  assert.doesNotMatch(footer, /compact-footer[\s\S]*href="\/events">The Drop/u);
+  assert.doesNotMatch(footer, /compact-footer[\s\S]*href="\/my-nights">My Nights/u);
   assert.match(css, /\.night-footer > p\s*\{[^}]*color:\s*#898a83/su);
 });
 
@@ -1020,7 +1030,7 @@ test("public typography keeps compact copy readable without shrinking header lab
   const [css, about, events, hosts, host, privacy, nights, submission] = await Promise.all([
     readFile(new URL("../app/access-polish.css", import.meta.url), "utf8"),
     readFile(new URL("../app/about/page.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/events/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/events/events-screen.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/hosts/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/hosts/[slug]/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/account/privacy/privacy-settings.tsx", import.meta.url), "utf8"),
@@ -1031,10 +1041,12 @@ test("public typography keeps compact copy readable without shrinking header lab
   assert.match(css, /\.submission-intro h1\s*\{[^}]*font-size:\s*clamp\(48px,\s*5\.5vw,\s*76px\)/su);
   assert.match(css, /\.submission-page\s*\{[^}]*--signal:\s*#bd3f11/su);
   assert.match(css, /\.directory-header__back-label\s*\{[^}]*display:\s*none/su);
-  for (const source of [about, events, hosts, host, privacy, nights]) {
+  for (const source of [about, privacy, nights]) {
     assert.match(source, /className="(?:directory-header__back-label|account-header-label)"/u);
     if (!source.includes('className="account-header-label"')) assert.match(source, /aria-label="Back to /u);
   }
+  for (const source of [events, hosts, host]) assert.match(source, /<BoxOfficeHeader \/>/u);
+  assert.match(host, /href="\/hosts"[^>]*>Back to Hosts/u);
   assert.match(submission, /<PublicNavigation \/>/u);
 });
 
@@ -1123,10 +1135,10 @@ test("compact booking consent rows preserve alignment and unobstructed evidence"
   assert.doesNotMatch(capture, /addStyleTag|style\.(?:display|visibility)\s*=/u);
 });
 
-test("checkout quantity uses a labelled native boxed dropdown within existing inventory limits", async () => {
+test("checkout quantity uses a labelled native dropdown within existing inventory limits", async () => {
   const [checkout, css] = await Promise.all([
     readFile(new URL('../app/checkout/[slug]/checkout-form.tsx', import.meta.url), 'utf8'),
-    readFile(cssUrl, 'utf8'),
+    readFile(new URL('../app/checkout/[slug]/checkout-panels.css', import.meta.url), 'utf8'),
   ]);
   assert.match(checkout, /<select\s+aria-label=\{`\$\{tier.name\} quantity`\}/u);
   assert.match(checkout, /disabled=\{!ready \|\| isPaying\}/u);
@@ -1134,7 +1146,7 @@ test("checkout quantity uses a labelled native boxed dropdown within existing in
   assert.match(checkout, /Math\.min\(selectedTier\.maxUnitsPerOrder, Math\.floor\(selectedTier\.remainingAdmissions \/ selectedTier\.admissionsPerUnit\)\)/u);
   assert.match(checkout, /setSelectedTierId\(tierId\);\s+setQuantity\(1\)/u);
   assert.match(checkout, /selected && !soldOut &&/u);
-  assert.match(css, /\.quantity-control select \{[^}]*min-height: 46px;[^}]*border: 1px solid/u);
+  assert.match(css, /\.quantity-control select \{[^}]*appearance:none;[^}]*border-bottom:1px solid/u);
   assert.doesNotMatch(css, /\.quantity-control button/u);
 });
 
@@ -1155,7 +1167,7 @@ test("checkout keeps semantic section headings without decorative step numbers",
   const checkout = await readFile(new URL('../app/checkout/[slug]/checkout-form.tsx', import.meta.url), 'utf8');
   assert.doesNotMatch(checkout, /<span>[123]<\/span><div><small>/u);
   assert.match(checkout, /<h1>Your tickets<\/h1>/u);
-  assert.match(checkout, /className="checkout-event-name">\{event.title\}/u);
+  assert.match(checkout, /className="checkout-event-name">[\s\S]*?<strong>\{event.title\}<\/strong>/u);
   assert.match(checkout, /<h2 id="ticket-selection">Choose tickets<\/h2>/u);
   assert.match(checkout, /<h2 id="delivery-title">Where to send your tickets<\/h2>/u);
   assert.match(checkout, /<h2 id="payment-title">How would you like to pay\?<\/h2>/u);

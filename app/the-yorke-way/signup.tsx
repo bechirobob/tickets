@@ -60,7 +60,7 @@ export default function YorkeSignup() {
   if (state === 'success') return <div className="yorke-success" role="status" tabIndex={-1} ref={success}>
     <svg className="yorke-status-icon" aria-hidden="true" viewBox="0 0 32 32" fill="none"><path d="M4 8h24v17H4zM4 8l12 10L28 8" /></svg>
     <p className="yorke-eyebrow">Good call.</p>
-    <h2>You’re on the list.</h2>
+    <h1>You’re on the list.</h1>
     <p>Your year-end plans just got a little more interesting. Keep an eye on your inbox for The Yorke Way updates.</p>
     <p className="yorke-success-hint">For new signups, a welcome email is on its way. No extra confirmation needed.</p>
     <p className="yorke-success-hint">Previously unsubscribed? We’ll keep that choice. Contact <a href="mailto:tickets@becoreops.com">tickets@becoreops.com</a> if you want to rejoin.</p>

@@ -1,9 +1,10 @@
 "use client";
 
 import { ActionButton } from "../../action";
+import Link from "next/link";
 
 import { ArrowLeft, ArrowRight, CheckCircle2, Loader2, Send, Upload } from "lucide-react";
-import { FormEvent, useRef, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 
 const maximumSourceBytes = 8 * 1024 * 1024;
 const maximumPreparedBytes = 1_500_000;
@@ -66,19 +67,61 @@ async function preparePoster(file: File) {
   throw new Error("That flyer stays too large after preparation. Choose a simpler or smaller image.");
 }
 
-export default function PartySubmissionForm({ contactName, contactEmail }: { contactName?: string; contactEmail?: string } = {}) {
+type SubmissionRecap = {
+  title: string;
+  organizer: string;
+  date: string;
+  venue: string;
+  price: string;
+  capacity: string;
+};
+
+function summarize(form: FormData): SubmissionRecap {
+  const value = (name: string) => String(form.get(name) ?? "").trim();
+  const start = new Date(`${value("startsAt")}Z`);
+  return {
+    title: value("title"),
+    organizer: value("organizerName"),
+    date: Number.isFinite(start.getTime()) ? new Intl.DateTimeFormat("en-GH", {
+      dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Accra",
+    }).format(start) : value("startsAt"),
+    venue: [value("venueName"), value("area")].filter(Boolean).join(", "),
+    price: Number(value("priceFrom")) === 0 ? "Free" : `From GH₵${value("priceFrom")}`,
+    capacity: `${value("capacity")} guests`,
+  };
+}
+
+function RecapFacts({ recap }: { recap: SubmissionRecap }) {
+  return <dl className="submission-recap">
+    {([["Organiser", recap.organizer], ["When (Accra time)", recap.date], ["Where", recap.venue], ["Tickets", recap.price], ["Capacity", recap.capacity]] as const).map(([label, value]) =>
+      <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
+  </dl>;
+}
+
+export default function PartySubmissionForm({ contactName, contactEmail, publicBoxOffice = false }: {
+  contactName?: string; contactEmail?: string; publicBoxOffice?: boolean;
+} = {}) {
   const [state, setState] = useState<"idle" | "preparing" | "sending" | "done" | "error">("idle");
   const [message, setMessage] = useState("");
   const [step, setStep] = useState(0);
   const [posterName, setPosterName] = useState("");
+  const [posterUrl, setPosterUrl] = useState("");
+  const [recap, setRecap] = useState<SubmissionRecap | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const steps = ["The people", "The party", "The flyer"];
   const busy = state === "preparing" || state === "sending";
+  const finalStep = publicBoxOffice ? 3 : 2;
+  const reviewing = publicBoxOffice && step === finalStep;
+  useEffect(() => () => { if (posterUrl) URL.revokeObjectURL(posterUrl); }, [posterUrl]);
+  useEffect(() => {
+    if (state === "done" && publicBoxOffice) headingRef.current?.focus();
+  }, [state, publicBoxOffice]);
 
   function moveTo(next: number) {
     setStep(next);
     setMessage("");
+    if (publicBoxOffice && state === "error") setState("idle");
     requestAnimationFrame(() => headingRef.current?.focus());
   }
 
@@ -99,11 +142,22 @@ export default function PartySubmissionForm({ contactName, contactEmail }: { con
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy) return;
-    if (step < 2) {
-      if (validateStep(step)) moveTo(step + 1);
+    if (step < finalStep) {
+      if (!validateStep(step)) return;
+      if (publicBoxOffice && step === 2) {
+        const draft = new FormData(event.currentTarget);
+        const poster = draft.get("poster");
+        if (!(poster instanceof File) || !supportedPosterTypes.has(poster.type) || poster.size > maximumSourceBytes) {
+          setState("error");
+          setMessage("Choose a JPG, PNG or WebP flyer under 8 MB.");
+          return;
+        }
+        setRecap(summarize(draft));
+      }
+      moveTo(step + 1);
       return;
     }
-    for (let index = 0; index < 3; index++) if (!validateStep(index)) return;
+    for (let index = 0; index <= finalStep; index++) if (!validateStep(index)) return;
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
     setState("preparing");
@@ -127,22 +181,54 @@ export default function PartySubmissionForm({ contactName, contactEmail }: { con
     }
   }
 
+  function startAgain() {
+    setState("idle"); setStep(0); setMessage(""); setPosterName(""); setPosterUrl(""); setRecap(null);
+    if (publicBoxOffice) requestAnimationFrame(() => headingRef.current?.focus());
+  }
+
+  const publicIntro = (title: string, description: string) => (
+    <header className="submission-box-office__intro">
+      <p className="night-kicker">For organisers</p>
+      <h1 ref={headingRef} tabIndex={-1}>{title}</h1>
+      <p>{description}</p>
+    </header>
+  );
+
   if (state === "done") {
+    if (publicBoxOffice && recap) return (
+      <div className="submission-receipt">
+        {publicIntro("Your night is under review", "Your event won’t appear on The Drop until it’s approved.")}
+        <section className="submission-success submission-success--box-office" aria-labelledby="submission-confirmation">
+          <p className="submission-status"><CheckCircle2 size={18} aria-hidden="true" /> Pending review</p>
+          <h2 id="submission-confirmation">{recap.title}</h2>
+          <RecapFacts recap={recap} />
+          <p>Reference <b>{message}</b>. We’ll get in touch after reviewing your plan.</p>
+          <div className="submission-receipt__actions">
+            <Link href="/organizer/workspace">See event operations</Link>
+            <button type="button" onClick={startAgain}>Submit another event</button>
+          </div>
+        </section>
+      </div>
+    );
     return (
       <section className="submission-success">
         <CheckCircle2 size={37} />
         <p className="night-kicker"><span /> Safely in the queue</p>
         <h2>Your party has entered the group chat.</h2>
         <p>Reference <b>{message}</b>. We’ll check the plan, venue and ticket details, then get back to you. Your event goes live after approval.</p>
-        <button type="button" onClick={() => { setState("idle"); setStep(0); setPosterName(""); }}>Submit another party</button>
+        <button type="button" onClick={startAgain}>Submit another party</button>
       </section>
     );
   }
 
-  return (
-    <form ref={formRef} className="submission-form" onSubmit={submit} noValidate>
-      <nav className="submission-progress" aria-label="Submission steps">{steps.map((label, index) => <button key={label} type="button" aria-current={step === index ? "step" : undefined} disabled={busy || index > step} onClick={() => moveTo(index)}><span>{index < step ? <CheckCircle2 size={17} /> : `0${index + 1}`}</span>{label}</button>)}</nav>
-      <header className="submission-form-heading"><p>Step {step + 1} of 3</p><h2 ref={headingRef} tabIndex={-1}>{steps[step]}</h2><p>{["Who’s making this happen?", "Give us the details worth clearing the calendar for.", "One last look, then send it our way."][step]}</p></header>
+  const consent = <label className="submission-consent submission-consent--check"><input name="acceptedPolicies" value="yes" type="checkbox" required /><span>I accept the <a href="/terms#organizer" target="_blank">organiser agreement</a> and <a href="/privacy" target="_blank">privacy notice</a>. Submitting does not guarantee placement; the organiser remains responsible for accurate event, venue and refund information.</span></label>;
+
+  const stepContent = <>
+      {!reviewing && <header className="submission-form-heading">
+        {!publicBoxOffice && <p>Step {step + 1} of 3</p>}
+        <h2 ref={publicBoxOffice ? undefined : headingRef} tabIndex={publicBoxOffice ? undefined : -1}>{steps[step]}</h2>
+        <p>{["Who’s making this happen?", "Give us the details worth clearing the calendar for.", publicBoxOffice ? "Add the artwork guests will see." : "One last look, then send it our way."][step]}</p>
+      </header>}
       <input className="submission-honeypot" name="website" tabIndex={-1} autoComplete="off" aria-hidden="true" />
       <section data-step="0" hidden={step !== 0}>
         <div className="submission-fields">
@@ -172,15 +258,50 @@ export default function PartySubmissionForm({ contactName, contactEmail }: { con
       </section>
 
       <section data-step="2" hidden={step !== 2}>
-        <label className="poster-upload"><Upload size={20} /><span><b>{posterName || "Choose your flyer"}</b><small>JPG, PNG or WebP · up to 8 MB · prepared automatically</small></span><input name="poster" aria-label="Upload the poster or key visual" onChange={(event) => setPosterName(event.target.files?.[0]?.name ?? "")} type="file" accept="image/jpeg,image/png,image/webp" required /></label>
-        <label className="submission-consent submission-consent--check"><input name="acceptedPolicies" value="yes" type="checkbox" required /><span>I accept the <a href="/terms#organizer" target="_blank">organiser agreement</a> and <a href="/privacy" target="_blank">privacy notice</a>. Submitting does not guarantee placement; the organiser remains responsible for accurate event, venue and refund information.</span></label>
+        <label className="poster-upload"><Upload size={20} /><span><b>{posterName || "Choose your flyer"}</b><small>JPG, PNG or WebP · up to 8 MB · prepared automatically</small></span><input name="poster" aria-label="Upload the poster or key visual" onChange={(event) => {
+          const file = event.target.files?.[0] ?? null;
+          setPosterName(file?.name ?? "");
+          if (publicBoxOffice) setPosterUrl(file && supportedPosterTypes.has(file.type) && file.size <= maximumSourceBytes
+            ? URL.createObjectURL(file) : "");
+        }} type="file" accept="image/jpeg,image/png,image/webp" required /></label>
+        {publicBoxOffice && posterUrl && <figure className="submission-review__poster submission-review__poster--chosen">
+          {/* eslint-disable-next-line @next/next/no-img-element -- browser-local flyer draft */}
+          <img src={posterUrl} alt="Selected event flyer" />
+          <figcaption>{posterName}</figcaption>
+        </figure>}
+        {!publicBoxOffice && consent}
       </section>
+
+      {publicBoxOffice && <section data-step="3" className="submission-review" hidden={!reviewing}>
+        {recap && <div className="submission-review__grid">
+          <div><h2>{recap.title}</h2><RecapFacts recap={recap} /></div>
+          {posterUrl && <figure className="submission-review__poster">
+            {/* eslint-disable-next-line @next/next/no-img-element -- browser-local flyer draft */}
+            <img src={posterUrl} alt="Your event flyer" />
+            <figcaption>{posterName}</figcaption>
+          </figure>}
+        </div>}
+        {consent}
+      </section>}
 
       <div className="submission-submit">
         {step > 0 ? <button className="submission-back" type="button" disabled={busy} onClick={() => moveTo(step - 1)}><ArrowLeft size={16} /> Back</button> : <p>Your event goes live after approval.</p>}
-        <ActionButton type="submit" disabled={state === "preparing" || state === "sending"} aria-busy={state === "preparing" || state === "sending"} icon={state === "preparing" || state === "sending" ? <Loader2 className="spin" size={17} /> : step < 2 ? <ArrowRight size={17} /> : <Send size={17} />}>{state === "preparing" ? "Preparing the flyer…" : state === "sending" ? "Sending to the queue…" : step < 2 ? "Continue" : "Submit for review"}</ActionButton>
+        <ActionButton type="submit" disabled={state === "preparing" || state === "sending"} aria-busy={state === "preparing" || state === "sending"} icon={state === "preparing" || state === "sending" ? <Loader2 className="spin" size={17} /> : step < finalStep ? <ArrowRight size={17} /> : <Send size={17} />}>{state === "preparing" ? "Preparing the flyer…" : state === "sending" ? "Sending to the queue…" : step === 2 && publicBoxOffice ? "Review your event" : step < finalStep ? "Continue" : "Submit for review"}</ActionButton>
       </div>
       {state === "error" && <p className="submission-error" role="alert">{message}</p>}
+    </>;
+
+  return (
+    <form ref={formRef} className={publicBoxOffice ? "submission-form submission-form--box-office" : "submission-form"} onSubmit={submit} noValidate>
+      {publicBoxOffice && publicIntro(
+        ["List your event", "Tell us about the night", "Add the flyer", "Review your event"][step],
+        ["Bring the plan. We’ll help with tickets, the guest list and getting everyone through the door.",
+         "The details guests need before they clear their calendars.",
+         "See your artwork before you send the plan.",
+         "Check the details and artwork guests would see."][step],
+      )}
+      <nav className="submission-progress" aria-label="Submission steps">{steps.map((label, index) => <button key={label} type="button" aria-current={Math.min(step, 2) === index ? "step" : undefined} disabled={busy || index > step} onClick={() => moveTo(index)}><span>{index < Math.min(step, 2) ? <CheckCircle2 size={17} /> : `0${index + 1}`}</span>{label}</button>)}</nav>
+      {publicBoxOffice ? <div className="submission-panel">{stepContent}</div> : stepContent}
     </form>
   );
 }

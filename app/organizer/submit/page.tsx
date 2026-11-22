@@ -23,13 +23,8 @@ export default async function SubmitPartyPage() {
         </nav>
       </header>
       <div className="submission-box-office">
-        <section className="submission-box-office__intro" aria-labelledby="list-your-event-title">
-          <p className="night-kicker">For organisers</p>
-          <h1 id="list-your-event-title">List your event</h1>
-          <p>Bring the plan. We’ll help with tickets, the guest list and getting everyone through the door.</p>
-        </section>
         <div className="submission-body" id="submit-your-night">
-          <PartySubmissionForm />
+          <PartySubmissionForm publicBoxOffice />
           <aside className="submission-guide" aria-labelledby="submission-guide-title">
             <p className="night-kicker">From the first invite to the last guest</p>
             <h2 id="submission-guide-title">What happens next</h2>
