@@ -2,6 +2,32 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test, expectWebsiteDiscovery } from './catalogue';
 test.use({ serviceWorkers: 'block' });
 
+test('mobile box office keeps a matched canvas and unobtrusive bottom navigation', async ({ page }, info) => {
+  test.skip((page.viewportSize()?.width ?? 1000) > 700, 'Mobile homepage');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/');
+  const scene = page.locator('.discovery-home .active-night-experience');
+  const hero = scene.getByRole('region', { name: 'Featured night' });
+  await expect(page.locator('html')).toHaveCSS('background-color', 'rgb(37, 28, 36)');
+  await expect(scene).toHaveCSS('background-color', 'rgb(37, 28, 36)');
+  expect((await hero.boundingBox())!.y - (await scene.boundingBox())!.y).toBeCloseTo(13, 0);
+  await page.screenshot({ path: info.outputPath('mobile-box-office-home.png') });
+  const dock = page.getByRole('navigation', { name: 'Customer navigation' });
+  for (const [path, canvas] of [['/', 'rgb(37, 28, 36)'], ['/events', 'rgb(48, 32, 51)'], ['/hosts', 'rgb(37, 28, 36)']]) {
+    await page.goto(path);
+    await expect(page.locator('html')).toHaveCSS('background-color', canvas);
+    await expect(dock).toHaveCSS('background-color', 'rgb(36, 27, 35)');
+    const box = (await dock.boundingBox())!;
+    expect(box.x).toBe(0);
+    expect(box.width).toBe(page.viewportSize()!.width);
+    expect(box.y + box.height).toBeCloseTo(page.viewportSize()!.height, 0);
+    expect(await dock.getByRole('link').evaluateAll(links => links.every(link => link.getBoundingClientRect().height >= 44))).toBe(true);
+  }
+  await page.goto('/organizer/submit');
+  await expect(page.locator('html')).toHaveCSS('background-color', 'rgb(40, 30, 38)');
+  await expect(dock).toHaveCount(0);
+});
+
 test('mobile Back closes navigation before leaving and outside destinations keep the new route', async ({ page }) => {
   test.skip((page.viewportSize()?.width ?? 1000) > 760, 'Mobile history boundary');
   await page.emulateMedia({ reducedMotion: 'reduce' });
