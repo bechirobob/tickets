@@ -94,6 +94,10 @@
  order:2;margin-top:4px;min-height:44px;padding:8px 11px;border:1px solid #887780;border-radius:7px;
  color:#fff3e3;text-decoration:none
 }
+/* Keep flyer size independent of copy when comparing multiple tickets. */
+.drop-explorer--full .discovery-grid:not([data-count="1"]) .drop-card[data-colour-scheme] .drop-card__image{
+ aspect-ratio:4/5;align-self:start
+}
 @media(max-width:780px){
  .drop-explorer--full .discovery-grid{grid-template-columns:1fr}
  /* Keep one flyer size across stacked listings, irrespective of the copy length. */
