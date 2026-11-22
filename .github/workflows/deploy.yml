@@ -85,8 +85,8 @@ jobs:
           BECORE_BOX_SNAPSHOT_TREE: 6557ee7049ebb5a65d931c029ab504fd1f4f565e
           BECORE_CANVAS_BASE: 024eaef59cb08ef277ec6c1598406d6c4ba06862
           BECORE_CANVAS_BASE_TREE: 5e4790e1c3cf3262fded40d8178e98dd46a4502e
-          BECORE_CANVAS_SNAPSHOT: fd67a6b9d1cff5fec90adf1feec4849db72c1337
-          BECORE_CANVAS_SNAPSHOT_TREE: 48d42cfbbba1fa4e50789af9c0c1bd7d742d8a55
+          BECORE_CANVAS_SNAPSHOT: 2f2773e2c61e70adea70a78b41b184f47ddfd8a5
+          BECORE_CANVAS_SNAPSHOT_TREE: 01b4e75ed133333b656940b8b7dde05c517cc8a8
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = bechirobob/tickets
