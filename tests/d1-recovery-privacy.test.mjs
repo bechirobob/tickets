@@ -246,8 +246,8 @@ const gitBlob = raw => createHash('sha1').update(`blob ${Buffer.byteLength(raw)}
 
 function restoreReviewedStandbyOverlay(raw) {
   if (gitBlob(raw) === priorRecoveryBlob) return raw;
-  if (gitBlob(raw) === 'c1f6990cd053c5e9821654388cff21b359e3e93b') {
-    const pins = '          BECORE_CANVAS_BASE: 024eaef59cb08ef277ec6c1598406d6c4ba06862\n          BECORE_CANVAS_BASE_TREE: 5e4790e1c3cf3262fded40d8178e98dd46a4502e\n          BECORE_CANVAS_SNAPSHOT: 8f137fed554db1db4a2e77bc5d4a9ce25e97972e\n          BECORE_CANVAS_SNAPSHOT_TREE: e9e0f8dd9dc83c2e08818833849df166038f18a3\n';
+  if (gitBlob(raw) === 'b7750995662249f55e2e28a6662f36927083a9e3') {
+    const pins = '          BECORE_CANVAS_BASE: 024eaef59cb08ef277ec6c1598406d6c4ba06862\n          BECORE_CANVAS_BASE_TREE: 5e4790e1c3cf3262fded40d8178e98dd46a4502e\n          BECORE_CANVAS_SNAPSHOT: afc1dd1b01eaa9841778f099b5f5573a5ac9007b\n          BECORE_CANVAS_SNAPSHOT_TREE: 01edccf5930337b3e885cf947d2af9091aa0a419\n';
     assert.equal(raw.split(pins).length, 2);
     raw = raw.replace(pins, '');
   }
