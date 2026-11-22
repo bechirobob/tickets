@@ -120,7 +120,7 @@ test('ordinary deployment excludes only the finite reviewed tooling paths withou
   const standbyPaths = ['ops/vps/box_office_standby_boundary.py', 'ops/vps/test_box_office_standby_boundary.py', 'ops/vps/recovery_maintenance_test_support.py', 'ops/vps/test_audit_readiness.py'];
   const standby = gitBlob(currentWorkflow) !== previousOverlay;
   if (standby) {
-    assert.equal(gitBlob(currentWorkflow), '40f5660995c0125ff9776f9076e532801e7769b2');
+    assert.equal(gitBlob(currentWorkflow), 'ffc2efacd307da66d64e55d3af524011819da3f8');
     const parsed = load(currentWorkflow);
     assert.deepEqual(parsed.permissions, { contents: 'read' });
     const gate = parsed.jobs.box_office_standby_boundary;
@@ -128,7 +128,7 @@ test('ordinary deployment excludes only the finite reviewed tooling paths withou
     assert.equal(parsed.jobs.deploy.if, "needs.box_office_standby_boundary.outputs.allow_cloudflare == 'true'");
     assert.equal(gate.steps[0].with['persist-credentials'], false);
     assert.equal(gate.steps[0].with['fetch-depth'], 0);
-    assert.equal(gate.steps[1].env.BECORE_BOX_SNAPSHOT, '1f937e5f1ac2de711d162ea46c98d65f28f46325');
+    assert.equal(gate.steps[1].env.BECORE_BOX_SNAPSHOT, 'a4c03b44f876d895c78fdd213dffb396e442c527');
     assert.match(gate.steps[1].run, /git show "\$BECORE_PUSH_BEFORE:ops\/vps\/box_office_standby_boundary\.py"/);
     assert.doesNotMatch(JSON.stringify(gate), /secrets\.|CLOUDFLARE_API_TOKEN|wrangler/);
     assert.deepEqual(standbyPaths.filter(path => parsed.on.push['paths-ignore'].includes(path)), standbyPaths);

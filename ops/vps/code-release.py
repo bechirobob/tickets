@@ -4213,8 +4213,8 @@ def reviewed_installment_application_blobs(expected, source):
 # One Box Office visual release with its exact mandatory Next.js patch; no schema or runtime changes.
 BOX_OFFICE_LIVE = '8c77eec14c6093a707a15bdaff6c4c631dbd358a'
 BOX_OFFICE_BASE_TREE = 'ecaa585e893982b6e7bd35d8a0467d684fd9d8e5'
-BOX_OFFICE_SNAPSHOT = '1f937e5f1ac2de711d162ea46c98d65f28f46325'
-BOX_OFFICE_SNAPSHOT_TREE = '6c8c2083deca098fd2a8fc2cc7d486249270d5c0'
+BOX_OFFICE_SNAPSHOT = 'a4c03b44f876d895c78fdd213dffb396e442c527'
+BOX_OFFICE_SNAPSHOT_TREE = '6557ee7049ebb5a65d931c029ab504fd1f4f565e'
 BOX_OFFICE_CANDIDATE_BRANCH = 'release/tickets-box-office-20261121'
 BOX_OFFICE_CONTROLS = frozenset({
     '.github/workflows/deploy.yml',
@@ -4267,6 +4267,7 @@ BOX_OFFICE_BLOBS = {
     "tests/e2e/event-details.spec.ts": "11554b2ef2ed9037edc5b46559ad2c83a715e659",
     "tests/e2e/host-brand-identity.spec.ts": "cf170c01cf2cef2e28124ebe7f6989f4933e7bd7",
     "tests/e2e/host-profile.spec.ts": "b7db80c8f6affdfd619eb70ab1605b64c983321f",
+    "tests/e2e/mobile-app-behavior.spec.ts": "a0e800af21ee97c09953ce9a26b2b409dff7047a",
     "tests/e2e/public-journey.spec.ts": "00ab482cad38aef74160ab4b1e0367f25c3e72a3",
     "tests/e2e/room-demo.spec.ts": "d1dfd848f8e37ffca0836a469586339c030507e5",
     "tests/e2e/room-identity.spec.ts": "3a68dce04376b4ffca3fd1c609d16ef002d25c7d",
