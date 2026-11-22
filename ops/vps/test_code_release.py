@@ -3992,7 +3992,7 @@ BOX_OFFICE_TEST_CONTROLS = {
     'ops/vps/box_office_standby_boundary.py': ('100644', '993538144be098e812fb88abe88ecc02edb44f63'),
     'ops/vps/test_box_office_standby_boundary.py': ('100644', '44db27df7a122ed6078b4de884b37168c6efa14b'),
     'ops/vps/test_audit_readiness.py': ('100644', 'c2073226f401a3e7840823c744511782fd4a0068'),
-    'ops/vps/recovery_maintenance_test_support.py': ('100644', '7d61237cd5cdcf6a81dc526e22a8fec6dc203199'),
+    'ops/vps/recovery_maintenance_test_support.py': ('100644', 'a2132975f6ba62d3be9fc066e0fa0941b11cee2f'),
     'tests/browser-environment.test.mjs': ('100644', 'e78386beb47a09acded6696896df695b205fc832'),
     'tests/d1-recovery-privacy.test.mjs': ('100644', 'dec651c1fc35c4ede0806d73cd0017e67aa0cd2a'),
 }
