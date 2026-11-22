@@ -28,7 +28,7 @@ export default function YorkeWayPage() {
     <main className="yorke-main" id="main">
       <YorkeMotion>
         <p className="yorke-eyebrow"><span aria-hidden="true" />Early access · Year-end 2026</p>
-        <h1 id="yorke-title"><span className="yorke-line"><span data-yorke-phrase>Your year-end</span></span><br /><span className="yorke-line"><span data-yorke-phrase>plans called.</span></span><br /><span className="yorke-punchline"><span data-yorke-phrase>They said</span>{' '}<strong data-yorke-phrase>Kofi Bills.</strong></span></h1>
+        <h1 id="yorke-title"><span className="yorke-line"><span data-yorke-phrase>Your year-end plans</span></span>{' '}<span className="yorke-line"><span data-yorke-phrase>called.</span></span><br /><span className="yorke-punchline"><span data-yorke-phrase>They said</span>{' '}<strong data-yorke-phrase>Kofi Bills.</strong></span></h1>
         <p className="yorke-description">Get early access to Kofi Bills’ year-end events. Give the group chat something to work with.</p>
       </YorkeMotion>
       <div className="yorke-logo-stage">

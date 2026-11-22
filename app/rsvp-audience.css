@@ -116,6 +116,23 @@
 }
 @media (forced-colors: none) {
   .rsvp-signup .registration-form input:not([type='checkbox']):focus {
-    outline: none; box-shadow: inset 0 -2px currentColor; border-bottom-color: currentColor;
+    outline: none; border-bottom:3px solid currentColor;
   }
+}
+
+/* The open guest-list journey shares the unboxed night-paper booking treatment. */
+.rsvp-signup:has(.registration-form) { background:#241b23; --line:#76616e; }
+.rsvp-signup:has(.registration-form) .rsvp-signup__response { border:0; padding-top:0; }
+.rsvp-signup .registration-form fieldset { gap:13px; }
+.rsvp-signup .registration-form input:not([type='checkbox']),
+.rsvp-signup .registration-form select { appearance:auto; }
+.rsvp-signup .registration-form .registration-confirmation { background:transparent; border:0; box-shadow:none; padding-inline:0; }
+.rsvp-signup .registration-success::before {
+  content:""; width:62px; height:6px; color:var(--event-wash);
+  background:radial-gradient(circle at 4px 3px,currentColor 1.5px,transparent 1.9px) 0 0 / 9px 6px repeat-x;
+}
+@media (forced-colors:none) {
+  .rsvp-signup .registration-form select:focus { outline:none; border-bottom:3px solid currentColor; }
+  .rsvp-signup .registration-consent:has(input:focus-visible) > span { text-decoration:underline; text-decoration-thickness:2px; text-underline-offset:.25em; }
+  .rsvp-signup .registration-consent input:focus-visible { outline:none; }
 }

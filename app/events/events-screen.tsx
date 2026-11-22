@@ -1,17 +1,15 @@
 "use client";
 
-
-import BrandLogo from "../brand-logo";
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import BoxOfficeHeader from "../box-office-header";
+import BoxOfficeFooter from "../box-office-footer";
 import EventExplorer from "../event-explorer";
 import type { CustomerEvent } from "../../lib/customer-screen";
-import PublicNavigation from "../mobile-navigation";
 
 export default function EventsScreen({ events }: { events: CustomerEvent[] }) {
   return <main className="directory-page discovery-directory">
-    <header className="directory-header"><Link href="/" aria-label="Back to home"><ArrowLeft size={16} /><span className="directory-header__back-label">Home</span></Link><Link href="/" className="brand-mark"><BrandLogo /></Link><span className="customer-header-actions"><Link href="/my-nights" className="customer-header-link">My Nights</Link><PublicNavigation /></span></header>
-    <section className="directory-intro"><p className="eyebrow">The Drop / Accra, Ghana</p><h1>Find your next night.</h1></section>
+    <BoxOfficeHeader />
+    <section className="directory-intro"><p className="eyebrow">BeCore Tickets / Accra</p><h1>The Drop</h1></section>
     <section className="directory-results"><EventExplorer events={events} full /></section>
+    <BoxOfficeFooter />
   </main>;
 }

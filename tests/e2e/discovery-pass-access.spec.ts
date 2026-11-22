@@ -20,7 +20,7 @@ test("date selection survives an event visit and clearing restores the catalogue
     await page.locator(`.drop-card[data-event-slug="${slug}"] h3 a`).click();
   } else {
     await expect(page.getByRole("heading", { name: "Even Accra has a quiet corner." })).toBeVisible();
-    await page.locator('.directory-header a[href="/"]').first().click();
+    await page.locator('.box-office-header .night-brand-link').first().click();
   }
   await expect(page).toHaveURL(datedEvent ? new RegExp(`/event/${slug}$`) : /\/$/);
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();

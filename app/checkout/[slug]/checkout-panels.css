@@ -51,6 +51,67 @@
 }
 @media (forced-colors: none) {
   .checkout-box-office :is(.form-grid,.checkout-coupon) input:not([type="checkbox"]):not([type="radio"]):focus {
-    outline: none; box-shadow: inset 0 -2px currentColor; border-bottom-color: currentColor;
+    outline: none; border-bottom:3px solid currentColor;
   }
+}
+
+/* The published box-office preview keeps checkout on night paper, with the event as the accent. */
+:is(html,body):has(.checkout-box-office) { background:#241b23; }
+.checkout-page.checkout-box-office {
+  --paper:#241b23; --white:#2b2028; --ink:#fff3e8; --muted:#d5c3cd; --line:#76616e;
+  --booking-accent:var(--event-wash, #ffb18b); --booking-on-accent:var(--event-ink, #2d1721);
+  --action-surface:var(--booking-accent); --action-ink:var(--booking-on-accent);
+  --focus-ring:var(--ink); --orange:var(--booking-accent);
+  color-scheme:dark; background:var(--paper); color:var(--ink);
+}
+.checkout-box-office > .checkout-header { background:var(--paper); color:var(--ink); }
+.checkout-box-office .checkout-event-name { display:flex; align-items:center; gap:10px; margin:0 0 15px; }
+.checkout-box-office .checkout-event-mark {
+  position:relative; display:grid; place-items:center; flex:0 0 40px; height:48px;
+  border-radius:4px; overflow:hidden; color:var(--booking-on-accent); background:var(--booking-accent);
+  font-weight:750; text-transform:uppercase;
+}
+.checkout-box-office .checkout-event-mark img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; background:var(--paper); }
+.checkout-box-office .checkout-event-name :is(strong,small) { display:block; }
+.checkout-box-office .checkout-event-name small { font-size:13px; margin:2px 0 0; letter-spacing:0; text-transform:none; color:var(--muted); }
+.checkout-box-office .checkout-box-panel, .checkout-box-office .ticket-tier-list,
+.checkout-box-office .payment-option, .checkout-box-office .checkout-discount { border:0; }
+.checkout-box-office .checkout-box-panel { padding-top:0; margin-top:27px; }
+.checkout-box-office .checkout-tier:last-child { border-bottom:0; }
+.checkout-box-office .payment-option + .payment-option { border-top:1px solid var(--line); }
+.checkout-box-office .payment-option:last-of-type { border-bottom:0; }
+.checkout-box-office .payment-method-choice { grid-template-columns:auto auto minmax(0,1fr) auto; }
+.checkout-box-office .checkout-method-marks { justify-self:end; display:flex; gap:3px; }
+.checkout-box-office .checkout-method-marks img { object-fit:contain; max-width:100%; height:20px; border-radius:3px; padding:2px; background:#fff; }
+.checkout-box-office .form-grid label, .checkout-box-office .network-list button,
+.checkout-box-office .card-payment-detail strong { color:var(--ink); }
+.checkout-box-office :is(.checkout-tier__vip,.checkout-field-error) { color:#ffb18b; }
+.checkout-box-office .form-grid input[aria-invalid="true"] { border-color:#ffb18b; }
+.checkout-box-office .order-summary { --action-ink:var(--booking-on-accent); }
+.checkout-box-office .order-summary .pay-button { background:var(--booking-accent); color:var(--booking-on-accent); }
+.checkout-box-office .order-summary .pay-button:hover:not(:disabled) { background:color-mix(in srgb,var(--booking-accent) 90%,#fff); }
+.checkout-box-office .summary-lines > span { border-bottom:0; }
+.checkout-box-office .checkout-discount summary { text-decoration:underline; text-underline-offset:.2em; }
+.checkout-box-office .checkout-quantity-picker { position:relative; display:inline-flex; align-items:center; }
+.checkout-box-office .checkout-quantity-picker svg { position:absolute; right:5px; pointer-events:none; }
+.checkout-box-office .quantity-control select {
+  appearance:none; background:transparent; border:0; border-bottom:1px solid var(--line);
+  border-radius:0; padding-inline:4px 24px;
+}
+.checkout-box-office :is(.form-grid,.checkout-coupon) input::placeholder { color:var(--muted); font-weight:400; }
+.checkout-box-office .checkout-discount summary { list-style:none; }
+.checkout-box-office .checkout-discount summary::-webkit-details-marker { display:none; }
+.checkout-box-office .checkout-discount summary::before { content:"+ "; }
+.checkout-box-office .checkout-discount[open] summary::before { content:"− "; }
+@media (forced-colors:none) {
+  .checkout-box-office .quantity-control select:focus { outline:0; border-bottom:3px solid currentColor; }
+  .checkout-box-office :is(.payment-method-choice,.checkout-consent):has(input:focus-visible) > span:first-of-type {
+    text-decoration:underline; text-decoration-thickness:2px; text-underline-offset:.25em;
+  }
+  .checkout-box-office :is(.payment-method-choice,.checkout-consent):has(input:focus-visible),
+  .checkout-box-office :is(.payment-method-choice,.checkout-consent) input:focus-visible { outline:none; }
+}
+@media (max-width:420px) {
+  .checkout-box-office .payment-method-choice { column-gap:7px; }
+  .checkout-box-office .checkout-method-marks img { max-width:23px; }
 }
