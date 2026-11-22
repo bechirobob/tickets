@@ -240,7 +240,7 @@ const recoveryMaintenancePaths = [
   'tests/d1-recovery-privacy.test.mjs',
   'docs/runbooks/d1-recovery.md',
 ];
-const reviewedStandbyBlob = 'eaf8c2a60008607e13329ae6dd6235211c23b020';
+const reviewedStandbyBlob = '40f5660995c0125ff9776f9076e532801e7769b2';
 const priorRecoveryBlob = '268260bd7642ee1430568aaeeff0a788389535e8';
 const gitBlob = raw => createHash('sha1').update(`blob ${Buffer.byteLength(raw)}\0`).update(raw).digest('hex');
 
