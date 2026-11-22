@@ -1,6 +1,8 @@
 /* This skin is scoped to the booking route. All checkout controls retain their handlers. */
+.checkout-box-office { --booking-accent: var(--event-accent, #863b25); }
 .checkout-box-office .checkout-layout { grid-template-columns: minmax(0, 1fr) minmax(290px, 360px); gap: 24px; width: min(1120px, calc(100% - 48px)); align-items: start; margin-inline: auto; padding-block: 32px 64px; }
 .checkout-box-office .checkout-main { min-width: 0; padding: 0; }
+.checkout-box-office .checkout-step small { color: var(--booking-accent); }
 .checkout-box-office .checkout-step h1 { font-size: clamp(28px, 4vw, 42px); }
 .checkout-box-office .checkout-step h2, .checkout-box-panel > h2 { font-size: 21px; margin: 0; }
 .checkout-box-office .checkout-step p { margin: 8px 0 0; color: var(--muted); line-height: 1.5; }
@@ -10,11 +12,18 @@
 .checkout-box-office :is(.checkout-tier__choice, .payment-method-choice) { min-height: 48px; }
 .checkout-box-office .checkout-tier__choice > b { text-align: end; white-space: normal; }
 .checkout-box-office .checkout-tier__choice > span { overflow-wrap: anywhere; }
-.checkout-box-office .order-summary { min-width: 0; padding: 16px 0 0; background: transparent; color: var(--ink); --action-surface: var(--ink); --action-ink: var(--paper); }
+.checkout-box-office .checkout-tier.selected .checkout-tier__choice > i { border-color: var(--booking-accent); background: var(--booking-accent); }
+.checkout-box-office .payment-method-choice input { accent-color: var(--booking-accent); }
+.checkout-box-office .order-summary { min-width: 0; padding: 16px 0 0; background: transparent; color: var(--ink); --action-surface: var(--booking-accent); --action-ink: #fff; }
+.checkout-box-office .order-summary::before {
+  content: ""; display: block; width: 62px; height: 6px; margin-bottom: 13px; color: var(--muted);
+  background: radial-gradient(circle at 4px 3px, currentColor 1.5px, transparent 1.9px) 0 0 / 9px 6px repeat-x;
+}
 .checkout-box-office .order-summary h2 { font-size: 23px; overflow-wrap: anywhere; }
-.checkout-box-office .summary-lines { margin-top: 22px; }
+.checkout-box-office .summary-lines { margin-top: 22px; border-top: 0; }
 .checkout-box-office .summary-lines > :is(span, strong) { gap: 12px; padding-block: 11px; }
 .checkout-box-office .summary-lines b { flex: none; }
+.checkout-box-office .summary-lines > span:has(+ .checkout-final-total) { border-bottom: 0; }
 .checkout-box-office .checkout-final-total { border-top: 1px solid var(--line); margin-top: 8px; font-size: 20px; }
 .checkout-box-office .pay-button { white-space: normal; text-wrap: balance; }
 .checkout-box-office .payment-message:empty { padding: 0; margin: 0; }
@@ -28,10 +37,10 @@
 .checkout-box-office .summary-lines,
 .checkout-box-office .summary-lines > span { border-color: var(--line); }
 .checkout-box-office .order-summary .pay-button {
-  background: var(--ink); color: var(--paper); border-color: var(--ink);
+  background: var(--booking-accent); color: #fff; border-color: var(--booking-accent);
 }
 .checkout-box-office .order-summary .pay-button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--ink) 88%, var(--paper));
+  background: color-mix(in srgb, var(--booking-accent) 88%, var(--ink));
 }
 .checkout-box-office .payment-message:not(:empty) {
   background: transparent; color: var(--ink); padding-inline: 0;

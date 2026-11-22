@@ -25,6 +25,10 @@ test("payment return keeps its claim through pending verification and refresh", 
   await page.route("**/my-nights/after-dark-osu?welcome=1", (route) => route.fulfill({ contentType: "text/html", body: "<h1>Your ticket</h1>" }));
   await page.goto(returnPath);
   await expect.poll(() => requests).toBeGreaterThanOrEqual(2);
+  const waiting = page.locator('.payment-return--box-office');
+  await expect(waiting.getByRole('heading', { name: 'One last money check.' })).toBeVisible();
+  await expect(waiting).toHaveCSS('align-items', 'start');
+  await expect(waiting.locator(':scope > div')).toHaveCSS('box-shadow', 'none');
   await expect(page).toHaveURL(new RegExp(`reference=${reference}&claim=${claim}$`));
   await expect(page.getByRole("heading", { name: "A small hold-up." })).toHaveCount(0);
   await page.reload();
