@@ -203,3 +203,26 @@ body .hosts-box-office :is(.host-ticket__cta, .host-profile__empty .ticket-actio
 @media (max-width: 700px) {
   html:has(.hosts-box-office):has(.customer-dock) { scroll-padding-bottom: calc(88px + max(12px, env(safe-area-inset-bottom))); }
 }
+
+/* Host access can briefly load over the dark ticket stock on a guest visit. */
+.hosts-box-office.host-page .member-actions--loading {color:var(--host-muted)}
+@media (max-width: 760px) {
+  .hosts-box-office.hosts-page .hosts-box-office__intro h1 {
+    max-width: 11ch;
+    font-size: clamp(33px, 9.8vw, 44px);
+    letter-spacing: -.055em;
+    line-height: 1.03;
+  }
+  .hosts-box-office.hosts-page .host-ticket__cta .ticket-action__icon {order:-1}
+}
+.hosts-box-office.host-page .hosts-box-office__content {
+  padding-top: clamp(10px, 2vw, 24px);
+}
+.hosts-box-office .host-profile__back {
+  display:inline-flex;align-items:center;min-height:44px;color:var(--host-muted);
+  text-decoration:underline;text-underline-offset:.23em;margin-bottom:7px;
+}
+.hosts-box-office .host-events {
+  border-top:0;padding-top:18px;
+  background:radial-gradient(circle,var(--host-stitch) 1px,transparent 1.5px) left top / 8px 4px repeat-x;
+}

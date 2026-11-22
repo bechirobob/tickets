@@ -6,41 +6,53 @@
   :is(html, body):has(.yorke-way) { background: #281b2b; }
 }
 
-/* Same dock geometry on browsing routes, with the poster palette on events.
-   Checkout, RSVP, Yorke Way and private tools keep their own navigation. */
-@media (max-width: 700px) {
-  body:has(.discovery-home, .discovery-directory, .hosts-box-office, .my-nights-page.supporting-box-office, .poster-event-page):has(.customer-dock) {
-    --box-office-dock-space: calc(56px + max(3px, env(safe-area-inset-bottom)));
-    --mobile-menu-bottom: var(--box-office-dock-space);
-    padding-bottom: var(--box-office-dock-space);
-  }
-  body:has(.discovery-home, .discovery-directory, .hosts-box-office, .my-nights-page.supporting-box-office, .poster-event-page) nav.customer-dock {
-    inset: auto 0 0;
-    min-height: 0;
-    max-width: none;
-    padding: 1px max(12px, env(safe-area-inset-right)) max(3px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
-    border: 0;
-    border-top: 1px solid var(--box-office-dock-rule, #55464f);
-    border-radius: 0;
-    background: var(--box-office-dock-surface, #241b23);
+/* Keep the original inset dock and palettes. One non-interactive plate
+   follows the selected destination across its existing equal-width grid. */
+@media (max-width: 700px) and (forced-colors: none) {
+  /* Prevent public page content from competing with navigation labels. */
+  body:has(.discovery-home, .discovery-directory, .hosts-box-office, .my-nights-page.supporting-box-office) nav.customer-dock {
+    background: #241b23;
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
   }
-  body:has(.discovery-home, .discovery-directory, .hosts-box-office, .my-nights-page.supporting-box-office, .poster-event-page) .customer-dock a {
-    border-radius: 0;
-  }
-  body:has(.discovery-home, .discovery-directory, .hosts-box-office, .my-nights-page.supporting-box-office) .customer-dock a[aria-current="page"] {
-    background: transparent;
-    color: #dff098;
-  }
   body:has(.poster-event-page) nav.customer-dock {
-    --box-office-dock-surface: var(--event-shell-paper);
-    --box-office-dock-rule: color-mix(in srgb, var(--event-shell-ink) 25%, transparent);
+    background: var(--event-shell-paper);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
-  body:has(.poster-event-page) nav.customer-dock a[aria-current="page"] {
-    background: transparent;
-    color: var(--event-shell-ink);
-    text-decoration: underline;
-    text-underline-offset: 3px;
+
+  @supports (translate: 1px) {
+    body nav.customer-dock:has(> a[aria-current="page"]) {
+      --dock-tab-count: 3;
+      --dock-tab-index: 0;
+      --dock-tab-gap: 4px;
+      --dock-tab-width: calc((100% - 12px - (var(--dock-tab-count) - 1) * var(--dock-tab-gap)) / var(--dock-tab-count));
+      --dock-tab-fill: #e4f18b;
+      isolation: isolate;
+    }
+    body nav.customer-dock--with-room:has(> a[aria-current="page"]) { --dock-tab-count: 4; }
+    body nav.customer-dock:has(> a:nth-child(2)[aria-current="page"]) { --dock-tab-index: 1; }
+    body nav.customer-dock:has(> a:nth-child(3)[aria-current="page"]) { --dock-tab-index: 2; }
+    body:has(.poster-event-page) nav.customer-dock:has(> a[aria-current="page"]) { --dock-tab-fill: var(--event-shell-ink); }
+    body nav.customer-dock:has(> a[aria-current="page"])::before {
+      content: "";
+      position: absolute;
+      inset: 6px auto 6px 6px;
+      width: var(--dock-tab-width);
+      border-radius: 16px;
+      background: var(--dock-tab-fill);
+      z-index: -1;
+      pointer-events: none;
+      translate: calc((100% + var(--dock-tab-gap)) * var(--dock-tab-index));
+      transition: translate var(--ui-control);
+    }
+    body nav.customer-dock:has(> a[aria-current="page"]) > a[aria-current="page"] { background: transparent; }
+    body:has(.poster-event-page) nav.customer-dock:has(> a[aria-current="page"]) > a[aria-current="page"] {
+      color: var(--event-shell-paper);
+    }
   }
+}
+
+@media (max-width: 700px) and (prefers-reduced-motion: reduce) {
+  body nav.customer-dock:has(> a[aria-current="page"])::before { transition: none; }
 }

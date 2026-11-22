@@ -167,7 +167,8 @@ test("full flyers and event lettering stay visible on the listed Drop", async ({
     expect(Math.min(...bounds)).toBeGreaterThanOrEqual(-1);
   }
   await expect(cards.filter({ hasText: "On The Guest List" })).toHaveCount(0);
-  await expect(page.locator(".discovery-home .night-drop--compact")).toHaveCSS("background-color", "rgb(48, 32, 51)");
+  // The approved Box Office preview uses its night ink on the home Drop.
+  await expect(page.locator(".discovery-home .night-drop--compact")).toHaveCSS("background-color", "rgb(37, 28, 36)");
   await expectVisibleLettering(page, ".discovery-grid");
   await page.screenshot({ path: testInfo.outputPath("listed-event-home.png"), fullPage: true });
 });

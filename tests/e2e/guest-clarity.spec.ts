@@ -49,7 +49,7 @@ test('registration drafts survive close and back without carrying consent or sub
   await expect(page.getByLabel('Email address', { exact: true })).toHaveValue('draft@example.com');
   await expect(page.getByRole('checkbox', { name: /I accept the event terms/ })).not.toBeChecked();
   await expect(emailChoice).not.toBeChecked();
-  await page.locator('.sub-header .back-link').click();
+  await page.locator('.event-detail-toolbar .back-link').click();
   await expect(page).toHaveURL(/\/events$/);
   await page.goBack();
   // Routers may restore the open screen or remount its collapsed view.

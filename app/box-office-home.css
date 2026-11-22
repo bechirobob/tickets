@@ -108,3 +108,89 @@
   aspect-ratio:4/5;align-self:start
  }
 }
+
+/* The public Box Office pages share one header, not a second mobile utility row. */
+body main > .night-header.box-office-header {
+ position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;
+ min-height:65px;height:auto;padding-inline:max(18px,5vw);
+ background:#241b22;color:#fff3e3;border-color:#493e46;box-shadow:none;
+}
+body .box-office-header .night-header__actions, body .box-office-header .night-desktop-links {gap:19px}
+body .box-office-header .night-mobile-menu__trigger {
+ min-height:44px;padding-inline:12px;border:1px solid #71616a;border-radius:7px;background:transparent;
+}
+.discovery-directory {background:#251c24;}
+body:has(main.discovery-directory), html:has(main.discovery-directory) {background:#251c24}
+.discovery-directory .directory-intro {padding-bottom:6px}
+.discovery-directory .directory-intro h1, .discovery-home .compact-section-head h2 {
+ font-size:clamp(36px,5.5vw,66px);font-weight:730;letter-spacing:-.055em
+}
+.discovery-directory .directory-intro .eyebrow {color:#e3d4db}
+.discovery-home .night-drop--compact {background:#251c24;}
+.discovery-home .compact-section-head {padding-top:0;border-bottom:0;margin-bottom:12px}
+.discovery-home .compact-section-head .night-kicker > span {display:none}
+:is(.discovery-home, .discovery-directory) .event-empty {
+ display:block;border:0;padding:14px 0 8px;
+}
+.event-empty__status {display:flex;align-items:flex-start;gap:12px;max-width:560px}
+.event-empty__status > svg {flex:none;color:#e4f18b;margin-top:3px}
+:is(.discovery-home, .discovery-directory) .event-empty__status :is(h2,h3) {
+ margin:0 0 5px;font-size:18px;font-weight:650;line-height:1.3;letter-spacing:-.02em;
+}
+:is(.discovery-home, .discovery-directory) .event-empty__status p {
+ color:#e3d4db;font-size:15px;line-height:1.45;
+}
+:is(.discovery-home, .discovery-directory) .event-empty__actions {gap:8px;}
+:is(.discovery-home, .discovery-directory) .event-empty__actions a {
+ margin-top:0;padding:9px 13px;min-height:44px;justify-content:center;
+ border:1px solid #927f8c;border-radius:7px;color:#fff3e3;text-decoration:none;font-size:14px;
+}
+:is(.discovery-home, .discovery-directory) .event-empty__actions a:hover {background:#3f323d;border-color:#fff3e3}
+.discovery-directory .event-empty__actions {margin:14px 0 0 30px}
+.discovery-home .box-office-drop-actions {margin:14px 0 10px}
+body .discovery-home .box-office-drop-actions > .ticket-action[data-variant="primary"] {
+ justify-content:center;gap:8px;min-height:44px;margin:0;padding:9px 13px;border-radius:7px;
+ background:#e4f18b;border:1px solid #e4f18b;color:#241b22;text-decoration:none;font-size:14px;
+}
+body .discovery-home .box-office-drop-actions .ticket-action .ticket-action__icon {
+ order:-1;width:18px;height:18px;flex-basis:18px;
+}
+
+@media(max-width:760px){
+ body main > .night-header.box-office-header {
+  position:sticky;top:0;min-height:calc(60px + env(safe-area-inset-top));
+  padding-inline:max(18px,env(safe-area-inset-left)) max(18px,env(safe-area-inset-right));
+ }
+ body .box-office-header .night-desktop-links, body .box-office-header .night-city {display:none}
+ .discovery-home .compact-hero.box-office-hero,
+ .discovery-home .compact-hero.box-office-hero:has(img[data-portrait-crop]) {
+  width:calc(100% - 24px);margin:13px auto 0;
+ }
+ .discovery-home .box-office-hero > img.compact-hero__image:not([data-portrait-crop]) {
+  width:calc(100% - 18px);height:clamp(148px,40vw,208px);margin:7px 9px 0;border-radius:7px;
+ }
+ .discovery-home .box-office-hero .compact-hero__copy {padding:11px 17px 15px}
+ .discovery-home .box-office-hero .compact-hero__copy h1 {
+  font-size:clamp(2rem,10vw,4.2rem);letter-spacing:-.065em;margin:8px 0 6px;
+ }
+ .discovery-home .box-office-hero .compact-hero__copy > .box-office-hero__imprint {margin-bottom:7px}
+ .discovery-home .box-office-hero .compact-hero__copy > .night-kicker {font-size:1rem;line-height:1.25;margin:0;}
+ .discovery-home .box-office-hero .compact-hero__copy > .night-kicker > span {display:none;}
+ .discovery-home .box-office-hero .compact-hero__copy > p:not(.night-kicker,.box-office-hero__imprint) {
+  line-height:1.4;margin-top:6px;
+ }
+ .discovery-home .night-drop--compact {padding-top:24px}
+ .discovery-home .box-office-drop-actions {display:grid;width:100%;}
+ body .discovery-home .box-office-drop-actions > .ticket-action[data-variant="primary"] {width:100%;min-width:100%}
+ .discovery-home .event-empty__actions {display:flex;flex-wrap:wrap}
+}
+
+/* One public footer keeps truthful provider logos and existing link targets. */
+body main > .box-office-footer {
+ padding:26px max(18px,5vw) 95px;
+ background:#241b22;border-color:#493e46;
+}
+body main > .box-office-footer :is(p, a) {color:#e3d4db}
+body main > .box-office-footer a {
+ display:inline-flex;align-items:center;min-height:44px;
+}

@@ -1,22 +1,17 @@
 "use client";
 
-import PaymentFooter from "./payment-footer";
-import BrandLogo from "./brand-logo";
-import Link from "next/link";
-import { Bell, MapPin, Ticket } from "lucide-react";
+import BoxOfficeFooter from "./box-office-footer";
+import { Bell, Ticket } from "lucide-react";
 import ActiveNightExperience from "./active-night-experience";
 import type { CustomerEvent } from "../lib/customer-screen";
 import ScrollReveal from "./scroll-reveal";
-import PublicNavigation from "./mobile-navigation";
+import BoxOfficeHeader from "./box-office-header";
 
 export default function HomeScreen({ events }: { events: CustomerEvent[] }) {
   return <main className="night-home compact-home discovery-home" id="main-content">
     <a className="discovery-skip" href="#drop">Skip to events</a>
     <ScrollReveal />
-    <header className="night-header">
-      <Link href="/" className="night-brand-link"><BrandLogo prominent /></Link>
-      <div className="night-header__actions"><nav className="night-desktop-links" aria-label="Explore"><Link href="/events">The Drop</Link><Link href="/hosts">Hosts</Link><Link href="/my-nights">My Nights</Link></nav><span className="night-city"><MapPin size={14} aria-hidden="true" /> Accra, GH</span><PublicNavigation primaryVisible /></div>
-    </header>
+    <BoxOfficeHeader />
 
     <ActiveNightExperience events={events} />
 
@@ -29,11 +24,6 @@ export default function HomeScreen({ events }: { events: CustomerEvent[] }) {
       </dl>
     </section>
 
-    <footer className="night-footer compact-footer">
-      <PaymentFooter />
-      <BrandLogo prominent />
-      <p>Accra, we’re going out. Tell the group chat.</p>
-      <div><Link href="/staff">Event staff</Link><Link href="/organizer/submit">Organisers</Link><Link href="/about">About us</Link><Link href="/help">Help</Link><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link></div>
-    </footer>
+    <BoxOfficeFooter />
   </main>;
 }

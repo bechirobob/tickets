@@ -6,7 +6,7 @@ import { eventArtworkPath } from "../../../lib/event-guest";
 import RegistrationForm from "../../registration-form";
 import { registrationOpeningMessage } from "../../../lib/registration-guidance";
 import HostPortrait from "../../host-portrait";
-import BrandLogo from "../../brand-logo";
+import BoxOfficeHeader from "../../box-office-header";
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowUpRight, BadgeCheck, CalendarDays, Gem, MapPin, MessageCircle, Ribbon, ShieldCheck, Ticket } from "lucide-react";
@@ -16,7 +16,6 @@ import { ActionLink } from "../../action";
 import EventActions from "./event-actions";
 import MemberActions from "../../member-actions";
 import WaitlistControl from "./waitlist-control";
-import PublicNavigation from "../../mobile-navigation";
 import EventCountdown from "./event-countdown";
 import EventPerkIcon from "./event-perk-icon";
 import { eventColourScheme, eventPresentationStyle } from "../../../lib/event-presentation";
@@ -40,6 +39,8 @@ export default function EventScreen({ event, host, hosts, registration, promoter
   const salesPending = event.scheduleStatus === "coming_soon" || event.scheduleStatus === "end_pending";
   const available = event.ticketTiers.some((tier) => tier.status === "available");
   const eventUnavailable = event.eventState === "cancelled" || event.eventState === "postponed";
+  const bookingOpen = available && !eventUnavailable && !salesPending && (!registration || registration.open);
+  const checkoutHref = `/checkout/${slug}${promoterCode ? `?ref=${encodeURIComponent(promoterCode)}` : ""}`;
   const entryStatus = event.eventState === "cancelled" ? "Cancelled"
     : event.eventState === "postponed" ? "Postponed"
     : salesPending ? "Bookings not open"
@@ -48,8 +49,8 @@ export default function EventScreen({ event, host, hosts, registration, promoter
     : registrationMode === "interest" ? "Event updates"
     : available ? "Tickets available" : "Tickets unavailable";
   return <main className="event-page compact-event-page poster-event-page" data-colour-scheme={colourScheme} style={eventPresentationStyle(event)}>
-    <header className="sub-header"><DiscoveryBackLink /><Link href="/" className="brand-mark"><BrandLogo /></Link><span className="public-header-actions customer-header-actions"><Link href="/my-nights" className="customer-header-link">My Nights</Link><PublicNavigation /></span></header>
-    <div className="event-detail-toolbar"><EventActions title={event.title} eventSlug={event.slug} /></div>
+    <BoxOfficeHeader />
+    <div className="event-detail-toolbar"><DiscoveryBackLink /><EventActions title={event.title} eventSlug={event.slug} /></div>
 
     <div className="event-detail-layout">
       <figure className={`event-detail-poster${poster ? " event-detail-poster--portrait" : ""}`}><Image src={eventImageUrl(event.image, 1200, 82)} width={poster ? 960 : 1200} height={poster ? 1423 : 900} sizes="(max-width: 760px) calc(100vw - 36px), (max-width: 1100px) 48vw, 540px" alt={`Event poster for ${event.title}`} priority unoptimized /></figure>
@@ -67,21 +68,25 @@ export default function EventScreen({ event, host, hosts, registration, promoter
               {event.dressCode ? <div className="event-dress-code"><dt>Dress code</dt><dd><strong>{event.dressCode}</strong>{/^light pink\s*(?:&|and)\s*white$/iu.test(event.dressCode) ? <span className="event-dress-swatches" aria-hidden="true"><i /><i /></span> : null}</dd></div> : null}
             </dl>
           </div>
-          {event.startsAt ? <a className="event-detail-calendar" href={`/api/calendar/${event.slug}`}><CalendarDays size={14} aria-hidden="true" /> Add to calendar</a> : null}
           {event.guestPerk ? <p className="event-guest-perk"><EventPerkIcon perk={event.guestPerk} /><span>{event.guestPerk}</span></p> : null}
           {event.awarenessNote ? <p className="event-awareness-note"><Ribbon size={19} strokeWidth={1.7} aria-hidden="true" />{event.awarenessNote}</p> : null}
         </div>
-        {!eventUnavailable ? <a className="event-booking-jump" href="#register" onClick={() => requestAnimationFrame(() => document.getElementById("register")?.focus({ preventScroll: true }))}>
-          {registrationMode === "rsvp" ? (registration?.open ? "Request RSVP" : "RSVP details") : registrationMode === "interest" ? "Event updates" : "Tickets & entry"}
-        </a> : null}
-        {registrationMode === "paid" && available && !eventUnavailable && !salesPending && (!registration || registration.open) ? <p className="event-fee-notice">Ticket prices exclude any booking fee. See the full total at checkout.</p> : null}
+        <div className="event-primary-entry">
+          {!eventUnavailable ? <div className="event-entry-action" inert={runtime.stale || undefined}>
+            {registrationMode === "paid" && bookingOpen ? <ActionLink href={checkoutHref} icon={<Ticket size={18} />}>Get tickets</ActionLink> : <a className="event-booking-jump" href="#register" onClick={() => requestAnimationFrame(() => document.getElementById("register")?.focus({ preventScroll: true }))}>
+              {registrationMode === "rsvp" ? (registration?.open ? "Request RSVP" : "RSVP details") : registrationMode === "interest" ? "Event updates" : "Tickets & entry"}
+            </a>}
+          </div> : null}
+          {event.startsAt ? <a className="event-detail-calendar" href={`/api/calendar/${event.slug}`}><CalendarDays size={14} aria-hidden="true" /> Add to calendar</a> : null}
+        </div>
+        {registrationMode === "paid" && bookingOpen ? <p className="event-fee-notice">See your full total at checkout.</p> : null}
         <EventCountdown startsAt={event.startsAt} endsAt={event.endsAt} eventState={event.eventState} isPreview={event.isTestEvent} />
         {event.isTestEvent ? <p className="event-detail-preview"><strong>Preview event</strong> · Sample date and tickets for trying BeCore. This is not a live event booking.</p> : null}
       </section>
       <aside className="compact-ticket-panel" id="register" tabIndex={-1} aria-label={registrationMode === "rsvp" ? "RSVP details" : registrationMode === "interest" ? "Event updates" : "Tickets and entry"} inert={runtime.stale || undefined} onClickCapture={e => { if (runtime.stale) { e.preventDefault(); e.stopPropagation(); } }}>
         {registration && registrationMode !== "paid" ? <><p className="eyebrow">{registrationMode === "interest" ? "Stay in the loop" : "RSVP"}</p>{registration.open ? <RegistrationForm eventSlug={slug} mode={registrationMode as "rsvp" | "interest"} maxPartySize={registration.maxPartySize} approvalRequired={registration.approvalRequired} schedulePending={!event.startsAt} roomAccess={registration.roomAccess} deadline={registration.deadline ?? undefined} /> : <p>{registrationOpeningMessage(event.salesOpenAt) ?? 'The guest list is closed for this one.'}</p>}</> : <>
         <div><p className="eyebrow">{salesPending ? "The plan" : "Choose your access"}</p>{salesPending ? <section><div><b>{event.startsAt ? "Admission" : "Tickets coming soon"}</b><span>{event.startsAt ? "The price is set. Ticket sales open soon." : "Keep the outfit ready. We’ll sort the date."}</span></div>{event.startsAt ? <strong>{formatGhanaCedis(event.priceFromMinor)}</strong> : null}</section> : event.ticketTiers.filter((tier) => tier.status !== "hidden").map((tier) => <section key={tier.id}><div><b>{tier.name}</b><span>{tier.description}{tier.scarcityLabel ? ` · ${tier.scarcityLabel}` : ""}</span>{tier.roomBadge === "VIP" ? <small className="tier-vip-note"><Gem size={11} /> Your VIP badge, plus a private line to the host when concierge is open</small> : null}</div><strong>{tier.status === "sold_out" ? "Sold out" : tier.status === "upcoming" ? "Sales soon" : tier.status === "closed" ? "Sales closed" : formatGhanaCedis(tier.priceMinor)}</strong></section>)}</div>
-        {salesPending ? <p className="event-state-notice">Ticket sales open soon.</p> : event.eventState === "cancelled" ? <p className="event-state-notice">This one’s been called off. Already paid? Check My Nights for refund help.</p> : event.eventState === "postponed" ? <p className="event-state-notice">New date loading. Hold onto your ticket and check back for the host’s update.</p> : registration && !registration.open ? <p className="event-state-notice">The guest list is closed for this one.</p> : available ? <ActionLink href={`/checkout/${slug}${promoterCode ? `?ref=${encodeURIComponent(promoterCode)}` : ""}`} className="checkout-link" icon={<Ticket size={18} />}>Get tickets</ActionLink> : <span className="checkout-link checkout-link--disabled">Tickets are taking a breather</span>}
+        {salesPending ? <p className="event-state-notice">Ticket sales open soon.</p> : event.eventState === "cancelled" ? <p className="event-state-notice">This one’s been called off. Already paid? Check My Nights for refund help.</p> : event.eventState === "postponed" ? <p className="event-state-notice">New date loading. Hold onto your ticket and check back for the host’s update.</p> : registration && !registration.open ? <p className="event-state-notice">The guest list is closed for this one.</p> : !available ? <span className="checkout-link checkout-link--disabled">Tickets are taking a breather</span> : null}
         {!salesPending ? <p className="secure-note"><ShieldCheck size={14} /> Secure checkout</p> : null}
         <div className="ticket-unlocks"><MessageCircle size={17} /><span><b>Your ticket unlocks the night</b>My Nights, Before the Night, updates, The Room and Flashes.</span></div>
         <MemberActions eventSlug={event.slug} hostSlug={host?.slug} />

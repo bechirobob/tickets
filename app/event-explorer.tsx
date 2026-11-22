@@ -62,7 +62,13 @@ export default function EventExplorer({ events, full = false, featuredSlug }: { 
 
   if (!events.length) {
     const EmptyHeading = full ? "h2" : "h3";
-    return <section className="event-empty"><Ticket size={24} aria-hidden="true" /><EmptyHeading>No upcoming nights announced.</EmptyHeading><p>New events will appear here. Already booked? Your tickets and RSVPs are in My Nights.</p><div className="event-empty__actions"><Link href="/my-nights"><Ticket size={16} aria-hidden="true" /> My Nights</Link><Link href="/hosts"><VelvetRope size={16} /> Explore hosts</Link></div></section>;
+    return <section className="event-empty">
+      <div className="event-empty__status">
+        <Ticket size={18} aria-hidden="true" /><div><EmptyHeading>No upcoming nights announced.</EmptyHeading><p>New events will appear here. Already booked? Your tickets and RSVPs are in My Nights.</p></div>
+      </div>
+      {!full && <div className="box-office-drop-actions"><ActionLink href="/events" icon={<CalendarDays size={16} />}>Browse all events</ActionLink></div>}
+      <div className="event-empty__actions"><Link href="/my-nights"><Ticket size={16} aria-hidden="true" /> My Nights</Link><Link href="/hosts"><VelvetRope size={16} /> Explore hosts</Link></div>
+    </section>;
   }
 
   return <div className={`drop-explorer discovery-explorer${full ? " drop-explorer--full" : ""}`}>

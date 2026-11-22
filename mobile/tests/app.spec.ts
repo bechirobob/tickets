@@ -20,7 +20,7 @@ test('shared Home, Drop, full posters and menu use the website destinations', as
   await expect(dock.getByRole('link')).toHaveText(['Home', 'The Drop', 'My Nights']);
   await dock.getByRole('link', { name: 'The Drop', exact: true }).click();
   await expect(page).toHaveURL(/\/events$/);
-  await expect(page.getByRole('heading', { level: 1, name: 'Find your next night.' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'The Drop', exact: true })).toBeVisible();
   await expect.poll(() => page.locator('.drop-card__image img').evaluateAll(images => images.length === 2 && images.every(image => (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth > 0))).toBe(true);
   const posters = await page.locator('.drop-card__image').evaluateAll(nodes => nodes.map(node => ({ height: node.getBoundingClientRect().height, fit: getComputedStyle(node.querySelector('img')!).objectFit })));
   expect(posters).toHaveLength(2);
@@ -81,7 +81,7 @@ test('failed refresh retains labelled public data, blocks stale signup and recov
 
 test('My Nights goes directly to the existing account flow with no intermediate app page', async ({ page }) => {
   await page.goto('/events');
-  await expect(page.getByRole('heading', { name: 'Find your next night.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'The Drop', exact: true })).toBeVisible();
   const popup = page.waitForEvent('popup');
   await page.getByRole('navigation', { name: 'Customer navigation' }).getByRole('link', { name: 'My Nights', exact: true }).click();
   const opened = await popup;
@@ -105,7 +105,7 @@ test('back restores Drop position and filtering; edge gestures distinguish verti
   await expect(page.getByRole('heading', { level: 1, name: braai.title })).toBeVisible();
   await content.dispatchEvent('touchstart', { touches: [{ identifier: 0, clientX: 10, clientY: 180 }] });
   await content.dispatchEvent('touchend', { changedTouches: [{ identifier: 0, clientX: 140, clientY: 190 }] });
-  await expect(page.getByRole('heading', { level: 1, name: 'Find your next night.' })).toBeFocused();
+  await expect(page.getByRole('heading', { level: 1, name: 'The Drop', exact: true })).toBeFocused();
   await expect(page.getByRole('searchbox', { name: 'Search events, artists or venues' })).toHaveValue('Braai');
   await expect.poll(() => page.evaluate(() => scrollY)).toBeCloseTo(position, 0);
 });

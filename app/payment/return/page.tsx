@@ -1,5 +1,7 @@
 "use client";
 
+import BookingProgress from "../../booking-progress";
+import BrandLogo from "../../brand-logo";
 import Link from "next/link";
 import { CheckCircle2, Clock3, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -77,13 +79,21 @@ export default function PaymentReturn() {
   }, [reference, claim, resumeCheckout]);
 
   return (
-    <main className="payment-return payment-return--box-office"><div>
+    <main className="payment-return payment-return--box-office" data-payment-state={state}>
+      <header className="payment-outcome-header"><Link href="/" aria-label="BeCore Tickets home" className="night-brand-link"><BrandLogo /></Link></header>
+      <div>
       {state === "ready" ? <CheckCircle2 size={45} /> : <Clock3 size={45} />}
-      <p className="eyebrow">{state === "ready" ? "Payment confirmed" : state === "failed" ? "Payment not confirmed" : "Checking your payment"}</p>
-      <h1>{state === "ready" ? "You’re going out." : state === "failed" ? "A small hold-up." : "One last money check."}</h1>
+      <p className="eyebrow">{state === "ready" ? "Payment confirmed" : state === "failed" ? "Payment not confirmed" : "Processing"}</p>
+      <h1>{state === "ready" ? "All sorted." : state === "failed" ? "A small hold-up." : "Confirming your payment"}</h1>
       <p role="status" aria-atomic="true">{message}</p>
-      {state === "ready" && eventSlug ? <Link href={`/my-nights/${eventSlug}?welcome=1`}>Open My Night</Link> : <Link href="/my-nights">Open My Nights</Link>}
-      <span><ShieldCheck size={15} /> Once payment clears, your ticket is right here.</span>
+      <BookingProgress active={state === "ready" ? "Confirmation" : "Processing"} />
+      {state === "ready" ? <div className="payment-confirmation-stub">
+        <strong>BeCore Tickets</strong>
+        <Link href={eventSlug ? `/my-nights/${encodeURIComponent(eventSlug)}?welcome=1` : "/my-nights"}>Open My Night</Link>
+      </div> : <>
+        <Link href="/my-nights">Open My Nights</Link>
+        <span><ShieldCheck size={15} /> Once payment clears, your ticket is right here.</span>
+      </>}
     </div></main>
   );
 }

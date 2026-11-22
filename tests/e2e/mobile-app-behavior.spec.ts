@@ -2,7 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test, expectWebsiteDiscovery } from './catalogue';
 test.use({ serviceWorkers: 'block' });
 
-test('mobile box office keeps a matched canvas and unobtrusive bottom navigation', async ({ page }, info) => {
+test('mobile box office keeps a matched canvas and original inset navigation', async ({ page }, info) => {
   test.skip((page.viewportSize()?.width ?? 1000) > 700, 'Mobile homepage');
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
@@ -13,19 +13,57 @@ test('mobile box office keeps a matched canvas and unobtrusive bottom navigation
   expect((await hero.boundingBox())!.y - (await scene.boundingBox())!.y).toBeCloseTo(13, 0);
   await page.screenshot({ path: info.outputPath('mobile-box-office-home.png') });
   const dock = page.getByRole('navigation', { name: 'Customer navigation' });
-  for (const [path, canvas] of [['/', 'rgb(37, 28, 36)'], ['/events', 'rgb(48, 32, 51)'], ['/hosts', 'rgb(37, 28, 36)']]) {
+  for (const [path, canvas] of [['/', 'rgb(37, 28, 36)'], ['/events', 'rgb(37, 28, 36)'], ['/hosts', 'rgb(37, 28, 36)']]) {
     await page.goto(path);
     await expect(page.locator('html')).toHaveCSS('background-color', canvas);
+    await expect(dock).toHaveCSS('border-radius', '22px');
     await expect(dock).toHaveCSS('background-color', 'rgb(36, 27, 35)');
     const box = (await dock.boundingBox())!;
-    expect(box.x).toBe(0);
-    expect(box.width).toBe(page.viewportSize()!.width);
-    expect(box.y + box.height).toBeCloseTo(page.viewportSize()!.height, 0);
+    expect(box.x).toBeGreaterThanOrEqual(12);
+    expect(box.x * 2 + box.width).toBeCloseTo(page.viewportSize()!.width, 0);
+    expect(box.y + box.height).toBeLessThanOrEqual(page.viewportSize()!.height - 12);
     expect(await dock.getByRole('link').evaluateAll(links => links.every(link => link.getBoundingClientRect().height >= 44))).toBe(true);
   }
+  await page.goto('/event/sun-chasers-labadi');
+  await expect(dock).toHaveCSS('background-color', 'rgb(255, 249, 248)');
+  await expect(dock.getByRole('link', { name: 'Home', exact: true })).toHaveCSS('color', 'rgb(113, 82, 95)');
+  await expect(dock.getByRole('link', { name: 'The Drop', exact: true })).toHaveCSS('color', 'rgb(255, 249, 248)');
+  expect(await dock.evaluate(element => getComputedStyle(element, '::before').backgroundColor)).toBe('rgb(57, 35, 46)');
+
   await page.goto('/organizer/submit');
   await expect(page.locator('html')).toHaveCSS('background-color', 'rgb(40, 30, 38)');
   await expect(dock).toHaveCount(0);
+});
+
+test('mobile dock glides to its new selection and respects reduced motion', async ({ page,hasTouch }) => {
+  test.skip((page.viewportSize()?.width ?? 1000) > 700, 'Mobile dock only');
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.goto('/');
+  await page.waitForFunction(() => performance.now() >= 2200);
+  await expect(page.getByTestId('brand-arrival')).toBeHidden();
+  const dock = page.getByRole('navigation', { name: 'Customer navigation' });
+  await expect(dock.getByRole('link', { name: 'Home', exact: true })).toHaveAttribute('aria-current', 'page');
+  await dock.evaluate(element => {
+    element.setAttribute('data-dock-glides', '0');
+    element.addEventListener('transitionrun', raw => {
+      const event = raw as TransitionEvent;
+      if (event.pseudoElement === '::before' && event.propertyName === 'translate') {
+        element.setAttribute('data-dock-glides', String(Number(element.getAttribute('data-dock-glides')) + 1));
+      }
+    });
+  });
+  const drop = dock.getByRole('link', { name:'The Drop', exact:true });
+  if (hasTouch) await drop.tap(); else await drop.click();
+  await expect(page).toHaveURL(/\/events$/);
+  await expect(drop).toHaveAttribute('aria-current','page');
+  await expect(dock).toHaveAttribute('data-dock-glides', '1');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  expect(await dock.evaluate(element => getComputedStyle(element,'::before').transitionDuration)).toBe('0s');
+  const home = dock.getByRole('link', { name:'Home', exact:true });
+  if (hasTouch) await home.tap(); else await home.click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(home).toHaveAttribute('aria-current','page');
+  await expect(dock).toHaveAttribute('data-dock-glides', '1');
 });
 
 test('mobile Back closes navigation before leaving and outside destinations keep the new route', async ({ page }) => {
@@ -168,7 +206,7 @@ test('mobile header and visual-viewport keyboard geometry integration preserve u
   test.skip((page.viewportSize()?.width ?? 1000) > 700, 'Mobile guest shell');
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/events');
-  const header = page.locator('.discovery-directory > .directory-header');
+  const header = page.locator('.discovery-directory > .box-office-header');
   const dock = page.getByRole('navigation', { name: 'Customer navigation' });
   // Streamed navigation can finish before the guest shell has mounted/hydrated.
   // Measure real, ready elements rather than treating a missing box as geometry.
@@ -184,17 +222,17 @@ test('mobile header and visual-viewport keyboard geometry integration preserve u
       && initialHeader.width > 0 && initialHeader.height > 0
       && dockBox.width > 0 && dockBox.height > 0;
   }, { message: 'The hydrated mobile header and dock must have usable geometry' }).toBe(true);
-  expect(dockBox!.x).toBe(0);
-  expect(dockBox!.width).toBe(page.viewportSize()!.width);
-  expect(dockBox!.y + dockBox!.height).toBeCloseTo(page.viewportSize()!.height, 0);
+  expect(dockBox!.x).toBeGreaterThanOrEqual(12);
+  expect(dockBox!.x * 2 + dockBox!.width).toBeCloseTo(page.viewportSize()!.width, 0);
+  expect(dockBox!.y + dockBox!.height).toBeLessThanOrEqual(page.viewportSize()!.height - 12);
   await page.evaluate(() => window.scrollTo(0, 400));
   await expect.poll(() => header.evaluate(element => Math.round(element.getBoundingClientRect().top))).toBe(Math.round(initialHeader!.y));
   const active = dock.getByRole('link', { name: 'The Drop', exact: true });
   await expect(active).toHaveAttribute('aria-current', 'page');
   const colors = await active.evaluate(element => ({ foreground: getComputedStyle(element).color, background: getComputedStyle(element).backgroundColor }));
   expect(colors.background).toBe('rgba(0, 0, 0, 0)');
-  expect(colors.foreground).toBe('rgb(223, 240, 152)');
-  await expect(dock).toHaveCSS('background-color', 'rgb(36, 27, 35)');
+  expect(colors.foreground).toBe('rgb(40, 27, 43)');
+  expect(await dock.evaluate(element => getComputedStyle(element, '::before').backgroundColor)).toBe('rgb(228, 241, 139)');
   // Exercise MobileAppFrame's focus/resize integration. This is simulated
   // viewport geometry, not evidence from a physical device's keyboard.
   const listed = await expectWebsiteDiscovery(page, catalogue);
@@ -232,7 +270,7 @@ test('mobile reduced-transparency preference makes navigation opaque', async ({ 
   await page.goto('/events');
   expect(await page.evaluate(() => matchMedia('(prefers-reduced-transparency: reduce)').matches)).toBe(true);
   await page.getByRole('button', { name: 'Open navigation', exact: true }).click();
-  for (const selector of ['.discovery-directory > .directory-header', '.customer-dock', '.night-mobile-menu--anchored .night-mobile-menu__links']) {
+  for (const selector of ['.discovery-directory > .box-office-header', '.customer-dock', '.night-mobile-menu--anchored .night-mobile-menu__links']) {
     const style = await page.locator(selector).evaluate(element => {
       const computed = getComputedStyle(element);
       return { background: computed.backgroundColor, blur: computed.backdropFilter };
@@ -286,7 +324,7 @@ test('reduced-transparency preference preserves desktop header backgrounds', asy
   test.skip(browserName !== 'chromium', 'Chromium exposes reduced-transparency media emulation');
   await page.setViewportSize({ width: 980, height: 844 });
   const session = await context.newCDPSession(page);
-  for (const [path, selector] of [['/', '.discovery-home > .night-header'], ['/events', '.discovery-directory > .directory-header'], ['/help', '.help-page > header']]) {
+  for (const [path, selector] of [['/', '.discovery-home > .night-header'], ['/events', '.discovery-directory > .box-office-header'], ['/help', '.help-page > header']]) {
     await session.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-transparency', value: 'no-preference' }] });
     await page.goto(path);
     const header = page.locator(selector);
@@ -354,15 +392,16 @@ test('dense My Nights headers keep the full brand and separate 44px controls at 
     expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
   }
   await info.attach('member-header-geometry.json', { body: JSON.stringify(geometries, null, 2), contentType: 'application/json' });
-  // Events now shares the compact named menu control alongside direct My Nights.
+  // The Drop shares the approved Box Office wordmark and named Menu.
   await page.setViewportSize({ width: 390, height: 664 });
   await page.goto('/events');
-  const eventsHeader = page.locator('.directory-header');
+  const eventsHeader = page.locator('.discovery-directory > .box-office-header');
   const eventsMenu = eventsHeader.getByRole('button', { name: 'Open navigation', exact: true });
   await expect(eventsMenu).toBeEnabled();
   await expect(eventsMenu).toBeInViewport({ ratio: 1 });
-  await expect(eventsMenu.locator('.night-mobile-menu__trigger-label')).toBeHidden();
-  const eventsControls = [eventsHeader.locator('.brand-mark'), eventsHeader.getByRole('link', { name: 'My Nights', exact: true }), eventsMenu];
+  await expect(eventsMenu.locator('.night-mobile-menu__trigger-label')).toBeVisible();
+  const eventsControls = [eventsHeader.locator('.night-brand-link'), eventsMenu];
+  await expect(eventsHeader.getByRole('link', { name: 'My Nights', exact: true })).toBeHidden();
   const eventsBoxes = await Promise.all(eventsControls.map(element => element.boundingBox()));
   for (const box of eventsBoxes) {
     expect(box!.width).toBeGreaterThanOrEqual(44);

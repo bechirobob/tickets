@@ -1,10 +1,9 @@
 import "./hosts.css";
 import HostPortrait from "../host-portrait";
-import BrandLogo from "../brand-logo";
+import BoxOfficeHeader from "../box-office-header";
+import BoxOfficeFooter from "../box-office-footer";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
 import { ActionLink } from "../action";
-import PublicNavigation from "../mobile-navigation";
 import VelvetRope from "./velvet-rope";
 
 type HostRow = { slug: string; name: string; brandName: string | null; brandLogoUrl: string | null; bio: string; city: string; profileImageUrl: string | null; verificationStatus: string; eventCount: number; nextEventAt: string | null };
@@ -24,10 +23,7 @@ export default async function HostsPage() {
     GROUP BY host.id ORDER BY nextEventAt IS NULL, nextEventAt, host.name
   `).all<HostRow>();
   return <main className="hosts-page hosts-box-office">
-    <header className="directory-header">
-      <Link href="/" aria-label="Back to home"><ArrowLeft size={16} aria-hidden="true" /><span className="directory-header__back-label">Home</span></Link>
-      <Link href="/" className="brand-mark"><BrandLogo /></Link><PublicNavigation />
-    </header>
+    <BoxOfficeHeader />
     <div className="hosts-box-office__content">
       <section className="hosts-box-office__intro" aria-labelledby="hosts-heading">
         <p className="hosts-box-office__label">Hosts / Accra</p>
@@ -54,5 +50,6 @@ export default async function HostsPage() {
         </article>)}
       </section>
     </div>
+    <BoxOfficeFooter />
   </main>;
 }
