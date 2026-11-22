@@ -35,8 +35,8 @@ PRE_BOX_OFFICE_DEPLOY_BLOB = '268260bd7642ee1430568aaeeff0a788389535e8'
 
 def restore_box_office_deploy(raw):
     """Only the exact checked-in overlay may restore the earlier reviewed byte shape."""
-    if digest(raw) == 'dcecb18c8ba5916587a4f09970bb44f676f61e60':
-        unified = b'          BECORE_UNIFIED_BASE: 46ef0197aa524459d26f3ff046c9da75b929881f\n          BECORE_UNIFIED_BASE_TREE: 32b464ae8d13393b41de13d089ec86e08f61629e\n          BECORE_UNIFIED_SNAPSHOT: 35a15e5cf3ae9c9699e3288d4133ef4ba884d2f9\n          BECORE_UNIFIED_SNAPSHOT_TREE: b9a04220ba265f0405f89227346cea7531c1a980\n'
+    if digest(raw) == '1d2bd5b0e215a45c9d61be49aab996ac3f32f11e':
+        unified = b'          BECORE_UNIFIED_BASE: 46ef0197aa524459d26f3ff046c9da75b929881f\n          BECORE_UNIFIED_BASE_TREE: 32b464ae8d13393b41de13d089ec86e08f61629e\n          BECORE_UNIFIED_SNAPSHOT: bbfb1e3de3e344f7dbc0e8210e88725436e898eb\n          BECORE_UNIFIED_SNAPSHOT_TREE: ce5e9e1eac6d3f4cf9d547d11ba9f2fc92c615cc\n'
         if raw.count(unified) != 1:
             raise AssertionError('Unified standby overlay is ambiguous or incomplete')
         raw = raw.replace(unified, b'', 1)

@@ -4010,15 +4010,15 @@ BOX_IPHONE_TEST_CONTROLS = {
 }
 
 
-BOX_UNIFIED_OPERATOR_BLOB = '041200997306c3dd6161fa77d8f065e60f6a30c5'
+BOX_UNIFIED_OPERATOR_BLOB = '72202ceb50a148b2f9b1472d181d962d980c6045'
 BOX_UNIFIED_TEST_CONTROLS = {
     'ops/vps/code-release.py': ('100644', BOX_UNIFIED_OPERATOR_BLOB),
-    '.github/workflows/deploy.yml': ('100644', 'dcecb18c8ba5916587a4f09970bb44f676f61e60'),
+    '.github/workflows/deploy.yml': ('100644', '1d2bd5b0e215a45c9d61be49aab996ac3f32f11e'),
     'ops/vps/box_office_standby_boundary.py': ('100644', 'c69a07dcf5b846809c005792b1197152eccac5b1'),
     'ops/vps/test_box_office_standby_boundary.py': ('100644', 'd1f95a6a0b251be76582289bc8c9b450721496bc'),
-    'ops/vps/recovery_maintenance_test_support.py': ('100644', 'dce0f9084f7c71db44f644e0a43f549466ca562e'),
-    'tests/browser-environment.test.mjs': ('100644', '72ed920897ce9e347b180f07b6d9386e91da8b9a'),
-    'tests/d1-recovery-privacy.test.mjs': ('100644', '672f090e51323b3a65aba4289bfeef03972ba1ab'),
+    'ops/vps/recovery_maintenance_test_support.py': ('100644', 'dc0b142176ce9936085eb6adf24c470c449d13d7'),
+    'tests/browser-environment.test.mjs': ('100644', 'c9ff9e77781f1c408090b8cf27f8edc61604dbc8'),
+    'tests/d1-recovery-privacy.test.mjs': ('100644', '6446a271ca1c02e71b640bec5f38f120a882f250'),
 }
 
 
