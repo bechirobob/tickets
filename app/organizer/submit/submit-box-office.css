@@ -27,7 +27,7 @@
 .submission-page--box-office .submission-box-office .submission-form > section { padding-top: 10px; }
 .submission-box-office .submission-progress { margin: 0; padding: 0; border-color: var(--submit-rule); }
 .submission-box-office .submission-progress button { color: var(--submit-muted); gap: 5px; text-align: start; }
-.submission-box-office .submission-progress button[aria-current="step"] { color: var(--submit-ink); border-bottom: 2px solid var(--submit-accent); }
+.submission-box-office .submission-progress button[aria-current="step"] { color: var(--submit-ink); border-radius: 0; border-bottom: 2px solid var(--submit-accent); }
 .submission-box-office .submission-progress button > span { color: inherit; border-radius: 0; background: transparent; width: 23px; }
 .submission-page--box-office .submission-box-office .submission-fields { gap: 12px; }
 .submission-page--box-office .submission-box-office .submission-fields label { color: var(--submit-ink); }

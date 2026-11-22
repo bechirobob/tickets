@@ -34,7 +34,16 @@ test("public navigation is usable without horizontal overflow", async ({ page })
   await menu.click();
   await expect(menu).toHaveAttribute("aria-expanded", "true");
   const panel = page.getByRole("navigation", { name: "Main navigation", exact: true });
-  await expect(panel.getByRole("link", { name: "Discover hosts", exact: true })).toHaveAttribute("href", "/hosts");
+  const menuHosts = panel.getByRole("link", { name: "Discover hosts", exact: true });
+  if ((page.viewportSize()?.width ?? 1000) >= 701) {
+    const explore = page.getByRole("navigation", { name: "Explore", exact: true });
+    await expect(explore.getByRole("link", { name: "Hosts", exact: true })).toBeVisible();
+    await expect(explore.getByRole("link", { name: "Hosts", exact: true })).toHaveAttribute("href", "/hosts");
+    await expect(menuHosts).toBeHidden();
+  } else {
+    await expect(menuHosts).toBeVisible();
+    await expect(menuHosts).toHaveAttribute("href", "/hosts");
+  }
   await expect(panel.getByRole("link", { name: "List your event", exact: true })).toHaveAttribute("href", "/organizer/submit");
   await page.keyboard.press("Escape");
   await expect(menu).toBeFocused();
@@ -139,7 +148,7 @@ test("The Room retains its two previews, manual rail and compact conversation", 
     await track.evaluate(element => element.scrollTo({ left: element.scrollWidth, behavior: "instant" }));
     await expect.poll(() => track.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
     const position = await track.evaluate(element => element.scrollLeft);
-    await expect.poll(() => track.evaluate(element => Math.abs(element.scrollLeft - position))).toBeLessThanOrEqual(2);
+    await expect.poll(() => track.evaluate((element, settledPosition) => Math.abs(element.scrollLeft - settledPosition), position)).toBeLessThanOrEqual(2);
   }
   // Host notices must remain inside the phone's visible conversation area.
   const hostNotices = await room.locator(".scene-host").evaluateAll((notices) => notices.map((notice) => {

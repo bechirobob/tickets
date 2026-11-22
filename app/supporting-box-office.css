@@ -58,6 +58,10 @@
   padding-block: clamp(18px, 3vw, 30px);
 }
 
+.about-page.supporting-box-office .about-reasons article > span {
+  color: #a93710;
+}
+
 .supporting-box-office .about-reasons h2 {
   font-size: clamp(1.3rem, 3vw, 2rem);
   line-height: 1.08;
@@ -65,6 +69,15 @@
 
 .supporting-box-office .about-close {
   padding-block: clamp(34px, 6vw, 68px);
+}
+
+@media (max-width: 760px) {
+  body .help-page.supporting-box-office > header:has(.night-mobile-menu) {
+    --mobile-chrome-solid: var(--support-night);
+    --mobile-chrome-fill: var(--support-night);
+    color: var(--support-white);
+    border-color: var(--support-rule);
+  }
 }
 
 .supporting-box-office.help-page > .help-centre {
