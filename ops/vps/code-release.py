@@ -4399,8 +4399,105 @@ def verify_box_iphone_host_scope(expected, changes, proof, *, enable_crypto, ena
                 and not migration_plan(changes), 'Box Office iPhone requires exact code-only source inventory.')
 
 
+# Unified reviewed public surfaces retain the exact VPS-only posture.
+BOX_UNIFIED_LIVE = '46ef0197aa524459d26f3ff046c9da75b929881f'
+BOX_UNIFIED_BASE_TREE = '32b464ae8d13393b41de13d089ec86e08f61629e'
+BOX_UNIFIED_SNAPSHOT = '35a15e5cf3ae9c9699e3288d4133ef4ba884d2f9'
+BOX_UNIFIED_SNAPSHOT_TREE = 'b9a04220ba265f0405f89227346cea7531c1a980'
+BOX_UNIFIED_CANDIDATE_BRANCH = 'release/tickets-unified-box-office-20261122'
+BOX_UNIFIED_CONTROLS = BOX_OFFICE_CONTROLS - {'ops/vps/test_audit_readiness.py'}
+BOX_UNIFIED_BLOBS = {
+    'app/active-night-experience.tsx': 'c46439e6d905d4e2535ff708840d021fe8454e98',
+    'app/booking-progress.tsx': '84a28300901ad7c59eb787c1f4d9d2a6ca3b7cd9',
+    'app/box-office-footer.tsx': '13c8594983bf097752aa701b251522aef0e16147',
+    'app/box-office-header.tsx': '2bf7d1bd16d7dc9638441c0c9e86ca5e1e8d2349',
+    'app/box-office-home.css': '5b0c2d97b0bd426f559bf93209ff7a957f11a3da',
+    'app/box-office-mobile-shell.css': '1dd131b0a195360dd805686453f9aa156a153193',
+    'app/checkout/[slug]/checkout-form.tsx': '79d45cdc0ba3ef9a7811065b56e646e0e1b8fed6',
+    'app/checkout/[slug]/checkout-panels.css': '3848ade5ab099c8eef79fc1007cc08dd542e4dd1',
+    'app/discovery-back-link.tsx': 'fc62ed73550518a88cad81942f6edd5763261034',
+    'app/discovery.css': 'd87723037149ad162604491a32875a0115debacf',
+    'app/event-explorer.tsx': '6a85c8905693880eb560a9375763c7f63dffca71',
+    'app/event/[slug]/event-details.css': '6f11ceea61ae01323c96affb4510c9033accea2a',
+    'app/event/[slug]/event-screen.tsx': 'a6bd21626f17b84a33c9cb57d82fcdd72386c8e6',
+    'app/events/events-screen.tsx': '74e85247c2e57fc139672a4230ca7779ddd4ff43',
+    'app/globals.css': '37bba99b6fa98c57ec11531a7fc80a2e9ac67bb6',
+    'app/home-screen.tsx': 'ea819fe868a350221f8e7f4dace7515d3a9936ae',
+    'app/hosts/[slug]/page.tsx': 'b51c4bf393371507599f8ec3fa198cfadcdef26f',
+    'app/hosts/hosts.css': '875a332532f8d2f268633ecb22d1c4e09bcacfd1',
+    'app/hosts/page.tsx': 'b5dfe39e1aa9c94f70d82d1bcd48149b28085e9b',
+    'app/organizer/submit/page.tsx': 'c73e2ef44c43e5bcc4fa3358c73cf6ca5e065001',
+    'app/organizer/submit/submission-form.tsx': '3c932a9751b7a7c9ae12e6c95fbfd21ac00e72ad',
+    'app/organizer/submit/submit-box-office.css': '3489a52eba0fd35af5c2d318ae82d0398627aa0f',
+    'app/payment-outcome.css': '668d20e38a19ecf6ced7bdfd1423081eaebbc8de',
+    'app/payment/return/page.tsx': '4461467b856ecd0ea3d0f6e78a55d8b9ddb55747',
+    'app/registration-form.tsx': 'b16c9e2014c02136d3d79a7105119d54b456a33a',
+    'app/rsvp-audience.css': 'f41aeef5117eb33460b22f8e8045ecbe9b2af4ab',
+    'app/rsvp/access/page.tsx': '495bdaa2ef43025549fd75fbaf56304b66e5183e',
+    'app/the-yorke-way/page.tsx': '902c8dd81dda339fffebd5dc9a13aa866999441c',
+    'app/the-yorke-way/signup.tsx': '6ceb784d5938a120f71d9473e43cb1b078ba61bd',
+    'app/the-yorke-way/yorke-way.css': '03afccdb49193602bc01f4bdba660d647d8a74b1',
+    'mobile/tests/app.spec.ts': '78c0fb6b5eb7e4e30487bf16118a192bace4b67d',
+    'tests/e2e/checkout-quantity.spec.ts': 'c85b2166bf562792b28683cd3b7467c1b3788b2f',
+    'tests/e2e/discovery-pass-access.spec.ts': 'bb3bbbd0c5a08ec099ebc7a4ade42dac2a27f64e',
+    'tests/e2e/guest-clarity.spec.ts': '6957a9099514f9db41cd73906d39bf6f5d0b30c1',
+    'tests/e2e/host-brand-identity.spec.ts': '5101ba6b8fdfa26cd2ce966cc6f6f66abcf6b073',
+    'tests/e2e/mobile-app-behavior.spec.ts': '63b1489fbf4bf0fbe32850f2e6713cbc54a28cae',
+    'tests/e2e/organizer-submission.spec.ts': '9872a16975e847edd3c57804f77bae1ac9484247',
+    'tests/e2e/payment-return.spec.ts': 'bd2398c057f9cd320cec2f8e392836e986db2a28',
+    'tests/e2e/private-link-recovery.spec.ts': '4dbc9f9ef8206852c2dbfb028b8ad4f5b32ba11a',
+    'tests/e2e/public-journey.spec.ts': '38b5b64a8b2a1bcd4b7a0c17a778d85b2e35b487',
+    'tests/e2e/registration.spec.ts': '56a11ac3ee38848afcd5fe6b4d6fabc3a0336513',
+    'tests/mobile-ui.test.mjs': '18215f78e6925a72f9cb2929c3756994bd2be516',
+}
+
+
+def reviewed_box_unified_application_blobs(expected, source):
+    require(expected == BOX_UNIFIED_LIVE, 'Unified Box Office live baseline differs.')
+    for revision, tree in ((expected, BOX_UNIFIED_BASE_TREE), (BOX_UNIFIED_SNAPSHOT, BOX_UNIFIED_SNAPSHOT_TREE)):
+        require(git('rev-parse', revision + '^{tree}') == tree, 'Unified Box Office reviewed tree differs.')
+    require(git('rev-list', '--parents', '-n', '1', BOX_UNIFIED_SNAPSHOT) == BOX_UNIFIED_SNAPSHOT + ' ' + expected,
+            'Unified Box Office snapshot must be an exact child of the live release.')
+    verify_trusted_operator(source)
+    trusted = os.environ['BECORE_TRUSTED_BASE']
+    require(trusted not in (expected, BOX_UNIFIED_SNAPSHOT, source),
+            'Unified Box Office requires independently merged controls.')
+    for before, after in ((expected, trusted), (BOX_UNIFIED_SNAPSHOT, source)):
+        require(git('merge-base', before, after) == before, 'Unified Box Office reviewed ancestry differs.')
+    base, snapshot = rsc_patch_tree_entries(expected), rsc_patch_tree_entries(BOX_UNIFIED_SNAPSHOT)
+    control, candidate = rsc_patch_tree_entries(trusted), rsc_patch_tree_entries(source)
+    require(BOX_UNIFIED_CONTROLS.isdisjoint(BOX_UNIFIED_BLOBS), 'Unified Box Office app and controls overlap.')
+    reviewed = {**base, **{name: ('100644', blob) for name, blob in BOX_UNIFIED_BLOBS.items()}}
+    require(snapshot == reviewed and all(base.get(name) != snapshot[name] for name in BOX_UNIFIED_BLOBS),
+            'Unified Box Office snapshot path, byte or mode inventory differs.')
+    require({name for name in base.keys() | control.keys() if base.get(name) != control.get(name)}
+            == BOX_UNIFIED_CONTROLS, 'Unified Box Office controls changed outside reviewed scope.')
+    require(all(control.get(name, (None,))[0] == '100644' for name in BOX_UNIFIED_CONTROLS),
+            'Unified Box Office trusted controls must be regular files.')
+    reviewed.update({name: control[name] for name in BOX_UNIFIED_CONTROLS})
+    require(candidate == reviewed, 'Unified Box Office complete source inventory differs.')
+    return {name: candidate[name][1] for name in BOX_UNIFIED_BLOBS.keys() | BOX_UNIFIED_CONTROLS}
+
+
+def verify_box_unified_host_scope(expected, changes, proof, *, enable_crypto, enable_first_host, recover_prepared):
+    candidate = proof.get('candidateVerification') or {}
+    if expected == BOX_UNIFIED_LIVE or candidate.get('head_branch') == BOX_UNIFIED_CANDIDATE_BRANCH:
+        require(expected == BOX_UNIFIED_LIVE
+                and candidate.get('head_branch') == BOX_UNIFIED_CANDIDATE_BRANCH
+                and candidate.get('event') == 'workflow_dispatch'
+                and candidate.get('schema') == 'tickets-parallel-candidate/v2',
+                'Unified Box Office host transaction requires exact parallel candidate proof.')
+        require(not enable_crypto and not enable_first_host and not recover_prepared,
+                'Unified Box Office must preserve runtime configuration and normal recovery guards.')
+        require(len(changes) == len(set(changes))
+                and set(changes) == BOX_UNIFIED_BLOBS.keys() | BOX_UNIFIED_CONTROLS
+                and not migration_plan(changes), 'Unified Box Office requires exact code-only source inventory.')
+
+
 def reviewed_application_blobs(expected, source):
     """Select each exact application tree only from its approved live baseline."""
+    if expected == BOX_UNIFIED_LIVE:
+        return reviewed_box_unified_application_blobs(expected, source)
     if expected == BOX_IPHONE_LIVE:
         return reviewed_box_iphone_application_blobs(expected, source)
     if expected == BOX_OFFICE_LIVE:
@@ -4531,6 +4628,9 @@ def vetted_changes(expected, source):
         require(before.count(original) == 1 and after == before.replace(
             original, "'SEEV_ENABLED', 'SEEV_CRYPTO_ENABLED', 'SEEV_ENVIRONMENT',"),
             "Only the vetted crypto configuration-name addition is permitted.")
+    if expected == BOX_UNIFIED_LIVE:
+        require(not migration_plan(changed), 'Unified Box Office cannot introduce migrations.')
+        return changed
     if expected == BOX_IPHONE_LIVE:
         require(not migration_plan(changed), 'Box Office iPhone cannot introduce migrations.')
         return changed
@@ -4825,7 +4925,7 @@ def admitted_parallel_ref(event, branch):
     # Preserve historical admission; only this reviewed release gains a manual ref.
     return (branch == "improve/release-evidence-parallel-20261013"
             and event in ("push", "workflow_dispatch")) or (
-                branch in (BOX_IPHONE_CANDIDATE_BRANCH, BOX_OFFICE_CANDIDATE_BRANCH, COMBINED_CANDIDATE_BRANCH, CUSTOMER_CANDIDATE_BRANCH, ROOM_REFRESH_CANDIDATE_BRANCH, RSC_PATCH_CANDIDATE_BRANCH, INSTALLMENT_CANDIDATE_BRANCH) and event == "workflow_dispatch")
+                branch in (BOX_UNIFIED_CANDIDATE_BRANCH, BOX_IPHONE_CANDIDATE_BRANCH, BOX_OFFICE_CANDIDATE_BRANCH, COMBINED_CANDIDATE_BRANCH, CUSTOMER_CANDIDATE_BRANCH, ROOM_REFRESH_CANDIDATE_BRANCH, RSC_PATCH_CANDIDATE_BRANCH, INSTALLMENT_CANDIDATE_BRANCH) and event == "workflow_dispatch")
 
 
 def verify_combined_parallel_scope(candidate, expected, source):
@@ -4872,6 +4972,14 @@ def verify_box_iphone_parallel_scope(candidate, expected, source, candidate_mode
                 and candidate.get("event") == "workflow_dispatch",
                 "Box Office iPhone requires its exact parallel candidate.")
         reviewed_box_iphone_application_blobs(expected, source)
+
+
+def verify_box_unified_parallel_scope(candidate, expected, source, candidate_mode="parallel-v1"):
+    if expected == BOX_UNIFIED_LIVE or candidate.get("head_branch") == BOX_UNIFIED_CANDIDATE_BRANCH:
+        require(candidate_mode == "parallel-v1" and candidate.get("head_branch") == BOX_UNIFIED_CANDIDATE_BRANCH
+                and candidate.get("event") == "workflow_dispatch",
+                "Unified Box Office requires its exact parallel candidate.")
+        reviewed_box_unified_application_blobs(expected, source)
 
 
 def verify_installment_parallel_scope(candidate, expected, source, candidate_mode="parallel-v1"):
@@ -5194,6 +5302,7 @@ def verify_ci(args):
     verify_rsc_patch_parallel_scope(candidate, args.expected, args.source, candidate_mode)
     verify_box_office_parallel_scope(candidate, args.expected, args.source, candidate_mode)
     verify_box_iphone_parallel_scope(candidate, args.expected, args.source, candidate_mode)
+    verify_box_unified_parallel_scope(candidate, args.expected, args.source, candidate_mode)
     verify_installment_parallel_scope(candidate, args.expected, args.source, candidate_mode)
     verify_room_refresh_parallel_scope(candidate, args.expected, args.source, candidate_mode)
     verify_customer_parallel_scope(candidate, args.expected, args.source, candidate_mode)
@@ -6221,6 +6330,9 @@ class Deployment:
                                      enable_crypto=self.enable_crypto, enable_first_host=self.enable_first_host,
                                      recover_prepared=self.recover_prepared)
         verify_box_iphone_host_scope(self.expected, changes, self.proof,
+                                     enable_crypto=self.enable_crypto, enable_first_host=self.enable_first_host,
+                                     recover_prepared=self.recover_prepared)
+        verify_box_unified_host_scope(self.expected, changes, self.proof,
                                      enable_crypto=self.enable_crypto, enable_first_host=self.enable_first_host,
                                      recover_prepared=self.recover_prepared)
         if self.expected == INSTALLMENT_LIVE:

@@ -22,6 +22,7 @@ CONTROLS = frozenset({
 # Separate from the original release pins. The follow-up is based on the
 # activated Box Office merge, not on the older pre-redesign baseline.
 CANVAS_CONTROLS = CONTROLS - {'ops/vps/test_audit_readiness.py'}
+UNIFIED_CONTROLS = CANVAS_CONTROLS
 SHA = re.compile(r'[a-f0-9]{40}\Z')
 
 
@@ -110,6 +111,10 @@ def main():
             allowed = allow_cloudflare(Path.cwd(), **context, controls=CANVAS_CONTROLS,
                 base=os.environ['BECORE_CANVAS_BASE'], base_tree=os.environ['BECORE_CANVAS_BASE_TREE'],
                 snapshot=os.environ['BECORE_CANVAS_SNAPSHOT'], snapshot_tree=os.environ['BECORE_CANVAS_SNAPSHOT_TREE'])
+        if allowed:
+            allowed = allow_cloudflare(Path.cwd(), **context, controls=UNIFIED_CONTROLS,
+                base=os.environ['BECORE_UNIFIED_BASE'], base_tree=os.environ['BECORE_UNIFIED_BASE_TREE'],
+                snapshot=os.environ['BECORE_UNIFIED_SNAPSHOT'], snapshot_tree=os.environ['BECORE_UNIFIED_SNAPSHOT_TREE'])
         with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
             output.write(f'allow_cloudflare={str(allowed).lower()}\n')
         print('Existing Cloudflare path.' if allowed else 'Exact Box Office VPS-only release; Cloudflare untouched.')

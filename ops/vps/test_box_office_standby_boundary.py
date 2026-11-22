@@ -75,7 +75,9 @@ class StandbyBoundaryTests(unittest.TestCase):
                 BECORE_BOX_BASE=self.base, BECORE_BOX_BASE_TREE=self.rev_tree(self.base),
                 BECORE_BOX_SNAPSHOT=self.snapshot, BECORE_BOX_SNAPSHOT_TREE=self.rev_tree(self.snapshot),
                 BECORE_CANVAS_BASE=self.head, BECORE_CANVAS_BASE_TREE=self.rev_tree(self.head),
-                BECORE_CANVAS_SNAPSHOT=snapshot, BECORE_CANVAS_SNAPSHOT_TREE=self.rev_tree(snapshot))
+                BECORE_CANVAS_SNAPSHOT=snapshot, BECORE_CANVAS_SNAPSHOT_TREE=self.rev_tree(snapshot),
+                BECORE_UNIFIED_BASE=self.head, BECORE_UNIFIED_BASE_TREE=self.rev_tree(self.head),
+                BECORE_UNIFIED_SNAPSHOT='f' * 40, BECORE_UNIFIED_SNAPSHOT_TREE='f' * 40)
             if missing:
                 del env[missing]
             result = subprocess.run([sys.executable, '-I', boundary.__file__], cwd=self.root, env=env,
@@ -123,6 +125,47 @@ class StandbyBoundaryTests(unittest.TestCase):
         before = self.commit('unexpected prior main')
         self.git('merge', '--no-ff', '-m', 'app without independently staged controls', snapshot)
         self.assertEqual(self.classify_canvas(before, snapshot, self.git('rev-parse', 'HEAD')), (1, ''))
+
+    def test_unified_after_consumed_canvas_admits_only_exact_vps_tree(self):
+        canvas_controls, canvas_snapshot, active = self.canvas_fixture()
+        self.put('app/page.tsx', 'reviewed unified public surface')
+        snapshot = self.commit('unified app only')
+        self.git('checkout', '-q', '--detach', active)
+        for path in boundary.UNIFIED_CONTROLS:
+            self.put(path, 'third independently reviewed controls')
+        trusted = self.commit('unified controls only')
+        self.git('merge', '--no-ff', '-m', 'compose exact unified app and controls', snapshot)
+        deployed = self.git('rev-parse', 'HEAD')
+        def classify(before, head, **overrides):
+            with tempfile.TemporaryDirectory() as temp:
+                output = Path(temp) / 'step-output'
+                env = dict(os.environ, GITHUB_REPOSITORY=boundary.REPOSITORY,
+                    GITHUB_REF=boundary.MAIN, GITHUB_EVENT_NAME='push', GITHUB_SHA=head,
+                    GITHUB_OUTPUT=str(output), BECORE_PUSH_BEFORE=before,
+                    BECORE_BOX_BASE=self.base, BECORE_BOX_BASE_TREE=self.rev_tree(self.base),
+                    BECORE_BOX_SNAPSHOT=self.snapshot, BECORE_BOX_SNAPSHOT_TREE=self.rev_tree(self.snapshot),
+                    BECORE_CANVAS_BASE=self.head, BECORE_CANVAS_BASE_TREE=self.rev_tree(self.head),
+                    BECORE_CANVAS_SNAPSHOT=canvas_snapshot, BECORE_CANVAS_SNAPSHOT_TREE=self.rev_tree(canvas_snapshot),
+                    BECORE_UNIFIED_BASE=active, BECORE_UNIFIED_BASE_TREE=self.rev_tree(active),
+                    BECORE_UNIFIED_SNAPSHOT=snapshot, BECORE_UNIFIED_SNAPSHOT_TREE=self.rev_tree(snapshot))
+                result = subprocess.run([sys.executable, '-I', boundary.__file__], cwd=self.root,
+                                        env=env | overrides, capture_output=True, timeout=15)
+                return result.returncode, output.read_text() if output.exists() else ''
+        # The controls-only push itself is ignored by deploy.yml (checked below).
+        self.assertEqual(self.git('diff', '--name-only', active, trusted).splitlines(),
+                         sorted(boundary.UNIFIED_CONTROLS))
+        self.assertEqual(classify(trusted, deployed), (0, 'allow_cloudflare=false\n'))
+        self.assertEqual(classify(trusted, deployed, BECORE_UNIFIED_SNAPSHOT='f' * 40), (1, ''))
+        self.assertEqual(classify(trusted, deployed, BECORE_UNIFIED_SNAPSHOT_TREE='f' * 40), (1, ''))
+        self.git('checkout', '-q', '--detach', snapshot)
+        self.assertEqual(classify(active, snapshot), (1, ''))
+        for name in ('app/unreviewed.tsx', 'drizzle/9999_unreviewed.sql'):
+            self.git('reset', '--hard', deployed)
+            self.put(name, 'unreviewed')
+            self.assertEqual(classify(trusted, self.commit('unreviewed merge')), (1, ''))
+        self.git('reset', '--hard', deployed)
+        self.put('app/ordinary.tsx', 'unrelated future change')
+        self.assertEqual(classify(deployed, self.commit('later ordinary push')), (0, 'allow_cloudflare=true\n'))
 
     def test_unrelated_push_without_pending_controls_still_allows(self):
         self.git('checkout', '-q', '--detach', self.base)
@@ -176,7 +219,7 @@ class StandbyBoundaryTests(unittest.TestCase):
         self.assertIn('persist-credentials: false', gate)
         self.assertIn('git show "$BECORE_PUSH_BEFORE:ops/vps/box_office_standby_boundary.py"', gate)
         ignored = gate.split('  workflow_dispatch:', 1)[0]
-        for path in boundary.CANVAS_CONTROLS:
+        for path in boundary.CANVAS_CONTROLS | boundary.UNIFIED_CONTROLS:
             self.assertIn(f"      - '{path}'\n", ignored)
         self.assertIn('if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then', gate)
         self.assertIn("echo 'allow_cloudflare=true'", gate)

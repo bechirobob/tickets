@@ -35,6 +35,13 @@ PRE_BOX_OFFICE_DEPLOY_BLOB = '268260bd7642ee1430568aaeeff0a788389535e8'
 
 def restore_box_office_deploy(raw):
     """Only the exact checked-in overlay may restore the earlier reviewed byte shape."""
+    if digest(raw) == 'dcecb18c8ba5916587a4f09970bb44f676f61e60':
+        unified = b'          BECORE_UNIFIED_BASE: 46ef0197aa524459d26f3ff046c9da75b929881f\n          BECORE_UNIFIED_BASE_TREE: 32b464ae8d13393b41de13d089ec86e08f61629e\n          BECORE_UNIFIED_SNAPSHOT: 35a15e5cf3ae9c9699e3288d4133ef4ba884d2f9\n          BECORE_UNIFIED_SNAPSHOT_TREE: b9a04220ba265f0405f89227346cea7531c1a980\n'
+        if raw.count(unified) != 1:
+            raise AssertionError('Unified standby overlay is ambiguous or incomplete')
+        raw = raw.replace(unified, b'', 1)
+        if digest(raw) != 'b7750995662249f55e2e28a6662f36927083a9e3':
+            raise AssertionError('Unified standby altered the underlying reviewed workflow')
     if digest(raw) == 'b7750995662249f55e2e28a6662f36927083a9e3':
         overlay = b'          BECORE_CANVAS_BASE: 024eaef59cb08ef277ec6c1598406d6c4ba06862\n          BECORE_CANVAS_BASE_TREE: 5e4790e1c3cf3262fded40d8178e98dd46a4502e\n          BECORE_CANVAS_SNAPSHOT: afc1dd1b01eaa9841778f099b5f5573a5ac9007b\n          BECORE_CANVAS_SNAPSHOT_TREE: 01edccf5930337b3e885cf947d2af9091aa0a419\n'
         if raw.count(overlay) != 1:
