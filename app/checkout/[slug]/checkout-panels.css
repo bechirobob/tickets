@@ -1,0 +1,47 @@
+/* This skin is scoped to the booking route. All checkout controls retain their handlers. */
+.checkout-box-office .checkout-layout { grid-template-columns: minmax(0, 1fr) minmax(290px, 360px); gap: 24px; width: min(1120px, calc(100% - 48px)); align-items: start; margin-inline: auto; padding-block: 32px 64px; }
+.checkout-box-office .checkout-main { min-width: 0; padding: 0; }
+.checkout-box-office .checkout-step h1 { font-size: clamp(28px, 4vw, 42px); }
+.checkout-box-office .checkout-step h2, .checkout-box-panel > h2 { font-size: 21px; margin: 0; }
+.checkout-box-office .checkout-step p { margin: 8px 0 0; color: var(--muted); line-height: 1.5; }
+.checkout-box-office .checkout-event-name { font-size: 17px; }
+.checkout-box-office .checkout-box-panel { margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--line); }
+.checkout-box-office :is(.ticket-tier-list, .form-grid, .payment-methods) { margin-top: 16px; }
+.checkout-box-office :is(.checkout-tier__choice, .payment-method-choice) { min-height: 48px; }
+.checkout-box-office .checkout-tier__choice > b { text-align: end; white-space: normal; }
+.checkout-box-office .checkout-tier__choice > span { overflow-wrap: anywhere; }
+.checkout-box-office .order-summary { min-width: 0; padding: 16px 0 0; background: transparent; color: var(--ink); --action-surface: var(--ink); --action-ink: var(--paper); }
+.checkout-box-office .order-summary h2 { font-size: 23px; overflow-wrap: anywhere; }
+.checkout-box-office .summary-lines { margin-top: 22px; }
+.checkout-box-office .summary-lines > :is(span, strong) { gap: 12px; padding-block: 11px; }
+.checkout-box-office .summary-lines b { flex: none; }
+.checkout-box-office .checkout-final-total { border-top: 1px solid var(--line); margin-top: 8px; font-size: 20px; }
+.checkout-box-office .pay-button { white-space: normal; text-wrap: balance; }
+.checkout-box-office .payment-message:empty { padding: 0; margin: 0; }
+@media (max-width: 740px) {
+  .checkout-box-office .checkout-layout { grid-template-columns: minmax(0, 1fr); width: min(100% - 32px, 580px); gap: 20px; padding-block: 22px 42px; }
+}
+
+.checkout-box-office .order-summary .eyebrow,
+.checkout-box-office .order-summary .secure-note,
+.checkout-box-office .order-summary > p:not(.eyebrow):not(.secure-note):not(.payment-message) { color: var(--muted); }
+.checkout-box-office .summary-lines,
+.checkout-box-office .summary-lines > span { border-color: var(--line); }
+.checkout-box-office .order-summary .pay-button {
+  background: var(--ink); color: var(--paper); border-color: var(--ink);
+}
+.checkout-box-office .order-summary .pay-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ink) 88%, var(--paper));
+}
+.checkout-box-office .payment-message:not(:empty) {
+  background: transparent; color: var(--ink); padding-inline: 0;
+}
+.checkout-box-office :is(.form-grid,.checkout-coupon) input:not([type="checkbox"]):not([type="radio"]) {
+  border: 0; border-bottom: 1px solid var(--muted); border-radius: 0; background: transparent;
+  color: var(--ink); min-height: 44px; padding-inline: 2px; box-shadow: none;
+}
+@media (forced-colors: none) {
+  .checkout-box-office :is(.form-grid,.checkout-coupon) input:not([type="checkbox"]):not([type="radio"]):focus {
+    outline: none; box-shadow: inset 0 -2px currentColor; border-bottom-color: currentColor;
+  }
+}

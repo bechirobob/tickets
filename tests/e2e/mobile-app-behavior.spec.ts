@@ -270,7 +270,7 @@ test('reduced-transparency preference preserves desktop header backgrounds', asy
   await session.detach();
 });
 
-test('menu labels and light guest headers keep their responsive visibility and foreground', async ({ page }) => {
+test('menu labels and guest headers keep their responsive visibility and contrast', async ({ page }) => {
   await page.setViewportSize({ width: 980, height: 664 });
   await page.goto('/help');
   const trigger = page.locator('.night-mobile-menu__trigger');
@@ -283,7 +283,11 @@ test('menu labels and light guest headers keep their responsive visibility and f
     await page.goto(path);
     await expect(trigger).toBeEnabled();
     const header = page.locator('main > header').first();
-    await expect(header).toHaveCSS('color', 'rgb(40, 27, 43)');
+    // Help uses the Box Office dark surface; policy pages keep their light chrome.
+    await expect(header).toHaveCSS('color', path === '/help' ? 'rgb(255, 243, 227)' : 'rgb(40, 27, 43)');
+    await expect(header).toHaveCSS('background-color', path === '/help'
+      ? 'rgb(37, 28, 36)'
+      : /^(?:rgb\(244, 241, 233\)|rgba\(244, 241, 233, 0\.9\))$/);
     await expect(label).toBeVisible();
     const triggerStyle = await trigger.evaluate(element => ({ color: getComputedStyle(element).color, font: getComputedStyle(element).fontSize }));
     await expect(label).toHaveCSS('color', triggerStyle.color);

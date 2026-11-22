@@ -73,7 +73,7 @@ test("poster, confirmed event facts and registration availability fit both launc
   expect(Math.abs(posterSizes[0].width - posterSizes[1].width)).toBeLessThanOrEqual(1);
 });
 
-test("synthetic two-listed-card fixture preserves aligned rows and compact posters as copy grows", async ({ page }, testInfo) => {
+test("synthetic two-listed-card fixture preserves aligned home cards and responsive directory listings as copy grows", async ({ page }, testInfo) => {
   for (const path of ["/", "/events"]) {
     await page.goto(path);
     const cards = page.locator(".discovery-grid .drop-card");
@@ -98,17 +98,37 @@ test("synthetic two-listed-card fixture preserves aligned rows and compact poste
     expect(new Set(lines).size).toBe(2);
     expect(lines).not.toContain("Sunset first. Regret nothing.");
     const assertAlignment = async () => {
-      const rows = await cards.evaluateAll((elements) => elements.map((card) => ({
-        width: card.getBoundingClientRect().width,
-        poster: card.querySelector(".drop-card__image")!.getBoundingClientRect().height,
-        tops: Array.from(card.querySelector(".drop-card__body")!.children).map((child) => child.getBoundingClientRect().top),
-      })));
-      expect(Math.abs(rows[0].width - rows[1].width)).toBeLessThanOrEqual(1);
-      expect(Math.abs(rows[0].poster - rows[1].poster)).toBeLessThanOrEqual(1);
-      for (let index = 0; index < rows[0].tops.length; index++) expect(Math.abs(rows[0].tops[index] - rows[1].tops[index]), `Matching card row ${index} on ${path}`).toBeLessThanOrEqual(1);
-      if (page.viewportSize()!.width > 700) {
-        expect(rows[0].width).toBeLessThanOrEqual(281);
-        expect(rows[0].poster).toBeLessThanOrEqual(337);
+      const rows = await cards.evaluateAll((elements) => elements.map((card) => {
+        const bounds = card.getBoundingClientRect();
+        const poster = card.querySelector(".drop-card__image")!.getBoundingClientRect();
+        const body = card.querySelector(".drop-card__body")!.getBoundingClientRect();
+        return {
+          left: bounds.left, right: bounds.right, top: bounds.top, bottom: bounds.bottom, width: bounds.width,
+          posterHeight: poster.height, posterRight: poster.right, bodyLeft: body.left,
+          tops: Array.from(card.querySelector(".drop-card__body")!.children).map((child) => child.getBoundingClientRect().top),
+        };
+      }));
+      const [first, second] = rows;
+      expect(Math.abs(first.width - second.width)).toBeLessThanOrEqual(1);
+      expect(Math.abs(first.posterHeight - second.posterHeight)).toBeLessThanOrEqual(1);
+      if (path === "/") {
+        for (let index = 0; index < first.tops.length; index++) expect(Math.abs(first.tops[index] - second.tops[index]), `Matching home card row ${index}`).toBeLessThanOrEqual(1);
+        if (page.viewportSize()!.width > 700) {
+          expect(first.width).toBeLessThanOrEqual(281);
+          expect(first.posterHeight).toBeLessThanOrEqual(337);
+        }
+      } else {
+        // The directory intentionally stacks entire tickets on phones and
+        // allows each ticket's copy to flow independently alongside the flyer.
+        if (page.viewportSize()!.width <= 780) {
+          expect(Math.abs(first.left - second.left)).toBeLessThanOrEqual(1);
+          expect(second.top).toBeGreaterThan(first.bottom);
+        } else {
+          expect(Math.abs(first.top - second.top)).toBeLessThanOrEqual(1);
+          expect(Math.abs(first.bottom - second.bottom)).toBeLessThanOrEqual(1);
+          expect(second.left).toBeGreaterThan(first.right);
+        }
+        for (const row of rows) expect(row.bodyLeft).toBeGreaterThanOrEqual(row.posterRight - 1);
       }
       await expectVisibleLettering(page, ".discovery-grid");
     };
