@@ -81,8 +81,8 @@ jobs:
           BECORE_PUSH_BEFORE: ${{ github.event.before }}
           BECORE_BOX_BASE: 8c77eec14c6093a707a15bdaff6c4c631dbd358a
           BECORE_BOX_BASE_TREE: ecaa585e893982b6e7bd35d8a0467d684fd9d8e5
-          BECORE_BOX_SNAPSHOT: 1f937e5f1ac2de711d162ea46c98d65f28f46325
-          BECORE_BOX_SNAPSHOT_TREE: 6c8c2083deca098fd2a8fc2cc7d486249270d5c0
+          BECORE_BOX_SNAPSHOT: a4c03b44f876d895c78fdd213dffb396e442c527
+          BECORE_BOX_SNAPSHOT_TREE: 6557ee7049ebb5a65d931c029ab504fd1f4f565e
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = bechirobob/tickets
