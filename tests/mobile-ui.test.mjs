@@ -272,7 +272,7 @@ test("homepage sections reveal once without overriding reduced-motion preference
   assert.match(reveal, /new IntersectionObserver/u);
   assert.match(reveal, /prefers-reduced-motion: reduce/u);
   assert.match(reveal, /observer\.unobserve\(entry\.target\)/u);
-  assert.match(home, /data-scroll-reveal/u);
+  assert.match(home, /className="box-office-guest-kit"/u);
   assert.match(css, /\.scroll-reveal-ready \[data-scroll-reveal\]/u);
   assert.match(css, /translateY\(26px\)[^}]*opacity\s+\.58s/su);
   assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)[\s\S]*?\.scroll-reveal-ready \[data-scroll-reveal\][^{]*\{[^}]*opacity:\s*1[^}]*transform:\s*none[^}]*transition:\s*none/su);
@@ -306,36 +306,24 @@ test("Polished Nightlife motion stays purposeful, scoped and accessibility-aware
   assert.doesNotMatch(`${css}\n${polish}`, /animation:\s*[^;]*(?:infinite)[^;]*compact-hero/iu);
 });
 
-test("featured nights coordinate the hero, Drop and Room without moving content under readers", async () => {
-  const [experience, explorer, css, polish] = await Promise.all([
+test("one featured night drives the hero, Drop and Room without autoplay", async () => {
+  const [experience, explorer] = await Promise.all([
     readFile(activeNightUrl, "utf8"),
     readFile(new URL("../app/event-explorer.tsx", import.meta.url), "utf8"),
-    readFile(cssUrl, "utf8"),
-    readFile(accessPolishUrl, "utf8"),
   ]);
 
-  assert.match(experience, /const sceneInterval = 4_500/u);
-  assert.match(experience, /events\.filter\([^;]+\.slice\(0, 4\)/u);
-  assert.match(experience, /new IntersectionObserver/u);
-  assert.match(experience, /setSceneVisible\(visible\.size > 0\)/u);
-  assert.match(experience, /document\.visibilityState !== "visible"/u);
-  assert.match(experience, /prefers-reduced-motion: reduce/u);
+  assert.match(experience, /aria-label="Featured night"/u);
+  assert.match(experience, /const active = events\.find\(/u);
+  assert.match(experience, /data-active-night=\{active\?\.slug/u);
   assert.match(experience, /<EventExplorer events=\{events\} featuredSlug=\{active\?\.slug\}/u);
   assert.match(experience, /<RoomPreviewCarousel>/u);
-  assert.match(experience, /data-active-night=\{active\?\.slug/u);
-  assert.match(experience, /className="active-night-autoplay-toggle"/u);
-  assert.match(experience, /aria-label=\{manualPause \? "Resume featured nights" : "Pause featured nights"/u);
-  assert.doesNotMatch(experience, /active-night-controls|Previous featured night|Next featured night|Show \$\{event\.title\}/u);
-  assert.match(experience, /className="compact-hero__image compact-hero__image--outgoing"/u);
-  assert.match(experience, /className="compact-hero__image compact-hero__image--active"/u);
+  assert.equal(experience.match(/<RoomPhone event=\{active\}/gu)?.length, 2);
+  assert.match(experience, /aria-hidden="true" unoptimized\s*\/>/u);
+  assert.ok(experience.includes('`/devices/box-office-${conversation}.webp`'));
+  assert.equal(experience.match(/>Browse all events<\/ActionLink>/gu)?.length, 1);
+  assert.match(experience, /<EventExplorer[^>]+\/>\s*<div className="box-office-drop-actions">/u);
+  assert.doesNotMatch(experience, /sceneInterval|className="active-night-autoplay-toggle"|(?:Pause|Resume|Previous|Next) featured night|compact-hero__image--outgoing/u);
   assert.match(explorer, /data-featured=\{event\.slug === featuredSlug \? "true"/u);
-  assert.doesNotMatch(css, /\.drop-card\[data-featured="true"\][^{]*\{[^}]*border/su);
-  assert.match(css, /\.drop-card__body\s*\{[^}]*padding-top:\s*15px[^}]*\}/su);
-  const discovery = await readFile(discoveryUrl, "utf8");
-  assert.match(discovery, /\.active-night-autoplay-toggle:focus-visible\s*\{[^}]*height:\s*44px[^}]*clip-path:\s*none/su);
-  assert.doesNotMatch(experience, /onMouseEnter|setLeftHero|Motion on|Motion off/u);
-  assert.match(polish, /\.active-night-experience \.night-drop,[\s\S]*?transition:\s*background-color var\(--motion-scene\)/su);
-  assert.match(polish, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.active-night-experience \.night-drop,[\s\S]*?transition:\s*none/su);
 });
 
 test("mobile customers retain wallet access and form controls do not trigger iOS zoom", async () => {
@@ -493,7 +481,7 @@ test("checkout conversion actions look and behave like primary controls", async 
   assert.match(checkout, /payment-providers\/mtn-momo\.svg/u);
   assert.match(checkout, /payment-providers\/telecel-cash\.svg/u);
   assert.match(checkout, /payment-providers\/at-money\.svg/u);
-  assert.match(checkout, /Let’s make it official\./u);
+  assert.match(checkout, /<h1>Your tickets<\/h1>/u);
   assert.match(checkout, /Mobile Money<small>MTN MoMo, Telecel Cash or AT Money/u);
   assert.match(checkout, /Cards<small>Visa or Mastercard through Paystack/u);
   assert.match(checkout, /useState<"mobile_money" \| "card" \| "crypto" \| null>\(null\)/u);
@@ -554,7 +542,7 @@ test("public organiser actions keep submission public and named workspaces prote
   assert.doesNotMatch(home, /href="\/organizer"/u);
   assert.equal(home.match(/href="\/organizer\/submit"/gu)?.length, 1);
   assert.match(home, />Organisers\s*</u);
-  assert.match(home, /<ActionLink href="\/hosts">Meet the Hosts/u);
+  assert.match(home, /href="\/hosts"/u);
   assert.match(organizer, /redirect\("\/organizer\/workspace"\)/u);
   assert.doesNotMatch(organizer, /ops-shell|Ticket sales|Gross sales|Attendees/u);
   assert.match(submission, /<PublicNavigation \/>/u);
@@ -562,7 +550,7 @@ test("public organiser actions keep submission public and named workspaces prote
   assert.match(submission, /aria-label="Organiser access"/u);
   assert.match(submission, /Organiser sign in/u);
   assert.match(submission, /private organiser workspace/u);
-  assert.match(submission, /Tickets & RSVP/u);
+  assert.match(submission, /Tickets and RSVPs/u);
   assert.match(submission, /Guest updates, The Room and entry tools/u);
   assert.match(submission, /Sales, promoter results and arrivals/u);
   assert.match(adminSubmissions, /readAdminSession\(request\.headers\.get\("cookie"\)\)/u);
@@ -604,14 +592,13 @@ test("About us has its own open page and no longer interrupts the landing page",
   assert.match(home, /<Link href="\/about">About us<\/Link>/u);
   assert.doesNotMatch(home, /<nav aria-label="Main navigation">[^<]*(?:<[^>]+>[^<]*)*<Link href="\/hosts">/u);
   assert.doesNotMatch(home, /id="about"|className="becore-about"|Accra plans differently/u);
-  assert.match(about, /className="about-page"/u);
+  assert.match(about, /className="about-page(?: [^"]+)?"/u);
   assert.match(about, /needed a plan/u);
   assert.match(about, /Your people are already in the Room/u);
   assert.match(about, /A good night deserves an encore/u);
   assert.match(about, /which tickets sold, which promoters brought people and when the crowd arrived/u);
   assert.match(about, /Made for how Accra moves/u);
-  assert.match(home, /className="organizer-intelligence backstage-bridge(?: [^"]+)?"/u);
-  assert.match(home, /Find your people/u);
+  assert.match(home, /className="box-office-guest-kit"/u);
   assert.match(home, /Keep your bookings and entry passes in My Nights/u);
   assert.match(css, /\.about-hero\s*\{[^}]*display:\s*grid[^}]*border-bottom:\s*1px solid #aaa79e/su);
   assert.match(css, /\.about-reasons article\s*\{[^}]*border-bottom:\s*1px solid #cbc7bd/su);
@@ -1167,9 +1154,11 @@ test("mobile checkout header hides optional reassurance without suppressing the 
 test("checkout keeps semantic section headings without decorative step numbers", async () => {
   const checkout = await readFile(new URL('../app/checkout/[slug]/checkout-form.tsx', import.meta.url), 'utf8');
   assert.doesNotMatch(checkout, /<span>[123]<\/span><div><small>/u);
-  assert.match(checkout, /<h1>\{event.title\}<\/h1>/u);
-  assert.match(checkout, /<small>Delivery details<\/small><h2>/u);
-  assert.match(checkout, /<small>Payment<\/small><h2>/u);
+  assert.match(checkout, /<h1>Your tickets<\/h1>/u);
+  assert.match(checkout, /className="checkout-event-name">\{event.title\}/u);
+  assert.match(checkout, /<h2 id="ticket-selection">Choose tickets<\/h2>/u);
+  assert.match(checkout, /<h2 id="delivery-title">Where to send your tickets<\/h2>/u);
+  assert.match(checkout, /<h2 id="payment-title">How would you like to pay\?<\/h2>/u);
   assert.match(checkout, /event.isTestEvent \? <div className="preview-checkout-note"/u);
 });
 

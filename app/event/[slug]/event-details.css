@@ -149,3 +149,33 @@ body:has(.poster-event-page) .customer-dock a[aria-current="page"] { color: var(
 .event-host--branded a { display: flex; width: fit-content; min-width: 44px; min-height: 44px; margin-top: 8px; padding: 0 14px; border: 1px solid var(--event-ink); border-radius: 6px; background: var(--event-ink); color: var(--event-paper); text-decoration: none; }
 .event-host--branded a:hover { background: color-mix(in srgb, var(--event-ink) 92%, var(--event-paper)); }
 .event-host--branded a:focus-visible { outline: 2px solid var(--event-ink); outline-offset: 3px; }
+
+/* Box office: keep the real poster and event palette, with entry information first. */
+.event-entry-status { display: flex; align-items: center; gap: 7px; margin: 0 0 12px; font-size: 14px; font-weight: 650; }
+.event-entry-status svg { flex: none; }
+.event-arrival { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
+.event-arrival .event-practical-details { padding: 0; border: 0; }
+.event-arrival dt { display: flex; align-items: center; gap: 6px; font-weight: 620; }
+.event-booking-jump { display: inline-flex; min-height: 44px; align-items: center; color: var(--event-ink); font-size: 14px; font-weight: 650; text-decoration: underline; text-underline-offset: 4px; }
+.compact-ticket-panel:target { scroll-margin-top: 20px; }
+.event-fee-notice { margin: 10px 0; font-size: 13px; line-height: 1.5; }
+@media (max-width: 760px) {
+  .event-detail-poster { aspect-ratio: auto; }
+  .event-detail-poster img { height: auto; max-height: min(56svh, 460px); }
+  .event-detail-facts { margin-top: 16px; }
+  .event-date-line { gap: 12px 20px; padding-top: 14px; }
+  .event-date-display > b { font-size: 46px; }
+  .event-date-display strong { font-size: 20px; }
+}
+
+/* Inline event RSVP stays on the poster's colour field. */
+.poster-event-page .registration-form { background: transparent; border: 0; box-shadow: none; padding-inline: 0; }
+.poster-event-page .registration-form input:not([type="checkbox"]):not([type="radio"]) {
+  border: 0; border-bottom: 1px solid var(--event-muted); border-radius: 0; background: transparent;
+  color: var(--event-ink); min-height: 44px; padding-inline: 2px; box-shadow: none;
+}
+@media (forced-colors: none) {
+  .poster-event-page .registration-form input:not([type="checkbox"]):not([type="radio"]):focus {
+    outline: none; box-shadow: inset 0 -2px currentColor; border-bottom-color: currentColor;
+  }
+}

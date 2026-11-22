@@ -3,7 +3,6 @@
 import Image from "next/image";
 import Link from "next/link";
 import {
-  ArrowRight,
   ArrowUp,
   BadgeCheck,
   BatteryFull,
@@ -16,8 +15,8 @@ import {
   Ticket,
   Wifi,
 } from "lucide-react";
-import type { CSSProperties, FocusEvent } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
+import { useState } from "react";
 import EventExplorer from "./event-explorer";
 import { eventImageUrl } from "./event-images";
 import type { CustomerEvent } from "../lib/customer-screen";
@@ -28,8 +27,7 @@ import { ActionLink } from "./action";
 import { discoveryOffer } from "../lib/event-pricing";
 import { eventArtworkPath } from "../lib/event-guest";
 
-const sceneInterval = 4_500;
-const fallbackImage = "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1800&q=88";
+const fallbackImage = "/atmospheres/behind-the-night.webp";
 
 const sceneThemes: Record<CustomerEvent["vibe"], { acid: string; signal: string; bone: string; dark: string }> = {
   "Late night": { acid: "#d7f45b", signal: "#bd3f11", bone: "#f1eee6", dark: "#10110f" },
@@ -55,7 +53,7 @@ function RoomPhone({ event, heroImage, conversation }: { event: CustomerEvent | 
   const { phoneRef, streamRef, step, ready, running, visible, visibleCount, typing, resetting, completeStep, pauseReason } = useRoomDemo(paused, reducedMotion, conversation === "inside" ? 2000 : 0, conversation === "inside" ? 4 : 5);
 
   return <article ref={phoneRef} data-demo-step={step} data-demo-ready={ready} data-demo-running={running} data-demo-visible={visible} data-demo-complete-step={completeStep} data-demo-pause-reason={pauseReason ?? undefined} className={`room-product-phone room-product-phone--${conversation}`} role="group" aria-roledescription="slide" aria-label={conversation === "arrival" ? "Before arrival, 1 of 2" : "Inside the night, 2 of 2"}>
-    <Image className="room-product-phone__render" src="/devices/iphone-titanium-front.svg" width={320} height={668} alt="" aria-hidden="true" unoptimized />
+    <Image className="room-product-phone__render" src={`/devices/box-office-${conversation}.webp`} width={732} height={1485} alt="" aria-hidden="true" unoptimized />
     <div className="room-product-phone__display">
     <div className="room-product-phone__hardware" aria-hidden="true"><span>{conversation === "arrival" ? "9:24" : "10:48"}</span><i /><b><Signal size={9} /><span>5G</span><Wifi size={10} /><BatteryFull size={13} /></b></div>
     <div className="room-product-phone__screen">
@@ -84,22 +82,9 @@ function RoomPhone({ event, heroImage, conversation }: { event: CustomerEvent | 
 
 export default function ActiveNightExperience({ events }: { events: CustomerEvent[] }) {
   const [observedAt] = useState(() => Date.now());
-  const scenes = useMemo(() => events.filter((event) => event.eventState !== "cancelled" && event.eventState !== "postponed" && (!event.startsAt || Date.parse(event.endsAt ?? event.startsAt) > observedAt)).slice(0, 4), [events, observedAt]);
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [previousIndex, setPreviousIndex] = useState<number | null>(null);
-  const [manualPause, setManualPause] = useState(false);
-  const [interactionPause, setInteractionPause] = useState(false);
-  const [documentHidden, setDocumentHidden] = useState(false);
-  const [sceneVisible, setSceneVisible] = useState(true);
-  const [reducedMotion, setReducedMotion] = useState(false);
-  const heroRef = useRef<HTMLElement>(null);
-  const roomRef = useRef<HTMLElement>(null);
-  const active = scenes[activeIndex] ?? null;
-  const previous = previousIndex === null ? null : scenes[previousIndex] ?? null;
+  const active = events.find((event) => event.eventState !== "cancelled" && event.eventState !== "postponed" && (!event.startsAt || Date.parse(event.endsAt ?? event.startsAt) > observedAt)) ?? null;
   const heroImage = active?.image ?? fallbackImage;
   const theme = sceneThemes[active?.vibe ?? "Late night"];
-  const hasScenes = scenes.length > 1;
-  const autoplayRunning = hasScenes && !manualPause && !interactionPause && !documentHidden && sceneVisible && !reducedMotion;
   const sceneStyle = {
     "--acid": theme.acid,
     "--signal": theme.signal,
@@ -107,104 +92,28 @@ export default function ActiveNightExperience({ events }: { events: CustomerEven
     "--scene-dark": theme.dark,
   } as CSSProperties;
 
-  useEffect(() => {
-    const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const updateMotion = () => setReducedMotion(motionQuery.matches);
-    updateMotion();
-    motionQuery.addEventListener("change", updateMotion);
-    return () => motionQuery.removeEventListener("change", updateMotion);
-  }, []);
-
-  useEffect(() => {
-    const updateVisibility = () => setDocumentHidden(document.visibilityState !== "visible");
-    updateVisibility();
-    document.addEventListener("visibilitychange", updateVisibility);
-    return () => document.removeEventListener("visibilitychange", updateVisibility);
-  }, []);
-
-  useEffect(() => {
-    const surfaces = [heroRef.current, roomRef.current].filter((surface): surface is HTMLElement => surface !== null);
-    const visible = new Set<Element>();
-    const observer = new IntersectionObserver((entries) => {
-      for (const entry of entries) {
-        if (entry.isIntersecting) visible.add(entry.target);
-        else visible.delete(entry.target);
-      }
-      setSceneVisible(visible.size > 0);
-    }, { threshold: 0.05 });
-    surfaces.forEach((surface) => observer.observe(surface));
-    return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    if (!autoplayRunning) return;
-    const timer = window.setTimeout(() => {
-      if (heroRef.current?.contains(document.activeElement) || roomRef.current?.contains(document.activeElement)) return;
-      setPreviousIndex(activeIndex);
-      setActiveIndex((activeIndex + 1) % scenes.length);
-    }, sceneInterval);
-    return () => window.clearTimeout(timer);
-  }, [activeIndex, autoplayRunning, scenes.length]);
-
-  useEffect(() => {
-    if (previousIndex === null) return;
-    const timer = window.setTimeout(() => setPreviousIndex(null), 900);
-    return () => window.clearTimeout(timer);
-  }, [activeIndex, previousIndex]);
-
-  useEffect(() => {
-    if (!hasScenes || reducedMotion) return;
-    const next = scenes[(activeIndex + 1) % scenes.length];
-    const preload = new window.Image();
-    preload.src = eventImageUrl(next.image, 1600, 78);
-  }, [activeIndex, hasScenes, reducedMotion, scenes]);
-
-  function toggleAutoplay() {
-    if (reducedMotion) return;
-    setManualPause((paused) => !paused);
-  }
-
-  function leaveFocus(event: FocusEvent<HTMLElement>) {
-    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setInteractionPause(false);
-  }
-
   return <div className="active-night-experience" style={sceneStyle} data-active-night={active?.slug ?? "waiting"}>
-    <section
-      ref={heroRef}
-      className="compact-hero active-night-hero"
-      role="region"
-      aria-roledescription={hasScenes ? "carousel" : undefined}
-      aria-label="Featured nights"
-      onFocusCapture={() => setInteractionPause(true)}
-      onBlurCapture={leaveFocus}
-    >
-      {previous ? <Image key={`previous-${previous.slug}`} className="compact-hero__image compact-hero__image--outgoing" data-portrait-crop={eventArtworkPath(previous.image) === "/events/on-the-guest-list.webp" || undefined} src={eventImageUrl(previous.image, 1600, 78)} width={1600} height={900} sizes="100vw" alt="" aria-hidden="true" unoptimized /> : null}
-      <Image key={active?.slug ?? "waiting"} className="compact-hero__image compact-hero__image--active" data-portrait-crop={eventArtworkPath(heroImage) === "/events/on-the-guest-list.webp" || undefined} src={eventImageUrl(heroImage, 1600, 78)} width={1600} height={900} sizes="100vw" alt={active ? `Atmosphere for ${active.title}` : "A crowd under warm stage lights at night"} priority={activeIndex === 0} unoptimized />
-      <div key={`shade-${active?.slug ?? "waiting"}`} className="compact-hero__shade" />
-      <div key={`copy-${active?.slug ?? "waiting"}`} className="compact-hero__copy" aria-live={autoplayRunning ? "off" : "polite"} aria-atomic="true">
+    <section className="compact-hero active-night-hero box-office-hero" aria-label="Featured night">
+      <Image className="compact-hero__image compact-hero__image--active" data-portrait-crop={eventArtworkPath(heroImage) === "/events/on-the-guest-list.webp" || undefined} src={eventImageUrl(heroImage, 1600, 78)} width={1600} height={900} sizes="(max-width: 700px) 100vw, 55vw" alt={active ? `Atmosphere for ${active.title}` : "A DJ at the decks in front of the crowd"} priority unoptimized />
+      <div className="compact-hero__copy">
+        <p className="box-office-hero__imprint"><span>BeCore Tickets</span><span>Accra, GH</span></p>
         <p className="night-kicker hero-editor-note"><span /> {active ? active.quip : "Your next good excuse to go out."}{active?.isTestEvent ? <small> / Preview</small> : null}</p>
         <h1>{active?.title ?? "Plans, sorted."}</h1>
         <p>{active ? active.startsAt ? `${active.vibe} · ${active.day} ${active.shortDate} · ${active.time.split(" — ")[0]}` : `${active.vibe} · ${active.shortDate}` : "Discover music, people and places worth going out for."}</p>
         {active ? <p className="hero-venue">{active.venue}, {active.area}</p> : null}
-        {active ? <div className="hero-actions"><ActionLink href={discoveryOffer(active).href} icon={<Ticket size={18} />}>{discoveryOffer(active).action}</ActionLink>{discoveryOffer(active).href !== `/event/${active.slug}` ? <ActionLink href={`/event/${active.slug}`} variant="text">Explore the night</ActionLink> : null}</div> : <ActionLink href="/events" className="compact-hero__single">Explore The Drop</ActionLink>}
+        {active ? <div className="hero-actions"><ActionLink href={discoveryOffer(active).href} icon={<Ticket size={18} />}>{discoveryOffer(active).action}</ActionLink>{discoveryOffer(active).href !== `/event/${active.slug}` ? <ActionLink href={`/event/${active.slug}`} variant="text" icon={null}>Event details</ActionLink> : null}</div> : null}
+        {active && active.scheduleStatus !== "coming_soon" ? <p className="compact-hero__price">{discoveryOffer(active).label}</p> : null}
       </div>
-      {active && active.scheduleStatus !== "coming_soon" ? <p className="compact-hero__price">{discoveryOffer(active).label}</p> : null}
-      {hasScenes ? <button
-        type="button"
-        className="active-night-autoplay-toggle"
-        aria-label={manualPause ? "Resume featured nights" : "Pause featured nights"}
-        aria-pressed={manualPause || reducedMotion}
-        disabled={reducedMotion}
-        onClick={toggleAutoplay}
-      >{manualPause ? "Resume featured nights" : "Pause featured nights"}</button> : null}
+      <div className="box-office-hero__stub" aria-hidden="true">Accra after dark <i /></div>
     </section>
 
     <section className="night-drop night-drop--compact" id="drop">
-      <div className="compact-section-head"><div><p className="night-kicker"><span /> The Drop / Accra</p><h2>Where are we going?</h2></div><Link href="/events">All events <ArrowRight size={15} /></Link></div>
+      <div className="compact-section-head"><div><p className="night-kicker"><span /> The Drop / Accra</p><h2>Where are we going?</h2></div></div>
       <EventExplorer events={events} featuredSlug={active?.slug} />
+      <div className="box-office-drop-actions"><ActionLink href="/events" icon={null}>Browse all events</ActionLink></div>
     </section>
 
-    <section ref={roomRef} className="room-product-scene active-night-room" id="the-room" onFocusCapture={() => setInteractionPause(true)} onBlurCapture={leaveFocus}>
+    <section className="room-product-scene active-night-room" id="the-room">
       <Image className="room-product-scene__atmosphere" src={eventImageUrl(heroImage, 1200, 75)} width={1200} height={800} sizes="100vw" alt="" aria-hidden="true" unoptimized />
       <div className="room-product-scene__copy"><p className="night-kicker"><span /> You’re already on the inside</p><h2>The night has a Room.</h2><p>Find your people before you find the dance floor. Host updates, a little banter and Flashes you get one look at. <Link href="/help#room-private">Check which passes include access.</Link></p><span><LockKeyhole size={13} /> Private to guests with Room access</span></div>
       <RoomPreviewCarousel>

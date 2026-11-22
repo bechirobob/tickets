@@ -3,23 +3,25 @@ import AxeBuilder from '@axe-core/playwright';
 
 test('Kofi Bills profile shows the portrait, public socials without the temporarily unlisted event',async({page})=>{
   await page.goto('/hosts');
-  const kofi = page.locator('.hosts-list article').filter({ has: page.getByRole('heading', { name: 'Kofi Bills', exact: true }) });
+  const kofi = page.getByRole('region', { name: 'Host directory' }).getByRole('article').filter({ has: page.getByRole('heading', { name: 'Kofi Bills', exact: true }) });
   await expect(kofi).toContainText('Verified host');
   await expect(kofi).not.toContainText('Reviewed Host');
-  await page.getByRole('link',{name:'View Host',exact:true}).click();
+  await kofi.getByRole('link',{name:'View host: Kofi Bills',exact:true}).click();
   await expect(page).toHaveURL(/\/hosts\/kofi-bills$/);
   await expect(page.getByRole('heading',{name:'Kofi Bills',exact:true})).toBeVisible();
-  await expect(page.locator('.host-profile__identity')).toContainText('Verified host');
-  await expect(page.locator('.host-profile__identity')).not.toContainText('Henry Yorke');
-  await expect(page.locator('.host-profile__bio')).toContainText('Henry Yorke');
-  await expect(page.locator('.host-profile__portrait .host-portrait__image')).toBeVisible();
-  await expect.poll(() => page.locator('.host-profile__portrait .host-portrait__image').evaluate((img:HTMLImageElement)=>img.complete && img.naturalWidth>0)).toBe(true);
+  const profile = page.getByRole('region', { name: 'Kofi Bills', exact: true });
+  await expect(profile.locator('.host-ticket__brand')).toContainText('Verified host');
+  await expect(profile.locator('.host-ticket__brand')).not.toContainText('Henry Yorke');
+  await expect(profile.locator('.host-ticket__bio')).toContainText('Henry Yorke');
+  const portrait = profile.getByRole('img', { name: 'Kofi Bills', exact: true });
+  await expect(portrait).toBeVisible();
+  await expect.poll(() => portrait.evaluate((img:HTMLImageElement)=>img.complete && img.naturalWidth>0)).toBe(true);
   await expect(page.getByRole('link',{name:/Instagram/})).toHaveAttribute('href','https://www.instagram.com/mr.yorke/');
   await expect(page.getByRole('link',{name:/Snapchat/})).toHaveAttribute('href','https://www.snapchat.com/add/kofi_billz123');
   await expect(page.getByRole('heading',{name:'On The Guest List',exact:true})).toHaveCount(0);
   await expect(page.locator('a[href="/event/sun-chasers-labadi"]')).toHaveCount(0);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
-  expect((await new AxeBuilder({page}).include('.host-profile').analyze()).violations).toEqual([]);
+  expect((await new AxeBuilder({page}).include('.host-ticket--profile').analyze()).violations).toEqual([]);
   await page.screenshot({path:`test-results/kofi-bills-${test.info().project.name}.png`,fullPage:true});
 });
 

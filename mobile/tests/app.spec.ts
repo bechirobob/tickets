@@ -153,19 +153,34 @@ test('absolute native artwork keeps the same portrait hero geometry as the websi
   const hero = page.locator('.compact-hero');
   const artwork = hero.locator('img.compact-hero__image--active');
   await expect(artwork).toHaveAttribute('data-portrait-crop', 'true');
-  await expect(hero).toHaveCSS('height', '560px');
-  await expect(artwork).toHaveCSS('height', '300px');
-  // The kicker intentionally overlaps the faded artwork edge. The actual
-  // title and actions must remain below it and inside the shared hero frame.
+  await expect(artwork).toHaveAttribute('src', `${origin}/events/on-the-guest-list.webp`);
+  await expect(artwork).toHaveCSS('object-fit', 'contain');
+  await expect.poll(() => artwork.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0 && image.naturalHeight > 0)).toBe(true);
+  // Mobile artwork follows the approved responsive height, not the retired
+  // 300px portrait crop. The frame must grow with the title and actions.
+  await expect.poll(() => artwork.evaluate(image => {
+    const expected = Math.max(148, Math.min(innerWidth * 0.51, 330));
+    return Math.abs(image.getBoundingClientRect().height - expected);
+  })).toBeLessThan(1);
   const geometry = await hero.evaluate(element => {
     const title = element.querySelector('h1')!.getBoundingClientRect();
     const image = element.querySelector('.compact-hero__image--active')!.getBoundingClientRect();
     const frame = element.getBoundingClientRect();
     const actions = element.querySelector('.hero-actions')!.getBoundingClientRect();
-    return { titleTop: title.top, imageBottom: image.bottom, actionsBottom: actions.bottom, heroBottom: frame.bottom };
+    const stub = element.querySelector('.box-office-hero__stub')!.getBoundingClientRect();
+    return {
+      imageTop: image.top, imageBottom: image.bottom, imageWidth: image.width,
+      titleTop: title.top, titleBottom: title.bottom, actionsTop: actions.top,
+      actionsBottom: actions.bottom, stubTop: stub.top, stubBottom: stub.bottom,
+      heroTop: frame.top, heroBottom: frame.bottom, heroWidth: frame.width,
+    };
   });
+  expect(geometry.imageTop).toBeGreaterThanOrEqual(geometry.heroTop);
+  expect(Math.abs(geometry.imageWidth - geometry.heroWidth)).toBeLessThan(3);
   expect(geometry.titleTop).toBeGreaterThan(geometry.imageBottom);
-  expect(geometry.actionsBottom).toBeLessThanOrEqual(geometry.heroBottom);
+  expect(geometry.actionsTop).toBeGreaterThanOrEqual(geometry.titleBottom);
+  expect(geometry.actionsBottom).toBeLessThanOrEqual(geometry.stubTop);
+  expect(Math.abs(geometry.stubBottom - geometry.heroBottom)).toBeLessThan(3);
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)).toBe(false);
   await page.screenshot({ path: info.outputPath('shared-portrait-hero.png') });
 });
