@@ -1,12 +1,18 @@
 import {test,expect} from './analytics-fixture';
 import AxeBuilder from '@axe-core/playwright';
 
-test('Kofi Bills profile shows the portrait, public socials without the temporarily unlisted event',async({page})=>{
+test('Kofi Bills profile shows the portrait, public socials without the temporarily unlisted event',async({page,hasTouch})=>{
+  // The opening scene intentionally consumes its dismissing gesture. Its own
+  // suite covers that behavior; this journey checks a single host-card activation.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/hosts');
   const kofi = page.getByRole('region', { name: 'Host directory' }).getByRole('article').filter({ has: page.getByRole('heading', { name: 'Kofi Bills', exact: true }) });
   await expect(kofi).toContainText('Verified host');
   await expect(kofi).not.toContainText('Reviewed Host');
-  await kofi.getByRole('link',{name:'View host: Kofi Bills',exact:true}).click();
+  const viewHost = kofi.getByRole('link',{name:'View host: Kofi Bills',exact:true});
+  await expect(viewHost).toHaveAttribute('href','/hosts/kofi-bills');
+  if (hasTouch) await viewHost.tap();
+  else await viewHost.click();
   await expect(page).toHaveURL(/\/hosts\/kofi-bills$/);
   await expect(page.getByRole('heading',{name:'Kofi Bills',exact:true})).toBeVisible();
   const profile = page.getByRole('region', { name: 'Kofi Bills', exact: true });

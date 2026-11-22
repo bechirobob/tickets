@@ -25,6 +25,12 @@ test('boxed quantity preserves purchase limits, totals and tier changes', async 
   await expect(page.locator('.summary-lines')).toContainText('GH₵360');
   await expect(page.locator('.summary-lines')).toContainText('GH₵18');
   await expect(page.locator('.summary-lines > strong')).toHaveText('Total GH₵378');
+  const summary = page.locator('.checkout-box-office .order-summary');
+  await expect(summary.locator('.summary-lines')).toHaveCSS('border-top-width', '0px');
+  await expect(summary.locator('.summary-lines > span').filter({ hasText: 'Booking fee' })).toHaveCSS('border-bottom-width', '0px');
+  await expect(summary.locator('.checkout-final-total')).toHaveCSS('border-top-width', '1px');
+  expect(await summary.evaluate(element => getComputedStyle(element, '::before').backgroundImage)).toContain('radial-gradient');
+  await expect(page.locator('.checkout-main')).not.toContainText('Booking fee');
   await page.getByRole('radio', { name: /Table for 5/ }).click();
   const tableQuantity = page.getByRole('combobox', { name: 'Table for 5 quantity' });
   await expect(tableQuantity).toHaveValue('1');
