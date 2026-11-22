@@ -11,6 +11,34 @@ test('direct registration links respect the saved mode and do not imply free adm
   await page.goto('/rsvp/the-weekend-braai');await expect(page.locator('.rsvp-signup__event .eyebrow')).toContainText('Paid registration');await expect(page.getByRole('heading',{name:'The host is putting the date together. RSVPs open soon.',exact:true})).toBeVisible();await expect(page.getByLabel('Your name')).toHaveCount(0);
   await page.goto('/rsvp/sun-chasers-labadi');await expect(page.getByLabel('Your name')).toBeVisible();await expect(page.getByText('Date drops & updates')).toBeVisible();
 });
+test('phone RSVP links show the form under a compact, linked event summary', async ({ page }) => {
+  for (const width of [320, 390, 430]) {
+    await page.setViewportSize({ width, height: 664 });
+    await page.goto('/rsvp/after-dark-osu');
+    const summary = page.getByRole('region', { name: 'After Dark: Osu' });
+    const flyer = summary.getByRole('link', { name: 'View full flier for After Dark: Osu' });
+    await expect(flyer).toHaveAttribute('target', '_blank');
+    const image = flyer.getByRole('img');
+    await expect(image).toHaveCSS('height', '72px');
+    await expect(image).toHaveCSS('object-fit', 'contain');
+    await expect(page.getByLabel('Your name')).toBeInViewport();
+    await expect(summary.locator('.rsvp-signup__facts')).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+  }
+});
+test('the phone booking jump keeps the RSVP panel clear of the sticky header', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (const width of [320, 390, 430]) {
+    await page.setViewportSize({ width, height: 664 });
+    await page.goto('/event/after-dark-osu');
+    await page.locator('.event-booking-jump').click();
+    await expect(page).toHaveURL(/#register$/);
+    await expect(page.locator('#register')).toBeFocused();
+    await expect.poll(() => page.locator('#register').evaluate(target =>
+      target.getBoundingClientRect().top - document.querySelector('.poster-event-page > header')!.getBoundingClientRect().bottom,
+    )).toBeGreaterThanOrEqual(0);
+  }
+});
 test('free RSVP preserves form details on failure and submits the selected party without checkout', async ({ page }) => {
   await page.goto('/event/after-dark-osu');
   await activate(page.getByRole('button', { name: 'RSVP' }));
