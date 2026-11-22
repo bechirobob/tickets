@@ -1,4 +1,4 @@
-"""Classify one independently reviewed BeCore Tickets main push before Cloudflare writes."""
+"""Classify independently reviewed BeCore Tickets main pushes before Cloudflare writes."""
 
 import os
 import re
@@ -19,6 +19,9 @@ CONTROLS = frozenset({
     'tests/browser-environment.test.mjs',
     'tests/d1-recovery-privacy.test.mjs',
 })
+# Separate from the original release pins. The follow-up is based on the
+# activated Box Office merge, not on the older pre-redesign baseline.
+CANVAS_CONTROLS = CONTROLS - {'ops/vps/test_audit_readiness.py'}
 SHA = re.compile(r'[a-f0-9]{40}\Z')
 
 
@@ -59,7 +62,8 @@ def changed_paths(before, after):
     return {path for path in before.keys() | after.keys() if before.get(path) != after.get(path)}
 
 
-def allow_cloudflare(root, *, repository, ref, event, before, head, base, base_tree, snapshot, snapshot_tree):
+def allow_cloudflare(root, *, repository, ref, event, before, head, base, base_tree, snapshot, snapshot_tree,
+                     controls=CONTROLS):
     """Only an exact first Box Office push defers standby. Intended drift fails closed."""
     require((repository, ref, event) == (REPOSITORY, MAIN, 'push'),
             'Box Office standby gate expects a canonical main push.')
@@ -74,7 +78,7 @@ def allow_cloudflare(root, *, repository, ref, event, before, head, base, base_t
             'Box Office standby live baseline tree differs.')
     base_entries, before_entries = tree(root, base), tree(root, before)
     pending_release = (ancestor(root, base, before) and
-                       changed_paths(base_entries, before_entries) == CONTROLS)
+                       changed_paths(base_entries, before_entries) == controls)
     available = git(root, 'cat-file', '-e', snapshot + '^{commit}', statuses=(0, 128)).returncode == 0
     first_snapshot_push = available and ancestor(root, snapshot, head) and not ancestor(root, snapshot, before)
     if not (pending_release or first_snapshot_push):
@@ -85,22 +89,27 @@ def allow_cloudflare(root, *, repository, ref, event, before, head, base, base_t
     require(git(root, 'rev-parse', snapshot + '^{tree}').stdout.decode().strip() == snapshot_tree
             and ancestor(root, base, snapshot), 'Box Office standby reviewed snapshot differs.')
     snapshot_entries = tree(root, snapshot)
-    require(CONTROLS.isdisjoint(changed_paths(base_entries, snapshot_entries)),
+    require(controls.isdisjoint(changed_paths(base_entries, snapshot_entries)),
             'Box Office application snapshot is not separate from controls.')
-    require(all(before_entries.get(path, (None, None))[0:2] == ('100644', 'blob') for path in CONTROLS),
+    require(all(before_entries.get(path, (None, None))[0:2] == ('100644', 'blob') for path in controls),
             'Box Office standby control files must be reviewed regular blobs.')
-    expected = {**snapshot_entries, **{path: before_entries[path] for path in CONTROLS}}
+    expected = {**snapshot_entries, **{path: before_entries[path] for path in controls}}
     require(tree(root, head) == expected, 'Box Office standby merge tree differs from exact review.')
     return False
 
 
 def main():
     try:
-        allowed = allow_cloudflare(Path.cwd(), repository=os.environ['GITHUB_REPOSITORY'],
+        context = dict(repository=os.environ['GITHUB_REPOSITORY'],
             ref=os.environ['GITHUB_REF'], event=os.environ['GITHUB_EVENT_NAME'],
-            before=os.environ['BECORE_PUSH_BEFORE'], head=os.environ['GITHUB_SHA'],
+            before=os.environ['BECORE_PUSH_BEFORE'], head=os.environ['GITHUB_SHA'])
+        allowed = allow_cloudflare(Path.cwd(), **context,
             base=os.environ['BECORE_BOX_BASE'], base_tree=os.environ['BECORE_BOX_BASE_TREE'],
             snapshot=os.environ['BECORE_BOX_SNAPSHOT'], snapshot_tree=os.environ['BECORE_BOX_SNAPSHOT_TREE'])
+        if allowed:
+            allowed = allow_cloudflare(Path.cwd(), **context, controls=CANVAS_CONTROLS,
+                base=os.environ['BECORE_CANVAS_BASE'], base_tree=os.environ['BECORE_CANVAS_BASE_TREE'],
+                snapshot=os.environ['BECORE_CANVAS_SNAPSHOT'], snapshot_tree=os.environ['BECORE_CANVAS_SNAPSHOT_TREE'])
         with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
             output.write(f'allow_cloudflare={str(allowed).lower()}\n')
         print('Existing Cloudflare path.' if allowed else 'Exact Box Office VPS-only release; Cloudflare untouched.')
