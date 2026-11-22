@@ -51,12 +51,17 @@
  inset:1.7% 3.4%;border-radius:13.4% / 6.7%;
 }
 @media(max-width:760px){
+ html:has(.discovery-home),body:has(.discovery-home),
+ .discovery-home .active-night-experience{background:#251c24}
+ .discovery-home .active-night-experience{display:flow-root}
  .discovery-home .compact-hero.box-office-hero,
  .discovery-home .compact-hero.box-office-hero:has(img[data-portrait-crop]){
-  grid-template-columns:1fr;width:calc(100% - 32px);height:auto;min-height:0;margin-top:12px
+  grid-template-columns:1fr;width:calc(100% - 24px);height:auto;min-height:0;margin-top:13px;
+  border:1px solid #66514e
  }
  .discovery-home .box-office-hero > img.compact-hero__image{
-  grid-column:1;grid-row:1;height:clamp(148px,51vw,330px);min-height:0
+  grid-column:1;grid-row:1;justify-self:center;width:calc(100% - 20px);
+  height:clamp(148px,40vw,208px);min-height:0;margin-top:10px;border-radius:5px
  }
  .discovery-home .box-office-hero .compact-hero__copy{grid-column:1;grid-row:2;padding:13px 14px 15px}
  .discovery-home .box-office-hero .compact-hero__copy h1{font-size:clamp(2.03rem,8.7vw,3.6rem)}
@@ -68,6 +73,25 @@
  .discovery-home .box-office-guest-kit{width:calc(100% - 36px)}
  .discovery-home .box-office-guest-kit dl{grid-template-columns:1fr;gap:9px}
  .discovery-home .box-office-guest-kit dl>div{padding-block:7px;border-top:1px solid #70636b}
+}
+@media(max-width:700px){
+ body:has(.discovery-home .box-office-hero):has(.customer-dock){
+  padding-bottom:calc(53px + env(safe-area-inset-bottom));
+  --mobile-menu-bottom:calc(53px + env(safe-area-inset-bottom))
+ }
+ body:has(.discovery-home .box-office-hero) nav.customer-dock{
+  inset:auto 0 0;min-height:0;max-width:none;
+  padding:1px max(12px,env(safe-area-inset-right)) max(3px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));
+  border:0;border-top:1px solid #55464f;border-radius:0;
+  background:#241b23;backdrop-filter:none;-webkit-backdrop-filter:none
+ }
+ body:has(.discovery-home .box-office-hero) .customer-dock a{
+  min-height:49px;border-radius:0
+ }
+ body:has(.discovery-home .box-office-hero) .customer-dock a[aria-current=page]{
+  background:transparent;color:#dff098
+ }
+ body:has(.discovery-home .box-office-hero) .customer-dock svg{width:19px;height:19px}
 }
 /* The Drop's approved artwork-plus-details list uses real event records. */
 .drop-explorer--full .discovery-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
